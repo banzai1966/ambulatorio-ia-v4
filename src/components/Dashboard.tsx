@@ -319,7 +319,7 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-800 truncate">{patient.paciente_nome_completo || 'Paciente'}</p>
                       <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                        {patient.created_at ? new Date(patient.created_at).toLocaleDateString('pt-BR') : 'Sem data'} • {patient.especialidade || 'Geral'} • {patient.medico_nome || 'Médico'}
+                        {patient.created_at ? new Date(patient.created_at).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Sem data'} • {patient.especialidade || 'Geral'} • {patient.medico_nome || 'Médico'}
                       </p>
                     </div>
                     <div className={`w-2 h-2 rounded-full ${

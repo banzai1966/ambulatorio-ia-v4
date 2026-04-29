@@ -1562,6 +1562,12 @@ export default function App() {
   const formatDateBR = (dateStr: string | undefined) => {
     if (!dateStr) return 'Não informado';
     try {
+      // Se tiver 'T00:00:00' e for UTC, é uma data YYYY-MM-DD pura que o banco converteu
+      if (dateStr.includes('T00:00:00.000Z') || dateStr.includes('T00:00:00+00:00')) {
+        const parts = dateStr.split('T')[0].split('-');
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      
       // Se for ISO string completa (com T), convertemos respeitando o fuso local
       if (dateStr.includes('T')) {
         const formatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1582,23 +1588,9 @@ export default function App() {
   };
 
   const getLocalISODate = () => {
-    // Generate date in Brazilian timezone to avoid UTC offset issues (e.g. 28 vs 29)
-    try {
-      const formatter = new Intl.DateTimeFormat('en-CA', { 
-        timeZone: 'America/Sao_Paulo', 
-        year: 'numeric', 
-        month: '2-digit', 
-        day: '2-digit' 
-      });
-      return formatter.format(new Date()); // Always returns YYYY-MM-DD
-    } catch (e) {
-      console.warn("Failed to format date with timezone", e);
-    }
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // Generate ISO string so that when saved to DB as timestamptz and read back,
+    // the timezone conversion accurately determines the day.
+    return new Date().toISOString();
   };
 
   const stripEmojis = (str: string) => {
