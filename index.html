@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#059669" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Ambulatório IA v4.4</title>
+    <script>
+      // Cache buster v4.4
+      console.log("Loading HTML v4.4 Focus - " + new Date().getTime());
+      
+      // Forçar limpeza de Service Workers ao carregar a página
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+      }
+      
+      // 1. Polyfill de segurança: Evita que bibliotecas que procuram o "process.env" (comum no Node) quebrem o React no navegador.
+      window.process = { env: {} };
+      
+      // 2. Dedo-duro de Erros: Se algo der errado, mostra na tela em vez de deixar tudo branco.
+      window.addEventListener('error', function(e) {
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'padding: 20px; color: #ef4444; background: #fef2f2; font-family: monospace; margin: 20px; border-radius: 8px; border: 1px solid #fecaca; z-index: 9999; position: relative;';
+        errorDiv.innerHTML = '<h3>⚠️ Erro Crítico Detectado:</h3><p><strong>' + e.message + '</strong></p><pre style="overflow:auto; font-size: 12px; margin-top: 10px;">' + (e.error ? e.error.stack : '') + '</pre><p style="margin-top: 15px; color: #333;">Tire um print desta tela e mande para o desenvolvedor.</p>';
+        document.body.prepend(errorDiv);
+      });
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div style="padding: 40px; text-align: center; font-family: system-ui, sans-serif; color: #334155;">
+        <h2 style="margin-bottom: 10px;">Iniciando o Ambulatório IA v4.4...</h2>
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-clinical-blue mx-auto mt-4"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

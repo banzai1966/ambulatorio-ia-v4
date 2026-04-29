@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Ambulatório IA",
+  "description": "Assistente de IA para gestão de saúde voluntária que transforma áudios médicos em dados clínicos e gerencia agendamentos inteligentes via WhatsApp.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
