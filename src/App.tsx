@@ -3156,6 +3156,15 @@ export default function App() {
                                       placeholder="DD/MM/AAAA"
                                     />
                                   </div>
+                                  <div className="flex items-center gap-2 text-[10px] bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 shrink-0">
+                                    <span className="text-slate-400 font-bold uppercase tracking-wider hidden sm:inline">Data:</span>
+                                    <input 
+                                      type="text"
+                                      value={formatDateBR(currentRecord.data_consulta) || ''}
+                                      readOnly
+                                      className="font-mono font-bold text-clinical-blue bg-transparent focus:outline-none w-20 sm:w-24"
+                                    />
+                                  </div>
                                   <div className={cn("px-2 py-1 rounded-full text-[10px] font-bold border capitalize shrink-0", getStatusColor(currentRecord.paciente_status))}>
                                     {currentRecord.paciente_status}
                                   </div>
@@ -3434,7 +3443,7 @@ export default function App() {
                                 <FileText className="text-clinical-blue" size={20} />
                                 <h3 className="font-bold text-lg text-slate-800">Resumo do Atendimento</h3>
                               </div>
-                              <p className="text-slate-600 leading-relaxed text-sm">
+                              <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">
                                 {currentRecord.resumo_formatado || currentRecord.queixa_principal || "Nenhum relato transcrito."}
                               </p>
                             </div>
@@ -3484,7 +3493,7 @@ export default function App() {
                                 <FileText className="text-slate-400" size={20} />
                                 <h3 className="font-bold text-lg text-slate-800">Resumo Formatado</h3>
                               </div>
-                              <p className="text-slate-600 leading-relaxed text-sm italic">
+                              <p className="text-slate-600 leading-relaxed text-sm italic whitespace-pre-wrap">
                                 "{currentRecord.resumo_formatado || currentRecord.queixa_principal || "Nenhum relato transcrito."}"
                               </p>
                             </div>

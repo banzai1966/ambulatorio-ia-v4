@@ -857,13 +857,25 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {patientHistory.length > 0 ? (
                   patientHistory.map(record => (
-                    <div key={record.id} className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-                      <div className="font-bold text-sm text-slate-800">{new Date(record.data_consulta).toLocaleDateString()} - {record.especialidade}</div>
-                      <div className="text-[10px] text-slate-500 mb-1 flex items-center gap-1">
+                    <div key={record.id} className="p-4 bg-slate-50 rounded-lg border border-slate-100 hover:border-clinical-blue/20 transition-colors">
+                      <div className="font-bold text-sm text-slate-800">
+                        {record.data_consulta ? new Date(record.data_consulta).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Sem data'} - {record.especialidade}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mb-2 flex items-center gap-1">
                         <Stethoscope size={12} />
                         Médico: {record.profiles?.full_name || record.profissional_responsavel || 'Não informado'}
                       </div>
-                      <div className="text-xs text-slate-600 mt-1">{record.resumo_formatado}</div>
+                      <div className="text-xs text-slate-600 space-y-2">
+                        {record.resumo_formatado && (
+                          <p className="font-medium bg-white/60 p-2 rounded border border-slate-100 whitespace-pre-wrap">{record.resumo_formatado}</p>
+                        )}
+                        {record.hipotese_diagnostica && (
+                          <p className="text-indigo-700 bg-indigo-50/50 p-2 rounded border border-indigo-100/30"><b>Hipótese:</b> {record.hipotese_diagnostica}</p>
+                        )}
+                        {record.sugestao_conduta && (
+                          <p className="text-emerald-700 bg-emerald-50/50 p-2 rounded border border-emerald-100/30"><b>Conduta:</b> {record.sugestao_conduta}</p>
+                        )}
+                      </div>
                     </div>
                   ))
                 ) : (
