@@ -2,7 +2,7 @@ import axios from 'axios';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const getGeminiKey = () => {
-  return import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+  return import.meta.env.VITE_GEMINI_API_KEY || (process.env.GEMINI_API_KEY as string);
 };
 
 export async function analyzeIntent(message: string, history: any[] = []) {

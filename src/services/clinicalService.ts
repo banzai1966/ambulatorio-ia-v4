@@ -12,7 +12,7 @@ export interface ClinicalSummary {
 }
 
 const getGeminiKey = () => {
-  return process.env.GEMINI_API_KEY;
+  return process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
 };
 
 export async function generateClinicalSummary(messages: any[]): Promise<ClinicalSummary> {
