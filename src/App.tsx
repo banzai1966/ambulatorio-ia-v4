@@ -3031,21 +3031,22 @@ export default function App() {
                               </button>
                             )}
 
-                            {/* Genérico Roteiro de Teste Demonstrativo */}
-                            <div className="mt-8 mx-4 sm:mx-10 max-w-2xl bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-indigo-900 animate-in slide-in-from-top-4 fade-in duration-300">
-                              <h3 className="font-bold text-sm sm:text-base flex items-center gap-2 mb-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                                Roteiro de Teste (Leia no microfone para ver o poder da IA):
-                              </h3>
-                              <p className="text-xs sm:text-sm italic select-all cursor-pointer bg-white/50 p-4 rounded-xl border border-indigo-50/50 leading-relaxed text-justify">
-                                {examMode === 'integrative' && '"O Paciente chama-se Carlos de Souza, 45 anos. Refere dor aguda nos dois joelhos, peso nas pernas e insônia frequente. Desejo manter a reposição de Vitamina D3 50.000 UI semanal. Adicionar Coenzima Q10 200mg, DHEA 25mg e também o fitoterápico Artemísia em gotas. Sinalizar déficit leve de Serotonina. Hipótese: Dores articulares e deficiências vitamínicas. Conduta: Administrar ibuprofeno para dores focais. Prescrição: Ibuprofeno 400mg, 1 comprimido pela manhã."'}
-                                {examMode === 'neurological' && '"O Paciente chama-se Carlos de Souza, 45 anos. No exame neurológico ele apresenta fácies típica, atitude ativa e dominância destra. A marcha é normal. A fluência verbal é da classe 30 a 45. O teste cognitivo apresentou orientação temporal e espacial normais, memória imediata e repetição preservadas, atingindo um total de 28 na pontuação. Sensibilidade de toque na cabeça preservada. Sobre a área de dores do mapeamento, o paciente manifesta uma dor persistente na região lombar posterior. Hipótese: Lombalgia crônica."'}
-                                {examMode !== 'integrative' && examMode !== 'neurological' && '"Paciente: João Silva, nascido em 10/05/1975. Queixa de dor de cabeça forte há 3 dias, acompanhada de dor na nuca e dor lombar. Pressão arterial 140 por 90. Hipótese: Cefaleia tensional e Lombalgia. Sugerido analgésico, repouso, e encaminhamento para fisioterapia. Prescrição: Paracetamol 750mg, tomar 1 comprimido a cada 8 horas."'}
-                              </p>
-                            </div>
                           </motion.div>
                         )}
                       </AnimatePresence>
+                    </div>
+
+                    {/* Genérico Roteiro de Teste Demonstrativo (Moved outside so it stays visible while recording) */}
+                    <div className="mt-8 mx-4 sm:mx-10 max-w-2xl mx-auto bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-indigo-900 animate-in slide-in-from-top-4 fade-in duration-300">
+                      <h3 className="font-bold text-sm sm:text-base flex items-center gap-2 mb-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                        Roteiro de Teste (Leia no microfone para ver o poder da IA):
+                      </h3>
+                      <p className="text-xs sm:text-sm italic select-all cursor-pointer bg-white/50 p-4 rounded-xl border border-indigo-50/50 leading-relaxed text-justify">
+                        {examMode === 'integrative' && '"O Paciente chama-se Carlos de Souza, 45 anos. Refere dor aguda nos dois joelhos, peso nas pernas e insônia frequente. Desejo manter a reposição de Vitamina D3 50.000 UI semanal. Adicionar Coenzima Q10 200mg, DHEA 25mg e também o fitoterápico Artemísia em gotas. Sinalizar déficit leve de Serotonina. Hipótese: Dores articulares e deficiências vitamínicas. Conduta: Administrar ibuprofeno para dores focais. Prescrição: Ibuprofeno 400mg, 1 comprimido pela manhã."'}
+                        {examMode === 'neurological' && '"O Paciente chama-se Carlos de Souza, 45 anos. No exame neurológico ele apresenta fácies típica, atitude ativa e dominância destra. A marcha é normal. A fluência verbal é da classe 30 a 45. O teste cognitivo apresentou orientação temporal e espacial normais, memória imediata e repetição preservadas, atingindo um total de 28 na pontuação. Sensibilidade de toque na cabeça preservada. Sobre a área de dores do mapeamento, o paciente manifesta uma dor persistente na região lombar posterior. Hipótese: Lombalgia crônica."'}
+                        {examMode !== 'integrative' && examMode !== 'neurological' && '"Paciente: João Silva, nascido em 10/05/1975. Queixa de dor de cabeça forte há 3 dias, acompanhada de dor na nuca e dor lombar. Pressão arterial 140 por 90. Hipótese: Cefaleia tensional e Lombalgia. Sugerido analgésico, repouso, e encaminhamento para fisioterapia. Prescrição: Paracetamol 750mg, tomar 1 comprimido a cada 8 horas."'}
+                      </p>
                     </div>
 
                     {error && (
