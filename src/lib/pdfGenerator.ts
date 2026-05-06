@@ -54,7 +54,7 @@ export function generatePrescriptionPDF(data: PrescriptionData) {
   doc.setFont('helvetica', 'bold');
   doc.text("DATA:", 145, 65);
   doc.setFont('helvetica', 'normal');
-  doc.text(data.data || new Date().toLocaleDateString('pt-BR'), 160, 65);
+  doc.text(data.data || new Date().toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}), 160, 65);
   
   // Rx Symbol
   doc.setFontSize(30);

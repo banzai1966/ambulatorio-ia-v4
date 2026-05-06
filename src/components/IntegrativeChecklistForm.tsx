@@ -133,10 +133,21 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
     );
   }
 
-  const formattedCurrentDate = currentDate ? (() => {
-    const d = new Date(currentDate);
-    return !isNaN(d.getTime()) ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
-  })() : '';
+  const formatShort = (dateStr: string | undefined | null) => {
+    if (!dateStr) return '';
+    try {
+      if (dateStr.includes('T00:00:00.000Z') || dateStr.includes('T00:00:00+00:00') || (dateStr.includes('-') && !dateStr.includes('T'))) {
+          const parts = dateStr.split('T')[0].split('-');
+          return `${parts[2].substring(0,2)}/${parts[1]}/${parts[0].slice(-2)}`;
+      }
+      const formatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: '2-digit', month: '2-digit', day: '2-digit' });
+      return formatter.format(new Date(dateStr));
+    } catch (e) {
+      return '';
+    }
+  };
+
+  const formattedCurrentDate = formatShort(currentDate as string | undefined);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -290,12 +301,14 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
                           </th>
                           {historyToDisplay.map((h, i) => {
                             const dateVal = h.data_consulta || h.created_at;
-                            const dateObj = dateVal ? new Date(dateVal) : null;
-                            const isValidDate = dateObj && !isNaN(dateObj.getTime());
+                            let formatted = formatShort(dateVal);
+                            if (formatted) {
+                              formatted = formatted.substring(0, 5); // Pega apenas DD/MM
+                            }
                             
                             return (
                               <th key={h.id || i} className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-100 min-w-[100px] text-left">
-                                Histórico ({isValidDate ? dateObj!.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : 'Ant.'})
+                                Histórico ({formatted || 'Ant.'})
                               </th>
                             );
                           })}
@@ -323,9 +336,12 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
                               const displayVal: string = safeStringifyItem(histVal);
                                
                               const dateVal = h.data_consulta || h.created_at;
-                              const dateObj = dateVal ? new Date(dateVal) : null;
-                              const isValidDate = dateObj && !isNaN(dateObj.getTime());
-                              const dateStr = isValidDate ? dateObj!.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : 'Ant.';
+                              let dateStr = formatShort(dateVal);
+                              if (dateStr) {
+                                dateStr = dateStr.substring(0, 5); // Apenas DD/MM
+                              } else {
+                                dateStr = 'Ant.';
+                              }
                               
                               return (
                                 <td key={h.id || i} className="p-3 border-l border-slate-100 text-left">

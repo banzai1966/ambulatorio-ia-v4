@@ -68,6 +68,17 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
         <RadioGroup path="atitude" label="Atitude" options={['ativa', 'passiva']} />
         <RadioGroup path="dominancia" label="Dominância" options={['D', 'E']} />
         <RadioGroup path="marcha" label="Marcha" options={['normal', 'alterada']} />
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-slate-800">Glasgow:</span>
+          <input 
+            type="number" 
+            value={data?.escala_glasgow || ''} 
+            onChange={(e) => updateField('escala_glasgow', Number(e.target.value))} 
+            className="w-12 border-b border-slate-300 outline-none text-center bg-transparent text-slate-800 font-bold"
+            min={3} max={15}
+          />
+          <span className="text-slate-500 text-xs">/15</span>
+        </div>
       </div>
 
       {/* Força Muscular */}

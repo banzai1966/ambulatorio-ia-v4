@@ -56,6 +56,7 @@ import IntegrativeChecklistForm from './components/IntegrativeChecklistForm';
 import IntegrativeBodyMap from './components/IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './components/IntegrativeEvolution';
 import SpecialtyFields from './components/SpecialtyFields';
+import VitalMonitor from './components/VitalMonitor';
 import { SPECIALTIES } from './constants/specialties';
 import type { NeurologicalExamData, MuscleAssessment, SensitivityAssessment } from './types/neurologicalExam';
 import type { IntegrativeChecklistData } from './types/integrativeChecklist';
@@ -96,6 +97,13 @@ interface ClinicalRecord {
   tipo_midia?: string;
   comparativo?: any;
   mapeamento_corporal?: any;
+  vitals?: {
+    bpm?: number;
+    spo2?: number;
+    resp?: number;
+    pressao?: string;
+    resumo_clinico?: string;
+  };
   profiles?: {
     full_name: string;
   };
@@ -1366,6 +1374,7 @@ export default function App() {
           prescricao: result.prescricao || '',
           sugestao_conduta: result.sugestao_conduta || '',
           queixa_principal: result.queixa_principal || '',
+          vitals: result.vitals ? { ...result.vitals, resumo_clinico: result.resumo_clinico || '' } : undefined,
           data_consulta: getLocalISODate()
         };
         
@@ -1451,6 +1460,11 @@ export default function App() {
         recordToSave.mapeamento_corporal = currentRecord.mapeamento_corporal;
       }
       
+      // Sempre salvar vitais se existir
+      if (currentRecord.vitals) {
+        recordToSave.vitals = currentRecord.vitals;
+      }
+      
       recordToSave.dados_especialidade = currentRecord.dados_especialidade || specialtyData;
       recordToSave.exame_fisico = currentRecord.exame_fisico;
 
@@ -1475,10 +1489,15 @@ export default function App() {
           }
         });
 
-        // Garantir que mapeamento_corporal seja salvo DENTRO do JSON dados_especialidade e NÃO na raiz
+        // Garantir que mapeamento e vitais sejam salvos DENTRO do JSON dados_especialidade e NÃO na raiz
         if (data.mapeamento_corporal) {
           payload.dados_especialidade = payload.dados_especialidade || {};
           payload.dados_especialidade.mapeamento_corporal = data.mapeamento_corporal;
+        }
+        
+        if (data.vitals) {
+          payload.dados_especialidade = payload.dados_especialidade || {};
+          payload.dados_especialidade.vitals = data.vitals;
         }
 
         console.log("PAYLOAD_ENVIADO (Chaves):", Object.keys(payload));
@@ -1741,28 +1760,33 @@ export default function App() {
         const neuroHeader = `Fáscia: ${safeText(ex.fascia || 'N/A')} | Atitude: ${safeText(ex.atitude || 'N/A')} | Dominância: ${safeText(ex.dominancia || 'N/A')}`;
         doc.text(neuroHeader, margin, currentY);
         currentY += 6;
-        doc.text(`Marcha: ${safeText(ex.marcha || 'N/A')}`, margin, currentY);
+        let marchaGlasgow = `Marcha: ${safeText(ex.marcha || 'N/A')}`;
+        if (ex.escala_glasgow) {
+          marchaGlasgow += ` | Escala de Glasgow: ${ex.escala_glasgow}`;
+        }
+        doc.text(marchaGlasgow, margin, currentY);
         currentY += 10;
 
         // Tabelas de Força e Sensibilidade
         if (ex.forca_muscular && typeof ex.forca_muscular === 'object') {
           const muscleData = Object.entries(ex.forca_muscular).map(([key, val]: [string, any]) => [
-            key.toUpperCase(), safeText(val?.forca), safeText(val?.tonus), safeText(val?.trofismo), safeText(val?.mov_anormais || val?.mov_normais)
-          ]).filter(row => row[1] || row[2] || row[3] || row[4]);
+            key.toUpperCase(), safeText(val?.tonus), safeText(val?.trofismo), safeText(val?.mov_anormais || val?.mov_normais), safeText(val?.deformidades), safeText(val?.fatigabilidade)
+          ]).filter(row => row[1] || row[2] || row[3] || row[4] || row[5]);
 
           if (muscleData.length > 0) {
             checkPageBreak(40);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0, 50, 100);
-            doc.text("AVALIAÇÃO MOTORA (FORÇA, TÔNUS, TROFISMO):", margin, currentY);
+            doc.text("AVALIAÇÃO MOTORA:", margin, currentY);
             currentY += 6;
             autoTable(doc, {
               startY: currentY,
-              head: [['Região', 'Força', 'Tônus', 'Trofismo', 'Mov. Anormais']],
+              head: [['Região', 'Tônus', 'Trofismo', 'Mov. Anormais', 'Deformidades', 'Fatigabilidade']],
               body: muscleData,
               theme: 'grid',
-              styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+              styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', halign: 'center' },
               headStyles: { fillColor: [240, 248, 255], textColor: [0, 50, 100], fontStyle: 'bold', lineWidth: 0.1 },
+              columnStyles: { 0: { halign: 'left' } },
               margin: { left: margin, right: margin }
             });
             currentY = (doc as any).lastAutoTable?.finalY + 15;
@@ -1873,9 +1897,9 @@ export default function App() {
       }
 
       // Especialidade
-      if (record.dados_especialidade && Object.keys(record.dados_especialidade).length > 1) {
+      if (record.dados_especialidade && Object.keys(record.dados_especialidade).length > 0) {
         const specDataStr = Object.entries(record.dados_especialidade)
-          .filter(([k]) => k !== 'mapeamento_corporal')
+          .filter(([k]) => k !== 'mapeamento_corporal' && k !== 'vitals')
           .map(([k, v]) => `${k.replace(/_/g, ' ').toUpperCase()}: ${safeText(v)}`)
           .join(' | ');
 
@@ -1883,13 +1907,35 @@ export default function App() {
           checkPageBreak(20);
           doc.setFontSize(12);
           doc.setTextColor(0, 50, 100);
-          doc.text(`Dados de ${safeText(record.especialidade)}`, margin, currentY);
+          doc.text(`Dados de ${safeText(record.especialidade || 'Especialidade')}`, margin, currentY);
           currentY += 7;
           doc.setFontSize(10);
           doc.setTextColor(0, 0, 0);
           const specLines = doc.splitTextToSize(specDataStr, contentWidth);
           doc.text(specLines, margin, currentY);
           currentY += (specLines.length * 5) + 10;
+        }
+      }
+
+      // Sinais Vitais (Vitals)
+      const vitalsObj = record.vitals || record.dados_especialidade?.vitals;
+      if (vitalsObj && typeof vitalsObj === 'object') {
+        const vitalsStr = Object.entries(vitalsObj)
+          .filter(([_, v]) => v)
+          .map(([k, v]) => `${k.toUpperCase()}: ${safeText(v)}`)
+          .join(' | ');
+        
+        if (vitalsStr) {
+          checkPageBreak(20);
+          doc.setFontSize(12);
+          doc.setTextColor(0, 50, 100);
+          doc.text("Sinais Vitais", margin, currentY);
+          currentY += 7;
+          doc.setFontSize(10);
+          doc.setTextColor(0, 0, 0);
+          const vitalsLines = doc.splitTextToSize(vitalsStr, contentWidth);
+          doc.text(vitalsLines, margin, currentY);
+          currentY += (vitalsLines.length * 5) + 10;
         }
       }
 
@@ -2803,10 +2849,11 @@ export default function App() {
                                     ...initialIntegrativeData,
                                     ...record.checklist_integrativo
                                   } : undefined,
-                                  // Garantia de carga do mapeamento seja da raiz (se existir coluna) ou do "baú" dados_especialidade
+                                  // Garantia de carga do mapeamento e vitals via raiz ou do "baú" dados_especialidade
                                   mapeamento_corporal: (record.mapeamento_corporal && record.mapeamento_corporal.length > 0)
                                     ? record.mapeamento_corporal 
-                                    : (record.dados_especialidade?.mapeamento_corporal || [])
+                                    : (record.dados_especialidade?.mapeamento_corporal || []),
+                                  vitals: record.vitals || record.dados_especialidade?.vitals || undefined,
                                 };
                                 console.log("LOG_VERSAO: 3.2 - Carregando mapeamento:", sanitizedRecord.mapeamento_corporal);
                                 setCurrentRecord(sanitizedRecord);
@@ -3035,9 +3082,9 @@ export default function App() {
                         Roteiro de Teste (Leia no microfone para ver o poder da IA):
                       </h3>
                       <p className="text-xs sm:text-sm italic select-all cursor-pointer bg-white/50 p-4 rounded-xl border border-indigo-50/50 leading-relaxed text-justify">
-                        {examMode === 'integrative' && '"O Paciente chama-se Carlos de Souza, 45 anos. Refere dor aguda nos dois joelhos, peso nas pernas e insônia frequente. Desejo manter a reposição de Vitamina D3 50.000 UI semanal. Adicionar Coenzima Q10 200mg, DHEA 25mg e também o fitoterápico Artemísia em gotas. Sinalizar déficit leve de Serotonina. Hipótese: Dores articulares e deficiências vitamínicas. Conduta: Administrar ibuprofeno para dores focais. Prescrição: Ibuprofeno 400mg, 1 comprimido pela manhã."'}
-                        {examMode === 'neurological' && '"O Paciente chama-se Carlos de Souza, 45 anos. No exame neurológico ele apresenta fácies típica, atitude ativa e dominância destra. A marcha é normal. A fluência verbal é da classe 30 a 45. O teste cognitivo apresentou orientação temporal e espacial normais, memória imediata e repetição preservadas, atingindo um total de 28 na pontuação. Sensibilidade de toque na cabeça preservada. Sobre a área de dores do mapeamento, o paciente manifesta uma dor persistente na região lombar posterior. Hipótese: Lombalgia crônica."'}
-                        {examMode !== 'integrative' && examMode !== 'neurological' && '"Paciente: João Silva, nascido em 10/05/1975. Queixa de dor de cabeça forte há 3 dias, acompanhada de dor na nuca e dor lombar. Pressão arterial 140 por 90. Hipótese: Cefaleia tensional e Lombalgia. Sugerido analgésico, repouso, e encaminhamento para fisioterapia. Prescrição: Paracetamol 750mg, tomar 1 comprimido a cada 8 horas."'}
+                        {examMode === 'integrative' && '"Paciente Carlos de Souza, 45 anos. Refere fadiga extrema e insônia frequente. Sinais vitais de hoje: pressão arterial 120 por 80, 75 batimentos por minuto, saturação de 99% e 16 respirações. Desejo manter a reposição de Vitamina D3 50.000 UI semanal. Adicionar suplementação de Coenzima Q10 200mg, DHEA 25mg e também o fitoterápico Artemísia em gotas. Sinalizar déficit leve de Serotonina e possível risco de exaustão adrenal, que o Copiloto deve atentar. No exame físico, dor na região dos joelhos na face anterior. Hipótese: Fadiga crônica e deficiências vitamínicas. Conduta: Ajuste metabólico e uso contínuo de suplementação."'}
+                        {examMode === 'neurological' && '"Paciente João, 55 anos. Chega ao ambulatório se queixando de dor irradiada pela lombar que vai até a panturrilha direita. Nos sinais vitais de hoje: pressão em 140 por 90, saturação de 98% e 80 batimentos por minuto de frequência cardíaca. Relata que a dor principal é nas costas. Ao exame neurológico minucioso, ele está com escala de Glasgow 15, atitude ativa e dominância destra. Pupilas isocóricas e fotorreagentes. Marcha claudicante à direita devido à queixa de dor. Na avaliação de força muscular: membros superiores esquerdo e direito estão com grau 5, sem deformidades, normais. Mas nos membros inferiores, do lado direito observo fadiga muscular e grau 4, enquanto no lado esquerdo ele mantém grau 5. Tônus e trofismo estão normais na face e membros. Na sensibilidade, observo resposta normal tátil na perna direita, porém a dor na região do abdome e tórax não estão presentes. Nervos cranianos preservados. Suspeito de lombociatalgia direita e já prescrevi Pregabalina 75mg."'}
+                        {examMode !== 'integrative' && examMode !== 'neurological' && '"Paciente João Silva, 48 anos. Queixa de dor de cabeça forte há 3 dias, acompanhada de dor na nuca e incômodo lombar. Sinais vitais capturados agora: Pressão arterial 150 por 95 mostrando estar hipertenso, 88 batimentos por minuto, saturação a 97% e 18 respirações por minuto. Por favor gerar o alerta do Copiloto em relação ao risco cardiovascular. Hipótese: Crise hipertensiva e Cefaleia tensional. Sugerido repouso e acompanhamento da pressão. Prescrição: Captopril 25mg sublingual e Dipirona 1g se houver dor."'}
                       </p>
                     </div>
 
@@ -3221,6 +3268,19 @@ export default function App() {
                             <Copy size={18} />
                           </button>
                         </div>
+                        
+                        {/* Vitals Monitor (AI Assisted) */}
+                        {currentRecord.vitals && (
+                          <div className="mb-8 w-full animate-in fade-in zoom-in-95 duration-500">
+                             <VitalMonitor 
+                               bpm={currentRecord.vitals.bpm} 
+                               spo2={currentRecord.vitals.spo2} 
+                               resp={currentRecord.vitals.resp}
+                               pressao={currentRecord.vitals.pressao}
+                               resumo_clinico={currentRecord.vitals.resumo_clinico} 
+                             />
+                          </div>
+                        )}
 
                         {/* Exam Specific Content */}
                         {examMode === 'integrative' ? (

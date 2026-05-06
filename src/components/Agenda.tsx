@@ -541,7 +541,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                         <Clock size={14} /> {new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:{new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}
                       </span>
                       <span className="flex items-center gap-1.5">
-                        <Calendar size={14} /> {new Date(app.data_hora_inicio).toLocaleDateString('pt-BR')}
+                        <Calendar size={14} /> {new Date(app.data_hora_inicio).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'})}
                       </span>
                       <span className="flex items-center gap-1.5 text-clinical-blue font-medium">
                         <Stethoscope size={14} /> {app.medico_nome} {app.medico_especialidade && `(${app.medico_especialidade})`}

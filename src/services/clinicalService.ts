@@ -103,6 +103,17 @@ export async function processClinicalInput(
         "queixa_principal": "Descreva a dor ou motivo",
         "prescricao": "Lista de medicações ditadas (ex: Colina 500mg)",
         "dados_clinicos": "Para pressão, peso, altura, histórico",
+        "paciente_status": "estável | atenção | crítico (Avalie a gravidade. Se fc, spo2 ou resp fora da normalidade, use atenção ou crítico)",
+        "vitals": {
+          "bpm": "Extraia número (ex: 72)",
+          "spo2": "Extraia número (ex: 98)",
+          "resp": "Extraia número de respirações",
+          "pressao": "Extraia valor de pressão arterial, ex: 120/80"
+        },
+        "alertas_copiloto": [
+          "Gere 1 a 3 alertas médicos rápidos e inteligentes baseados na transcrição (riscos, alterações, observações clínicas cruciais)"
+        ],
+        "resumo_clinico": "Breve justificativa clínica dos sinais vitais extraídos",
         "mapeamento_corporal": [
            {"x": 30, "y": 40, "label": "dor no ombro direito", "side": "anterior"}
         ],
@@ -111,6 +122,7 @@ export async function processClinicalInput(
           "atitude": "ativa" | "passiva",
           "dominancia": "D" | "E",
           "marcha": "normal" | "alterada",
+          "escala_glasgow": 15,
           "fluencia_verbal": "0-15" | "15-30" | "30-45" | "45-60",
           "cognitivo": { "orient_temp": "", "orient_esp": "", "mem_imed": "", "calculo": "", "mem_evoc": "", "nomeacao": "", "repeticao": "", "leitura": "", "comando": "", "total_score": "" },
           "nervos_cranianos": { "ii": "", "iii": "", "iv": "", "vi": "", "v": "", "vii": "", "viii": "", "ix": "", "x": "", "xi": "", "xii": "", "pupilas_d": "", "pupilas_e": "", "fundo_olho": "normal"|"alterado", "campo": "" },
@@ -132,6 +144,8 @@ export async function processClinicalInput(
          - Eixo X (Horizontal): Centro = 50. Ombros = 32 ou 68. Joelhos = 40 ou 60. Pés = 38 ou 62.
          - Eixo Y (Vertical): Cabeça=10, Cervical=15, Ombros=22, Peito=35, Lombar=48, Glúteo=55, Joelhos=72, Panturrilha=85, Pés=95.
       3. exame_neurologico: Preencha este objeto se o modo for 'neurological'. Caso contrário, retorne null!
+         - IMPORTANTE: "Glasgow" refere-se a "escala_glasgow" (um número, máx 15). NUNCA coloque 'Glasgow 15' dentro de 'cognitivo.total_score'.
+         - "cognitivo.total_score" é exclusivo do Mini Mental / MEEM (um número, máx 30).
       4. checklist_integrativo: Somente preencha do schema definido abaixo. Valores exatos (ex: 500mg). Se apenas nome, use 'Sinalizado'. Se não for modo integrativo, retorne null!
       5. Ignore pausas e ruídos.
 

@@ -228,7 +228,9 @@ app.post("/api/process-clinical", async (req, res) => {
       - sugestao_conduta: Resumo da conduta (para exibição rápida)
       - alertas_copiloto: Array de strings. Atue como um Copiloto Clínico Integrativo. Analise as suplementações/vitaminas e cite alertas CUIDADOSOS. Exemplos Obrigatórios: "Uso de altas doses de Vitamina D3 (como 50.000 UI) exige Vitamina K2 associada obrigatoriamente para evitar toxicidade e calcificação", "Zinco sem Cobre...". Seja breve e comece com "Atenção:". Mesmo riscos e dicas de controle devem ser pontuados.  Se a prescrição estiver 100% perfeita, retorne um array vazio [].
       - especialidade: Especialidade sugerida ou confirmada
-      - paciente_status: Status (Estável, Alerta, Urgente)
+      - paciente_status: Status ("Estável", "Atenção" ou "Crítico"). Avalie a gravidade. Se encontrar FC, SpO2, Pressão ou Respiração fora do normal, use "Atenção" ou "Crítico".
+      - vitals: Objeto contendo os sinais vitais extraídos do relato. Estrutura: { "bpm": numero, "spo2": numero, "resp": numero, "pressao": "string" }. Ex: { "bpm": 72, "spo2": 98, "resp": 16, "pressao": "120/80" }. Mantenha undefined para os não citados.
+      - resumo_clinico: String curta justificando o paciente_status e os sinais vitais, ou preencha com a condição geral rápida se for normal.
       - mapeamento_corporal: Array de objetos marcando sintomas locais ou dores. IMPORTANTE: Extraia SEMPRE o mapeamento se o paciente relatar dor (ex: "dor na perna") ou outros sintomas físicos localizados (ex: "peso nas pernas", "formigamento na mão"). Use labels curtíssimos (ex: "Dor Joelho D", "Peso Pernas"). Se não houver sintoma localizado relatado, retorne []. 
         Estrutura de cada ponto: { "x": numero, "y": numero, "side": "front" ou "back", "label": "string curta" }. 
         Use coordenadas percentuais X (lateral, 50 é o centro) e Y (altura, 10 a cabeça, 95 o pé).
@@ -356,6 +358,24 @@ app.post("/api/analyze-intent", async (req, res) => {
 app.get("/api/dump-logs", (req, res) => {
   fs.writeFileSync(path.join(process.cwd(), "debug_logs.txt"), webhookLogs.join("\n"));
   res.send("Logs dumped to debug_logs.txt");
+});
+
+// Keep-alive endpoint for Supabase (prevents pausing)
+app.get("/api/keep-alive", async (req, res) => {
+  try {
+    // Simple fetch to keep connection active
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .limit(1);
+    
+    if (error) throw error;
+    
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  } catch (error: any) {
+    console.error("Keep-alive failed:", error.message);
+    res.status(500).json({ status: "error", message: error.message });
+  }
 });
 
 // Rota de saúde para o sistema
