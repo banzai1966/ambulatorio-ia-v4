@@ -2610,7 +2610,6 @@ export default function App() {
         userId={user?.id || ''}
       />
 
-      {/* Modal de Configurações da Clínica */}
       <AnimatePresence>
         {showClinicSettings && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
