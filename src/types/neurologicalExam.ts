@@ -57,6 +57,7 @@ export interface NeurologicalExamData {
     total_score?: string;
   };
   fluencia_verbal?: string | null;
+  escala_glasgow?: number | null;
 }
 
 export interface MuscleAssessment {
