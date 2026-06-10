@@ -1361,7 +1361,17 @@ export default function App() {
           paciente_telefone: selectedPatientPhone || '',
           especialidade: stripEmojis(currentSpecialty?.name || result.especialidade || selectedAppointmentReason || 'Geral'),
           paciente_status: result.paciente_status || 'Estável',
-          dados_clinicos: result.dados_clinicos || {},
+          dados_clinicos: (() => {
+            let dados = result.dados_clinicos || {};
+            if (typeof result.dados_clinicos === 'string') {
+              try {
+                dados = JSON.parse(result.dados_clinicos);
+              } catch (e) {
+                dados = { observacoes: result.dados_clinicos };
+              }
+            }
+            return dados;
+          })(),
           alertas_copiloto: Array.isArray(result.alertas_copiloto) ? result.alertas_copiloto : [],
           exame_neurologico: (examMode === 'neurological' || (result.exame_neurologico && hasMeaningfulData(result.exame_neurologico))) ? (result.exame_neurologico || {}) : undefined,
           checklist_integrativo: (examMode === 'integrative' || hasIntegrativeData) ? sanitizeChecklist(result.checklist_integrativo) : undefined,
@@ -3390,9 +3400,9 @@ export default function App() {
                               )}
 
                               {/* Demais Dados Clínicos Diversos (Se houver) */}
-                              {Object.entries(currentRecord.dados_clinicos || {}).length > 0 && examMode !== 'neurological' && (
+                              {currentRecord.dados_clinicos && typeof currentRecord.dados_clinicos === 'object' && Object.entries(currentRecord.dados_clinicos).length > 0 && examMode !== 'neurological' && (
                                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {Object.entries(currentRecord.dados_clinicos || {}).map(([key, val]) => (
+                                  {Object.entries(currentRecord.dados_clinicos).map(([key, val]) => (
                                     val && val !== "null" && (
                                       <div key={key} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm group hover:border-clinical-blue/30 transition-all">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] block mb-1 group-hover:text-clinical-blue transition-colors">
