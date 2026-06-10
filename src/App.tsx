@@ -1617,9 +1617,25 @@ export default function App() {
   };
 
   const getLocalISODate = () => {
-    // Generate ISO string so that when saved to DB as timestamptz and read back,
-    // the timezone conversion accurately determines the day.
-    return new Date().toISOString();
+    // Retorna a data local no formato YYYY-MM-DD respeitando o fuso de America/Sao_Paulo
+    try {
+      const options = { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric', day: 'numeric' } as const;
+      const formatter = new Intl.DateTimeFormat('en-US', options);
+      const parts = formatter.formatToParts(new Date());
+      const monthPart = parts.find(p => p.type === 'month')?.value || '';
+      const dayPart = parts.find(p => p.type === 'day')?.value || '';
+      const yearPart = parts.find(p => p.type === 'year')?.value || '';
+      
+      const pad = (n: string) => n.padStart(2, '0');
+      if (yearPart && monthPart && dayPart) {
+        return `${yearPart}-${pad(monthPart)}-${pad(dayPart)}`;
+      }
+    } catch (e) {
+      console.warn("Error getting local ISO date", e);
+    }
+    const local = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
   };
 
   const stripEmojis = (str: string) => {

@@ -179,22 +179,39 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
   async function fetchDashboardData() {
     try {
       setLoading(true);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       
-      // Data de 7 dias atrás
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(today.getDate() - 7);
-      sevenDaysAgo.setHours(0, 0, 0, 0);
+      // Helper dates respecting Brazil (America/Sao_Paulo) timezone
+      const getLocalStartOfDay = (date: Date = new Date()) => {
+        const options = { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric', day: 'numeric' } as const;
+        const formatter = new Intl.DateTimeFormat('en-US', options);
+        const parts = formatter.formatToParts(date);
+        const month = parts.find(p => p.type === 'month')?.value || '';
+        const day = parts.find(p => p.type === 'day')?.value || '';
+        const year = parts.find(p => p.type === 'year')?.value || '';
+        const pad = (n: string) => n.padStart(2, '0');
+        const localDayStr = `${year}-${pad(month)}-${pad(day)}`;
+        
+        // Convert to start of day in UTC (using -3h offset for America/Sao_Paulo)
+        // Since America/Sao_Paulo is UTC-3, 00:00:00 local time is 03:00:00 UTC.
+        const startOfLocalDayUTC = new Date(`${localDayStr}T03:00:00.000Z`);
+        return {
+          todayDate: localDayStr,
+          todayISO: startOfLocalDayUTC.toISOString()
+        };
+      };
 
-      const todayISO = today.toISOString();
-      const todayDate = today.toISOString().split('T')[0];
+      const { todayDate, todayISO } = getLocalStartOfDay();
+      
+      // Calculate seven days ago local start of day
+      const dSeven = new Date(`${todayDate}T00:00:00Z`);
+      dSeven.setUTCDate(dSeven.getUTCDate() - 7);
+      const sevenDaysAgoISO = new Date(dSeven.getTime() + (3 * 60 * 60 * 1000)).toISOString();
 
       // 1. Buscar prontuários dos últimos 7 dias
       const { data: prontuarios, error: prontuariosError } = await supabase
         .from('prontuarios')
         .select('created_at')
-        .gte('created_at', sevenDaysAgo.toISOString());
+        .gte('created_at', sevenDaysAgoISO);
 
       if (prontuariosError) console.error("Erro ao buscar dados para o gráfico:", prontuariosError);
 
@@ -202,18 +219,26 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
       const counts: Record<string, number> = {};
       const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
       
-      // Inicializar com 0
+      // Inicializar com 0 respeitando o fuso horário
       for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(today.getDate() - i);
-        counts[days[d.getDay()]] = 0;
+        const d = new Date(`${todayDate}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - i);
+        const dayName = days[d.getUTCDay()];
+        counts[dayName] = 0;
       }
 
       if (prontuarios) {
         prontuarios.forEach(p => {
           const date = new Date(p.created_at);
-          const dayName = days[date.getDay()];
-          counts[dayName] = (counts[dayName] || 0) + 1;
+          const formatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short' });
+          const rawDay = formatter.format(date).toLowerCase().replace('.', '');
+          const mappedName = ({
+            'dom': 'Dom', 'seg': 'Seg', 'ter': 'Ter', 'qua': 'Qua', 'qui': 'Qui', 'sex': 'Sex', 'sáb': 'Sáb'
+          } as Record<string, string>)[rawDay] || rawDay;
+          
+          if (counts[mappedName] !== undefined) {
+            counts[mappedName] = (counts[mappedName] || 0) + 1;
+          }
         });
       }
 
