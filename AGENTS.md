@@ -24,3 +24,11 @@ Ao trabalhar com os modos `standard`, `neurological`, e `integrative`, a regra d
 
 **IMPORTANTE (NUNCA QUEBRE)**: Nunca verifique existencia de dados apenas por chaves (Exemplo ERRADO: `Object.keys(record.exame_neurologico).length > 0`). Sempre use a helper `hasMeaningfulData(record.exame_neurologico)`. E ao carregar do banco, dê prioridade checando se a especialidade corresponde a 'neuro' ou 'integrativa' para abrir no form adequado.
 
+## 5. Planejamento Científico Integrativo & Odontologia Biológica (Módulo Dra. Lucy)
+Quando o usuário solicitar a implementação deste módulo no futuro:
+- **Funcionalidade**: Gerador de Relatório de Casos Complexos em Odontologia Biológica & Saúde Integrativa.
+- **Entradas**: Queixas, exames de sangue, focos de inflamação crônica, amálgama/biocompatibilidade, raio-X/tomografia.
+- **Saídas**: Relatório clínico estruturado com diretrizes de intervenção, estilo de vida, imunologia, terapia neural e citações científicas / referências no rodapé.
+- **Base de Conhecimento**: Suporte a RAG (upload de diretrizes/artigos em PDF/Markdown) e busca científica integrada (Google Scholar / PubMed via Gemini Grounding).
+
+

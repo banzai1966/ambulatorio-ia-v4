@@ -31,6 +31,10 @@ interface Appointment {
   medico_id: string;
   medico_nome?: string;
   medico_especialidade?: string;
+  convenio?: string;
+  valor_consulta?: string;
+  status_pagamento?: string;
+  tipo_consulta?: string;
 }
 
 interface Doctor {
@@ -40,7 +44,7 @@ interface Doctor {
 }
 
 export default function Agenda({ onStartConsultation, onOpenChat, user, prefillPatient }: { 
-  onStartConsultation: (paciente: string, telefone?: string, motivo?: string, medicoId?: string, appointmentId?: string) => void, 
+  onStartConsultation: (paciente: string, telefone?: string, motivo?: string, medicoId?: string, appointmentId?: string, convenio?: string, especialidade?: string) => void, 
   onOpenChat: (phone: string) => void,
   user: any, 
   prefillPatient?: {name: string, phone: string} | null 
@@ -60,10 +64,60 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     data_hora_inicio: '', 
     motivo: '', 
     medico_id: user?.role === 'doctor' ? user.id : '',
-    especialidade_id: ''
+    especialidade_id: '',
+    convenio: 'SulAmérica Saúde',
+    valor_consulta: '350',
+    status_pagamento: 'Pago',
+    tipo_consulta: 'Primeira Consulta'
   });
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [testPhone, setTestPhone] = useState('');
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'confirmado':
+        return 'bg-amber-100 text-amber-900 border-amber-300 font-bold'; // Amarelo
+      case 'presente':
+      case 'aguardando':
+        return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold'; // Verde
+      case 'em atendimento':
+        return 'bg-purple-100 text-purple-900 border-purple-300 font-bold'; // Roxo
+      case 'atendido':
+        return 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold'; // Indigo
+      case 'agendado':
+      case 'não confirmado':
+      default:
+        return 'bg-blue-100 text-blue-900 border-blue-300 font-bold'; // Azul
+    }
+  };
+
+  const handleSendConfirmation = async (app: Appointment) => {
+    if (!app.paciente_telefone) {
+      toast.error("Paciente não possui telefone cadastrado.");
+      return;
+    }
+    const toastId = toast.loading("Enviando confirmação no WhatsApp...");
+    try {
+      const res = await fetch('/api/whatsapp/send-confirmation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: app.paciente_telefone,
+          patientName: app.paciente_nome,
+          doctorName: app.medico_nome,
+          date: new Date(app.data_hora_inicio).toLocaleDateString('pt-BR'),
+          time: `${new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:${new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}`,
+          appointmentId: app.id
+        })
+      });
+
+      if (!res.ok) throw new Error("Falha no disparo");
+
+      toast.success("Confirmação e Link de Anamnese enviados com sucesso!", { id: toastId });
+    } catch (err: any) {
+      toast.error("Erro ao enviar mensagem: " + err.message, { id: toastId });
+    }
+  };
 
   useEffect(() => {
     fetchDoctors();
@@ -79,8 +133,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const fetchSpecialties = async () => {
     // Começa com os padrões para garantir que nunca esteja vazio na UI
     const defaults = [
-      { id: 'neurologia', nome: 'Neurologia' },
-      { id: 'ortopedia', nome: 'Ortopedia' }
+      { id: 'integrativa', nome: 'Medicina Integrativa' },
+      { id: 'odontologia_biologica', nome: 'Odontologia Biológica & Harmonização' },
+      { id: 'neurologia', nome: 'Neurologia Especializada' },
+      { id: 'clinica_geral', nome: 'Clínica Geral & Rotina' }
     ];
     setSpecialties(defaults);
 
@@ -288,6 +344,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           }
           if (!dataHoraInicio) dataHoraInicio = new Date().toISOString();
 
+          const convenio = app.convenio || app.health_insurance || 'SulAmérica Saúde';
+          const valor_consulta = app.valor_consulta || '350';
+          const status_pagamento = app.status_pagamento || 'Pago';
+          const tipo_consulta = app.tipo_consulta || 'Primeira Consulta';
+
           return {
             id: app.id,
             paciente_nome,
@@ -297,7 +358,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             medico_id,
             status,
             medico_nome: medicoNome,
-            medico_especialidade: especialidadeNome
+            medico_especialidade: especialidadeNome,
+            convenio,
+            valor_consulta,
+            status_pagamento,
+            tipo_consulta
           };
         }));
 
@@ -386,6 +451,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         especialidade_id: (newAppointment.especialidade_id && newAppointment.especialidade_id.length > 20) ? newAppointment.especialidade_id : null,
         especialidade_nome: selectedSpecialtyObj?.nome || 'Clínico Geral',
         motivo: newAppointment.motivo,
+        convenio: newAppointment.convenio,
+        valor_consulta: newAppointment.valor_consulta,
+        status_pagamento: newAppointment.status_pagamento,
+        tipo_consulta: newAppointment.tipo_consulta,
         status: 'Agendado'
       };
 
@@ -407,7 +476,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         data_hora_inicio: '', 
         motivo: '', 
         medico_id: user?.role === 'doctor' ? user.id : '',
-        especialidade_id: ''
+        especialidade_id: '',
+        convenio: 'SulAmérica Saúde',
+        valor_consulta: '350',
+        status_pagamento: 'Pago',
+        tipo_consulta: 'Primeira Consulta'
       });
       setAvailableSlots([]);
     } catch (err: any) {
@@ -535,8 +608,29 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     <User size={24} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg text-slate-900">{app.paciente_nome}</h3>
-                    <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-bold text-lg text-slate-900">{app.paciente_nome}</h3>
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs border ${getStatusBadgeClass(app.status)}`}>
+                        {app.status || 'Agendado'}
+                      </span>
+                      {app.convenio && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                          {app.convenio}
+                        </span>
+                      )}
+                      {app.status_pagamento && (
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${app.status_pagamento === 'Pago' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                          {app.status_pagamento} • R$ {app.valor_consulta || '350'}
+                        </span>
+                      )}
+                      {app.tipo_consulta && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
+                          {app.tipo_consulta}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mt-1">
                       <span className="flex items-center gap-1.5">
                         <Clock size={14} /> {new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:{new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}
                       </span>
@@ -551,6 +645,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleSendConfirmation(app)}
+                    className="flex items-center gap-1 px-3 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-all shadow-xs"
+                    title="Disparar confirmação de consulta com link de Anamnese no WhatsApp"
+                  >
+                    <Send size={14} /> Confirmação
+                  </button>
+
                   <button 
                     onClick={() => {
                       if (app.paciente_telefone) {
@@ -566,8 +668,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   </button>
                   <button 
                     onClick={() => {
-                      console.log("Agenda - Iniciar Atendimento - paciente:", app.paciente_nome, "telefone:", app.paciente_telefone, "motivo:", app.motivo, "medico_id:", app.medico_id, "id:", app.id);
-                      onStartConsultation(app.paciente_nome, app.paciente_telefone, app.motivo, app.medico_id, app.id);
+                      console.log("Agenda - Iniciar Atendimento - paciente:", app.paciente_nome, "telefone:", app.paciente_telefone, "convenio:", app.convenio, "especialidade:", app.medico_especialidade);
+                      onStartConsultation(
+                        app.paciente_nome, 
+                        app.paciente_telefone, 
+                        app.motivo, 
+                        app.medico_id, 
+                        app.id, 
+                        app.convenio || 'SulAmérica Saúde', 
+                        app.medico_especialidade || 'Clínico Geral'
+                      );
                     }}
                     className="bg-slate-900 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all font-bold group-hover:bg-clinical-blue"
                   >
@@ -582,11 +692,26 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl border border-slate-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-slate-900">Novo Agendamento</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X /></button>
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto"
+          onClick={() => setShowModal(false)}
+        >
+          <div 
+            className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-lg shadow-2xl border border-slate-100 my-auto max-h-[90vh] overflow-y-auto flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Novo Agendamento</h3>
+                <p className="text-xs text-slate-500">Preencha os dados da consulta e do paciente</p>
+              </div>
+              <button 
+                onClick={() => setShowModal(false)} 
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+                title="Fechar (Esc)"
+              >
+                <X size={20} />
+              </button>
             </div>
             <div className="space-y-4">
               <input 
@@ -657,6 +782,68 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   </div>
                 )}
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Convênio / Plano</label>
+                  <select 
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    value={newAppointment.convenio}
+                    onChange={e => setNewAppointment({...newAppointment, convenio: e.target.value})}
+                  >
+                    <option value="Particular">Particular</option>
+                    <option value="SulAmérica Saúde">SulAmérica Saúde</option>
+                    <option value="Bradesco Saúde">Bradesco Saúde</option>
+                    <option value="Unimed">Unimed</option>
+                    <option value="Amil Saúde">Amil Saúde</option>
+                    <option value="Porto Seguro">Porto Seguro</option>
+                    <option value="Cassi">Cassi</option>
+                    <option value="Outro Convênio">Outro Convênio</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Tipo de Consulta</label>
+                  <select 
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    value={newAppointment.tipo_consulta}
+                    onChange={e => setNewAppointment({...newAppointment, tipo_consulta: e.target.value})}
+                  >
+                    <option value="Primeira Consulta">Primeira Consulta</option>
+                    <option value="Retorno">Retorno</option>
+                    <option value="Procedimento / Harmonização">Procedimento / Harmonização</option>
+                    <option value="Avaliação Integrativa">Avaliação Integrativa</option>
+                    <option value="Emergência / Encaixe">Emergência / Encaixe</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Valor (R$)</label>
+                  <input 
+                    type="number"
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    placeholder="350"
+                    value={newAppointment.valor_consulta}
+                    onChange={e => setNewAppointment({...newAppointment, valor_consulta: e.target.value})}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Status Pagamento</label>
+                  <select 
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    value={newAppointment.status_pagamento}
+                    onChange={e => setNewAppointment({...newAppointment, status_pagamento: e.target.value})}
+                  >
+                    <option value="Pago">Pago</option>
+                    <option value="Pendente no Balcão">Pendente no Balcão</option>
+                    <option value="Guia Faturada">Guia Faturada</option>
+                    <option value="Cortesia / Isento">Cortesia / Isento</option>
+                  </select>
+                </div>
+              </div>
+
               <select 
                 className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
                 value={newAppointment.especialidade_id}
@@ -674,8 +861,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   ))
                 ) : (
                   <>
-                    <option value="neurologia">Neurologia (Padrão)</option>
-                    <option value="ortopedia">Ortopedia (Padrão)</option>
+                    <option value="integrativa">Medicina Integrativa</option>
+                    <option value="odontologia_biologica">Odontologia Biológica & Harmonização</option>
+                    <option value="neurologia">Neurologia Especializada</option>
+                    <option value="clinica_geral">Clínica Geral & Rotina</option>
                   </>
                 )}
               </select>
@@ -701,13 +890,23 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 value={newAppointment.motivo}
                 onChange={e => setNewAppointment({...newAppointment, motivo: e.target.value})}
               />
-              <button 
-                onClick={addAppointment}
-                disabled={isSaving}
-                className="w-full bg-clinical-blue text-white p-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50"
-              >
-                {isSaving ? 'Salvando...' : 'Salvar Agendamento'}
-              </button>
+              <div className="flex items-center gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="w-1/3 bg-slate-100 text-slate-700 p-4 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  onClick={addAppointment}
+                  disabled={isSaving}
+                  className="w-2/3 bg-clinical-blue text-white p-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+                >
+                  {isSaving ? 'Salvando...' : 'Salvar Agendamento'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

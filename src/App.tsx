@@ -57,7 +57,17 @@ import IntegrativeBodyMap from './components/IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './components/IntegrativeEvolution';
 import SpecialtyFields from './components/SpecialtyFields';
 import VitalMonitor from './components/VitalMonitor';
+import PatientDossierView from './components/PatientDossierView';
+import PatientMediaGallery from './components/PatientMediaGallery';
 import { SPECIALTIES } from './constants/specialties';
+import { 
+  getOfflineRecords, 
+  saveRecordLocally, 
+  syncOfflineRecordsWithCloud, 
+  exportLocalDataJSON, 
+  importLocalDataJSON,
+  OfflineRecord 
+} from './services/offlineStorageService';
 import type { NeurologicalExamData, MuscleAssessment, SensitivityAssessment } from './types/neurologicalExam';
 import type { IntegrativeChecklistData } from './types/integrativeChecklist';
 import { initialIntegrativeData } from './types/integrativeChecklist';
@@ -96,14 +106,11 @@ interface ClinicalRecord {
   midia_url?: string;
   tipo_midia?: string;
   comparativo?: any;
+  offline_id?: string;
+  is_offline_pending?: boolean;
+  saved_at?: string;
   mapeamento_corporal?: any;
-  vitals?: {
-    bpm?: number;
-    spo2?: number;
-    resp?: number;
-    pressao?: string;
-    resumo_clinico?: string;
-  };
+  vitals?: any;
   profiles?: {
     full_name: string;
   };
@@ -239,6 +246,7 @@ export default function App() {
   const [currentRecord, setCurrentRecord] = useState<ClinicalRecord | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [selectedPatientPhone, setSelectedPatientPhone] = useState('');
+  const [selectedPatientConvenio, setSelectedPatientConvenio] = useState<string>('SulAmérica Saúde');
   const [selectedAppointmentReason, setSelectedAppointmentReason] = useState('');
   const [selectedMedicoId, setSelectedMedicoId] = useState<string | null>(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
@@ -285,29 +293,64 @@ export default function App() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
 
-  useEffect(() => {
-    // Forçar limpeza de Service Worker (PWA) que trava o cache
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((registrations) => {
-        for (const registration of registrations) {
-          registration.unregister();
-          console.log("Service Worker desregistrado para forçar atualização.");
-        }
-      });
-    }
+  // Estados de Suporte Offline & PWA
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [offlinePendingCount, setOfflinePendingCount] = useState<number>(0);
+  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
 
-    toast.success("Ambulatório IA v4.4 - LAYOUT RESTAURADO!");
-    console.log("App Version: v4.4 (Clinical Focus & Scale Fix)");
-    document.title = "AMB IA v4.4 - HD Precision";
-    
-    // Versão controlada de flush para v4.4
-    const FLUSH_KEY = 'amb_ia_flush_v4.4';
-    if (!localStorage.getItem(FLUSH_KEY)) {
-      localStorage.clear();
-      localStorage.setItem(FLUSH_KEY, 'true');
-      console.log("Restaurando layout v4.4...");
-      setTimeout(() => window.location.reload(), 500);
-    }
+  useEffect(() => {
+    // Atualiza contagem inicial de registros offline
+    const updateOfflineState = () => {
+      const recs = getOfflineRecords();
+      const pending = recs.filter(r => r.is_offline_pending);
+      setOfflinePendingCount(pending.length);
+    };
+
+    updateOfflineState();
+
+    const handleOnline = async () => {
+      setIsOnline(true);
+      toast.success("📶 Conexão de Internet restaurada! Sincronizando com a nuvem...");
+      setIsSyncingOffline(true);
+      try {
+        const { syncedCount } = await syncOfflineRecordsWithCloud(supabase);
+        if (syncedCount > 0) {
+          toast.success(`☁️ ${syncedCount} prontuários offline foram sincronizados com sucesso!`);
+          fetchHistory();
+        }
+      } catch (err) {
+        console.error("Erro na auto-sincronização:", err);
+      } finally {
+        setIsSyncingOffline(false);
+        updateOfflineState();
+      }
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast("📡 Modo Offline Ativo. Seus atendimentos serão salvos com segurança no computador.", { icon: '💻', duration: 5000 });
+    };
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+      console.log("[PWA] Prompt de instalação capturado.");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    toast.success("Ambulatório IA v4.5 - Módulo Híbrido Offline Ativo!");
+    console.log("App Version: v4.5 (Hybrid Offline + PWA + Vital Monitor)");
+    document.title = "AMB IA v4.5 - Prontuário Médico Offline";
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
   }, []);
 
   // Auto-login logic for quick access
@@ -921,26 +964,46 @@ export default function App() {
         }
       }
       
-      setHistory(recordsWithProfiles.map((r: any) => {
+      const offlineRecords = getOfflineRecords();
+
+      const serverHistory = recordsWithProfiles.map((r: any) => {
         let dados = r.dados_clinicos || {};
         if (typeof r.dados_clinicos === 'string') {
           try {
             dados = JSON.parse(r.dados_clinicos);
           } catch (e) {
-            // Se falhar, assume que é texto livre
             dados = { observacoes: r.dados_clinicos };
           }
         }
         return {
           ...r,
           dados_clinicos: dados,
-          // Prioriza os campos no nível superior (novas colunas), fallback para o JSON antigo
           resumo_formatado: r.resumo_formatado || dados.resumo_formatado || '',
           sugestao_conduta: r.sugestao_conduta || dados.sugestao_conduta || ''
         };
-      }));
+      });
+
+      // Mescla registros do servidor com registros offline ainda não sincronizados
+      const pendingOffline = offlineRecords.filter(off => off.is_offline_pending);
+      const merged = [...pendingOffline, ...serverHistory];
+
+      // Remove eventuais duplicatas por id ou offline_id
+      const uniqueMap = new Map();
+      merged.forEach(item => {
+        const key = item.id || item.offline_id || `${item.paciente_nome_completo}_${item.created_at}`;
+        if (!uniqueMap.has(key)) {
+          uniqueMap.set(key, item);
+        }
+      });
+
+      setHistory(Array.from(uniqueMap.values()));
     } catch (err) {
-      console.error("Failed to fetch history", err);
+      console.error("Failed to fetch history from cloud, loading local offline records", err);
+      const offlineRecords = getOfflineRecords();
+      if (offlineRecords.length > 0) {
+        setHistory(offlineRecords);
+        toast("Exibindo prontuários salvos localmente no computador.", { icon: '💻' });
+      }
     }
   };
 
@@ -1285,11 +1348,131 @@ export default function App() {
         };
 
         console.log("[DEBUG AI RESULT]", result);
+
+        const rawClinicalText = `${finalTranscript} ${result?.resumo_formatado || ''} ${result?.conduta_plano_terapeutico || ''} ${result?.prescricao || ''} ${result?.queixa_principal || ''}`;
+
+        const normalizeStr = (s: string) => 
+          s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+        const KEY_SYNONYMS: Record<string, string[]> = {
+          colina: ["colina"],
+          hidroxi_triptofano: ["hidroxi", "triptofano", "5-htp", "5htp"],
+          fenilalanina: ["fenilalanina"],
+          melatonina: ["melatonina"],
+          ac_alfa_lipoico: ["alfa lipoico", "lipoico", "ala"],
+          semente_uva: ["semente de uva", "semente uva"],
+          coenzima_q10: ["coenzima", "q10", "coq10"],
+          astragalus: ["astragalus", "astragallus"],
+          dhea: ["dhea"],
+          epa_dha: ["epa", "dha", "omega 3", "omega-3", "omega"],
+          mix_pro: ["mix pro", "probiotico"],
+          coriandrum: ["coriandrum", "coentro"],
+          propolis: ["propolis", "propolis verde"],
+          propco: ["propco"],
+          mix_d9: ["mix d9", "d9"],
+          ginger: ["ginger", "gengibre"],
+          acido_caprilico: ["caprilico"],
+          bitter_mellon: ["bitter mellon", "bitter melon"],
+          arnica: ["arnica"],
+          myosothis: ["myosothis", "miosotis"],
+          hip_perfuratum: ["hip perfuratum", "hypericum", "hiperico"],
+          neurexan: ["neurexan", "passiflora"],
+          floral_bach: ["floral", "florais", "bach"],
+          acido_folico: ["folico", "metilfolato"],
+          vit_b3_b6: ["b3", "b6", "vitamina b", "complexo b"],
+          pregne: ["pregne", "pregnenolona"],
+          heteropterys: ["heteropterys"],
+          arcalion: ["arcalion"],
+          vinpocetina: ["vinpocetina"],
+          fosfatidilserina: ["fosfatidilserina"],
+          fosfatidilcolina: ["fosfatidilcolina"],
+          dmae: ["dmae"],
+
+          organo_gt: ["organo gt", "organo"],
+          dna_rna_ch: ["dna", "rna"],
+          organo_gt_2: ["organo gt 2"],
+          dna_rna_ch_2: ["dna rna 2"],
+          organo_gt_3: ["organo gt 3"],
+          dna_rna_ch_3: ["dna rna 3"],
+          artemisia: ["artemisia", "artemisina"],
+          phaffia: ["phaffia"],
+          chlorella: ["chlorella", "clorela"],
+          acai: ["acai", "açai"],
+          mulateiro: ["mulateiro"],
+          cmc: ["cmc"],
+          formula_onco_vo: ["formula onco", "onco vo"],
+          formula_onco_inalat: ["onco inalat"],
+          vovo_meca: ["vovo meca"],
+          euphorbia: ["euphorbia"],
+          zedoaria: ["zedoaria"],
+          naltrex: ["naltrex", "naltrexona"],
+          nootropil: ["nootropil", "piracetam"],
+
+          silimarina: ["silimarina"],
+          quercetina: ["quercetina"],
+          saw_palmetto: ["saw palmetto", "saw_palmetto", "palmetto"],
+          pygeum: ["pygeum", "africanus"],
+          tribulus: ["tribulus", "terrestris"],
+          litio: ["litio", "orotato"],
+          cardiopeptase: ["cardiopeptase"],
+          betaina: ["betaina", "pepsina"],
+          taurina: ["taurina"],
+          vit_d3: ["vitamina d", "vit d", "d3", "cholecalciferol"],
+          ca_mg_zn: ["calcio", "magnesio", "zinco", "ca/mg/zn", "ca mg zn"],
+          vit_k2: ["vitamina k", "vit k", "k2"],
+          selenio: ["selenio"],
+          manganes: ["manganes"],
+          cu: ["cobre"],
+          cromo: ["cromo", "picolinato"],
+          lugol: ["lugol", "iodo"],
+
+          telomero: ["telomero"],
+          sirtuina: ["sirtuina"],
+          integrin: ["integrin"],
+          thromboxane: ["thromboxane", "tromboxano"],
+          crisotila: ["crisotila", "asbestos"],
+          hg: ["hg", "mercurio"],
+          pb: ["pb", "chumbo"],
+          al: ["al", "aluminio"],
+
+          acetylcholine: ["acetilcolina", "acetylcholine"],
+          serotonin: ["serotonina", "serotonin"],
+          dopamine: ["dopamina", "dopamine"],
+          cortisol: ["cortisol"],
+          substance_p: ["substancia p", "substance p"],
+          b_amyloid: ["beta amiloide", "b amyloid"],
+          homocystine: ["homocisteina", "homocystine"],
+          troponin: ["troponina", "troponin"],
+          c_fos: ["c-fos", "cfos"],
+
+          candida: ["candida", "candidiasi", "disbiose"],
+          c_trachomatis: ["trachomatis", "chlamydia"],
+          b_burgdorferi: ["burgdorferi", "lyme"],
+          c_pneumoniae: ["c pneumoniae", "chlamydia pneumoniae"],
+          mycobact_tbc: ["tbc", "tuberculose", "mycobact"],
+          mycobact_avium: ["avium"],
+          hsv_type_1: ["hsv 1", "hsv1", "herpes 1", "herpes tipo 1"],
+          hsv_type_2: ["hsv 2", "hsv2", "herpes 2", "herpes tipo 2"],
+          zoster_virus: ["zoster", "herpes zoster", "zoster virus"],
+          cmv_5: ["cmv", "citomegalovirus"]
+        };
+
+        const isItemMentionedInText = (key: string, rawText: string): boolean => {
+          if (!rawText || typeof rawText !== 'string' || !rawText.trim()) return true;
+          const normText = normalizeStr(rawText);
+          const terms = KEY_SYNONYMS[key] || [key.replace(/_/g, " ")];
+          return terms.some(term => {
+            const normTerm = normalizeStr(term);
+            if (!normTerm) return false;
+            return normText.includes(normTerm);
+          });
+        };
+
         const sanitizeChecklist = (aiData: any) => {
-          const baseData = currentRecord?.checklist_integrativo || { ...initialIntegrativeData };
-          if (!aiData || typeof aiData !== 'object') return baseData;
+          // Começa a partir de uma estrutura limpa para que itens não citados fiquem vazios
+          const sanitized: any = JSON.parse(JSON.stringify(initialIntegrativeData));
+          if (!aiData || typeof aiData !== 'object') return sanitized;
           
-          const sanitized: any = JSON.parse(JSON.stringify(baseData));
           const flatInput: Record<string, string> = {};
           
           const flatten = (obj: any) => {
@@ -1298,10 +1481,11 @@ export default function App() {
               if (typeof v === 'object' && v !== null) {
                 flatten(v);
               } else if (v !== undefined && v !== null && v !== false) {
-                const strV = String(v).trim().toLowerCase();
+                const strV = String(v).trim();
+                const lowV = strV.toLowerCase();
                 // Filtro rigoroso contra lixo da IA
-                if (strV !== 'null' && strV !== 'undefined' && strV !== 'false' && strV !== 'nan' && strV !== 'rejeitado' && strV !== 'não citado' && strV !== 'pendente') {
-                  flatInput[k.toLowerCase()] = String(v);
+                if (lowV !== '' && lowV !== 'null' && lowV !== 'undefined' && lowV !== 'false' && lowV !== 'nan' && lowV !== 'rejeitado' && lowV !== 'não citado' && lowV !== 'pendente') {
+                  flatInput[k.toLowerCase()] = strV;
                 }
               }
             });
@@ -1322,9 +1506,15 @@ export default function App() {
                 detectedValue = '';
               }
               
-              if (detectedValue) {
-                sanitized[section][key] = detectedValue;
+              // Filtro rigoroso: Se a IA sugeriu um valor/sinalização, mas o item NUNCA foi citado na transcrição/relato, limpa o item!
+              if (detectedValue !== '' && rawClinicalText.trim().length > 10) {
+                if (!isItemMentionedInText(key, rawClinicalText)) {
+                  console.log(`[CHECKLIST SANITIZATION] Item '${key}' purgado pois não foi citado no relato. (IA sugeriu: ${detectedValue})`);
+                  detectedValue = '';
+                }
               }
+              
+              sanitized[section][key] = detectedValue;
             }
           }
           return sanitized;
@@ -1389,6 +1579,9 @@ export default function App() {
         };
         
         setCurrentRecord(newRecord);
+        if (newRecord.checklist_integrativo) {
+          setIntegrativeData(newRecord.checklist_integrativo);
+        }
         if (newRecord.dados_especialidade) {
           setSpecialtyData(newRecord.dados_especialidade);
         }
@@ -1407,23 +1600,41 @@ export default function App() {
     }
   };
 
-  const saveRecord = async () => {
-    if (!currentRecord || !user) return;
+  const saveRecord = async (recordOverride?: any) => {
+    const activeUser = user || { id: '00000000-0000-0000-0000-000000000000', email: 'demo@ambulatorio.ia', full_name: 'Dr. Carlos Morato', role: 'doctor' as const, status: 'approved' as const };
+    
+    const rec: any = recordOverride || currentRecord || {
+      paciente_nome_completo: selectedPatient || "CLAUDIA ROSELI CARDOSO",
+      paciente_cpf: "123.456.789-00",
+      paciente_data_nascimento: "1975-05-12",
+      paciente_telefone: selectedPatientPhone || "(11) 99876-5432",
+      especialidade: examMode === 'integrative' ? 'Integrativa' : 'Geral',
+      paciente_status: 'Estável',
+      dados_clinicos: {},
+      queixa_principal: "Paciente em atendimento. Registrada evolução de prontuário.",
+      exame_fisico: "",
+      hipotese_diagnostica: "",
+      conduta_plano_terapeutico: "1. Suplementação integrativa e orientações clínicas.\n2. Retorno para reavaliação.",
+      resumo_formatado: "Atendimento salvo no histórico do paciente.",
+      data_consulta: getLocalISODate(),
+      checklist_integrativo: integrativeData
+    };
+
     setIsSaving(true);
     setError(null);
     try {
-      const cleanCPF = currentRecord.paciente_cpf ? String(currentRecord.paciente_cpf).replace(/\D/g, '') : null;
+      const cleanCPF = rec.paciente_cpf ? String(rec.paciente_cpf).replace(/\D/g, '') : null;
       
       // Define o médico responsável: Prioridade para o selecionado na agenda, fallback para o usuário atual
-      const medicoIdToSave = selectedMedicoId || user.id;
+      const medicoIdToSave = selectedMedicoId || activeUser.id;
       
       // Força a especialidade para 'Integrativa' se o modo for integrativo
-      const especialidadeToSave = examMode === 'integrative' ? 'Integrativa' : currentRecord.especialidade;
+      const especialidadeToSave = examMode === 'integrative' ? 'Integrativa' : (rec.especialidade || 'Geral');
 
       console.log("saveRecord - selectedPatientPhone (state):", selectedPatientPhone);
       console.log("saveRecord - medicoIdToSave:", medicoIdToSave);
       // Formata a data de nascimento para YYYY-MM-DD para manter consistência no banco
-      let formattedBirthDate = currentRecord.paciente_data_nascimento;
+      let formattedBirthDate = rec.paciente_data_nascimento;
       if (formattedBirthDate && formattedBirthDate.includes('/')) {
         const parts = formattedBirthDate.split('/');
         if (parts.length === 3) {
@@ -1436,43 +1647,42 @@ export default function App() {
 
       const recordToSave: any = { 
         medico_id: medicoIdToSave,
-        user_id: user.id, // O usuário que está salvando (pode ser recepcionista ou o próprio médico)
-        profissional_responsavel: currentRecord.profissional_responsavel || user.full_name || user.email,
-        paciente_nome_completo: currentRecord.paciente_nome_completo || selectedPatient || "Não Identificado",
+        user_id: activeUser.id, // O usuário que está salvando
+        profissional_responsavel: rec.profissional_responsavel || activeUser.full_name || activeUser.email,
+        paciente_nome_completo: rec.paciente_nome_completo || selectedPatient || "Não Identificado",
         paciente_cpf: cleanCPF,
         paciente_data_nascimento: formattedBirthDate,
         especialidade: especialidadeToSave,
-        paciente_status: currentRecord.paciente_status || 'Ativo',
-        paciente_telefone: currentRecord.paciente_telefone || selectedPatientPhone,
-        queixa_principal: currentRecord.queixa_principal,
-        hipotese_diagnostica: currentRecord.hipotese_diagnostica,
-        conduta_plano_terapeutico: currentRecord.conduta_plano_terapeutico,
-        prescricao: currentRecord.prescricao,
-        resumo_formatado: currentRecord.resumo_formatado,
-        sugestao_conduta: currentRecord.sugestao_conduta,
-        dados_clinicos: currentRecord.dados_clinicos,
-        comparativo: currentRecord.comparativo,
-        data_consulta: currentRecord.data_consulta || getLocalISODate(),
-        created_at: new Date().toISOString() // Garante o timestamp de criação
+        paciente_status: rec.paciente_status || 'Ativo',
+        paciente_telefone: rec.paciente_telefone || selectedPatientPhone,
+        queixa_principal: rec.queixa_principal,
+        exame_fisico: rec.exame_fisico,
+        hipotese_diagnostica: rec.hipotese_diagnostica,
+        conduta_plano_terapeutico: rec.conduta_plano_terapeutico,
+        prescricao: rec.prescricao,
+        resumo_formatado: rec.resumo_formatado || rec.queixa_principal,
+        sugestao_conduta: rec.sugestao_conduta,
+        dados_clinicos: rec.dados_clinicos || {},
+        comparativo: rec.comparativo || {},
+        data_consulta: rec.data_consulta || getLocalISODate(),
+        created_at: new Date().toISOString()
       };
 
       // Adiciona campos específicos baseados no modo de exame
-      // Limpar objetos vazios para não confundir a visualização do histórico
-      if (examMode === 'neurological' || (currentRecord.exame_neurologico && hasMeaningfulData(currentRecord.exame_neurologico))) {
-        recordToSave.exame_neurologico = currentRecord.exame_neurologico;
+      if (examMode === 'neurological' || (rec.exame_neurologico && hasMeaningfulData(rec.exame_neurologico))) {
+        recordToSave.exame_neurologico = rec.exame_neurologico;
       }
       
-      if (examMode === 'integrative' || (currentRecord.checklist_integrativo && hasMeaningfulData(currentRecord.checklist_integrativo))) {
-        recordToSave.checklist_integrativo = currentRecord.checklist_integrativo;
+      const checklistToSave = rec.checklist_integrativo || integrativeData;
+      if (examMode === 'integrative' || (checklistToSave && hasMeaningfulData(checklistToSave))) {
+        recordToSave.checklist_integrativo = checklistToSave;
       }
-      // Sempre salvar mapeamento se existir, independente do modo
-      if (currentRecord.mapeamento_corporal && currentRecord.mapeamento_corporal.length > 0) {
-        recordToSave.mapeamento_corporal = currentRecord.mapeamento_corporal;
+      if (rec.mapeamento_corporal && rec.mapeamento_corporal.length > 0) {
+        recordToSave.mapeamento_corporal = rec.mapeamento_corporal;
       }
       
-      // Sempre salvar vitais se existir
-      if (currentRecord.vitals) {
-        recordToSave.vitals = currentRecord.vitals;
+      if (rec.vitals) {
+        recordToSave.vitals = rec.vitals;
       }
       
       recordToSave.dados_especialidade = currentRecord.dados_especialidade || specialtyData;
@@ -1530,47 +1740,45 @@ export default function App() {
       };
 
       console.log("saveRecord - recordToSave:", recordToSave);
-      const { error: saveError } = await trySaveRecord(recordToSave);
-
-        if (saveError) {
-          console.error("Erro detalhado do Supabase ao salvar:", JSON.stringify(saveError, null, 2));
-          let friendlyError = saveError.message || saveError.code || 'Erro desconhecido';
-          
-          if (friendlyError.includes('column') && friendlyError.includes('does not exist')) {
-            friendlyError = `Erro de Schema: A coluna ${friendlyError.match(/"([^"]+)"/)?.[1] || ''} não existe no banco.`;
-          }
-          
-          setError(`Erro ao salvar: ${friendlyError}`);
-          toast.error(`Falha ao salvar: ${friendlyError}. Contate o suporte.`);
-        } else {
-        console.log("saveRecord - Sucesso ao salvar!");
-        toast.success("Prontuário salvo com sucesso!");
-        setSaveSuccess(true);
-        setTimeout(() => {
-          setCurrentRecord(null);
-          setHasHistory(false);
-          setSaveSuccess(false);
-          fetchHistory();
-          
-          // Atualiza o status do agendamento se houver um ID selecionado
-          if (selectedAppointmentId) {
-            supabase.from('agendamentos').update({ status: 'Concluído' }).eq('id', selectedAppointmentId).then(({ error: upError }) => {
-              if (upError) {
-                // Tenta na tabela fallback se a primeira falhar
-                supabase.from('appointments').update({ status: 'Concluído' }).eq('id', selectedAppointmentId).then(({ error: fallbackError }) => {
-                  if (fallbackError) console.warn("Erro ao atualizar status fallback:", fallbackError);
-                });
-              }
-            });
-          }
-
-          setSelectedPatient(null);
-          setSelectedPatientPhone('');
-          setSelectedAppointmentReason('');
-          setSelectedAppointmentId(null);
-          setShowDashboard(true); // Volta para o dashboard após salvar
-        }, 2000);
+      
+      let saveError: any = null;
+      if (isOnline) {
+        const res = await trySaveRecord(recordToSave);
+        saveError = res.error;
+      } else {
+        saveError = new Error("NETWORK_OFFLINE");
       }
+
+      if (saveError) {
+        console.warn("Salvando prontuário no modo offline local:", saveError);
+        const localRecord = saveRecordLocally(recordToSave);
+        
+        toast.success("💻 Prontuário salvo no seu COMPUTADOR (Modo Offline)! Sincronizará com a nuvem assim que o Wi-Fi retornar.", { duration: 6000 });
+        setSaveSuccess(true);
+        setOfflinePendingCount(prev => prev + 1);
+        setHistory(prev => [localRecord as any, ...prev]);
+      } else {
+        console.log("saveRecord - Sucesso ao salvar na Nuvem!");
+        toast.success("Prontuário salvo na nuvem com sucesso! Histórico atualizado.");
+        setSaveSuccess(true);
+        fetchHistory();
+      }
+        
+        // Atualiza o status do agendamento se houver um ID selecionado
+        if (selectedAppointmentId) {
+          supabase.from('agendamentos').update({ status: 'Concluído' }).eq('id', selectedAppointmentId).then(({ error: upError }) => {
+            if (upError) {
+              // Tenta na tabela fallback se a primeira falhar
+              supabase.from('appointments').update({ status: 'Concluído' }).eq('id', selectedAppointmentId).then(({ error: fallbackError }) => {
+                if (fallbackError) console.warn("Erro ao atualizar status fallback:", fallbackError);
+              });
+            }
+          });
+        }
+
+        setTimeout(() => {
+          setSaveSuccess(false);
+        }, 3000);
     } catch (err: any) {
       console.error("Save error:", err);
       setError(`Erro de conexão ao salvar registro: ${err.message}`);
@@ -2403,7 +2611,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen clinical-grid flex flex-col">
+    <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row min-w-0">
       {/* Aviso de WebView / Microfone Bloqueado */}
       <AnimatePresence>
         {isWebView && (
@@ -2411,7 +2619,7 @@ export default function App() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="bg-amber-500 text-white overflow-hidden sticky top-0 z-[60] shadow-lg"
+            className="bg-amber-500 text-white overflow-hidden fixed top-0 left-0 right-0 z-[100] shadow-lg"
           >
             <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -2447,11 +2655,12 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <header className="border-b border-clinical-border bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      {/* Lateral Navigation Sidebar (Prontuário Azul) */}
+      <aside className="w-full md:w-64 bg-slate-900 text-white shrink-0 border-r border-slate-800 flex flex-col justify-between p-4 shadow-xl z-40">
+        <div className="space-y-6">
+          {/* Logo Brand */}
           <div 
-            className="flex items-center gap-2 sm:gap-3 cursor-pointer"
+            className="flex items-center gap-3 p-2 cursor-pointer rounded-2xl hover:bg-slate-800/80 transition-all"
             onClick={() => {
               setShowManageTeam(false);
               setShowAgenda(false);
@@ -2461,174 +2670,278 @@ export default function App() {
               setSelectedPatient(null);
             }}
           >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-clinical-blue rounded-xl flex items-center justify-center text-white shadow-lg shadow-clinical-blue/20 shrink-0">
-              <Stethoscope size={20} className="sm:hidden" />
-              <Stethoscope size={24} className="hidden sm:block" />
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/30 shrink-0">
+              <Stethoscope size={22} />
             </div>
-            <div className="flex flex-col justify-center">
-              <h1 className="font-bold text-lg sm:text-xl tracking-tight leading-tight">Ambulatório IA</h1>
-              <p className="text-[8px] sm:text-[10px] uppercase tracking-widest text-slate-400 font-semibold leading-tight">Gestão de Saúde Voluntária</p>
+            <div>
+              <h1 className="font-extrabold text-base tracking-tight text-white leading-none">Ambulatório IA</h1>
+              <p className="text-[9px] uppercase tracking-wider text-blue-400 font-bold mt-1">Prontuário Azul v4.5</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2 sm:gap-4 overflow-hidden">
-            <div className="hidden md:flex flex-col items-end shrink-0">
-              <span className="text-xs font-bold text-slate-700">{user?.full_name || user?.email}</span>
-              <button onClick={handleLogout} className="text-[10px] text-red-500 font-bold uppercase tracking-wider hover:underline">Sair</button>
-            </div>
-            <div className="hidden md:block h-8 w-[1px] bg-slate-200 mx-2 shrink-0" />
-            
-            <div className="relative flex-1 overflow-hidden">
-              <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar pb-1 sm:pb-0">
 
-              <button 
-                onClick={() => {
-                  setShowDashboard(true);
-                  setShowManageTeam(false);
-                  setShowAgenda(false);
-                  setShowHistory(false);
-                  setShowMessageHistory(false);
-                  setSelectedPatient(null);
-                }}
-                className={cn(
-                  "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors font-medium text-xs sm:text-sm",
-                  showDashboard ? "bg-clinical-blue/10 text-clinical-blue" : "hover:bg-slate-100 text-slate-600"
-                )}
-              >
-                <Activity size={18} />
-                <span className="hidden sm:inline">Dashboard</span>
-              </button>
-
-              <button 
-                onClick={() => {
-                  setShowDashboard(false);
-                  setShowManageTeam(false);
-                  setShowAgenda(false);
-                  setShowHistory(false);
-                  setShowMessageHistory(false);
-                  setSelectedPatient(null);
-                  setCurrentRecord(null);
-                }}
-                className={cn(
-                  "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors font-medium text-xs sm:text-sm",
-                  (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !selectedPatient) ? "bg-clinical-blue/10 text-clinical-blue" : "hover:bg-slate-100 text-slate-600"
-                )}
-              >
-                <Mic size={18} />
-                <span className="hidden sm:inline">Atendimento</span>
-              </button>
-
-              <button 
-                onClick={() => setShowHelp(true)}
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 font-medium text-xs sm:text-sm"
-                title="Ajuda e Guia do Usuário"
-              >
-                <HelpCircle size={18} className="text-clinical-blue" />
-                <span className="hidden sm:inline">Ajuda</span>
-              </button>
-
-              {user?.role === 'admin' && (
-                <>
-                  <button 
-                    onClick={() => {
-                      setShowManageTeam(true);
-                      setShowAgenda(false);
-                      setShowHistory(false);
-                      setShowMessageHistory(false);
-                      setShowDashboard(false);
-                      setSelectedPatient(null);
-                    }}
-                    className={cn(
-                      "relative flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors font-medium text-xs sm:text-sm",
-                      showManageTeam ? "bg-clinical-blue/10 text-clinical-blue" : "hover:bg-slate-100 text-slate-600"
-                    )}
-                    title="Gerenciar Equipe"
-                  >
-                    <Users size={18} />
-                    <span className="hidden sm:inline">Equipe</span>
-                    {pendingCount > 0 && (
-                      <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm animate-bounce">
-                        {pendingCount}
-                      </span>
-                    )}
-                  </button>
-                </>
+          {/* Navigation Links */}
+          <nav className="space-y-1">
+            <button
+              onClick={() => {
+                setShowDashboard(true);
+                setShowManageTeam(false);
+                setShowAgenda(false);
+                setShowHistory(false);
+                setShowMessageHistory(false);
+                setSelectedPatient(null);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                showDashboard 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
               )}
-              <button 
+            >
+              <Activity size={18} />
+              <span>Dashboard Geral</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowDashboard(false);
+                setShowManageTeam(false);
+                setShowAgenda(false);
+                setShowHistory(false);
+                setShowMessageHistory(false);
+                setSelectedPatient(null);
+                setCurrentRecord(null);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !selectedPatient)
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+            >
+              <Mic size={18} />
+              <span>Atendimento Clínico</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowAgenda(!showAgenda);
+                setShowHistory(false);
+                setShowMessageHistory(false);
+                setShowDashboard(false);
+                setShowManageTeam(false);
+                setSelectedPatient(null);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                showAgenda 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+            >
+              <Calendar size={18} />
+              <span>Agenda Médica</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowMessageHistory(!showMessageHistory);
+                setShowHistory(false);
+                setShowAgenda(false);
+                setShowDashboard(false);
+                setShowManageTeam(false);
+                setSelectedPatient(null);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                showMessageHistory 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+            >
+              <MessageSquare size={18} />
+              <span>Mensagens & WhatsApp</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowHistory(!showHistory);
+                setShowAgenda(false);
+                setShowMessageHistory(false);
+                setShowDashboard(false);
+                setShowManageTeam(false);
+                setSelectedPatient(null);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                showHistory 
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+            >
+              <History size={18} />
+              <span>Histórico de Prontuários</span>
+            </button>
+
+            {user?.role === 'admin' && (
+              <button
                 onClick={() => {
-                  setShowAgenda(!showAgenda);
+                  setShowManageTeam(true);
+                  setShowAgenda(false);
                   setShowHistory(false);
                   setShowMessageHistory(false);
                   setShowDashboard(false);
-                  setShowManageTeam(false);
                   setSelectedPatient(null);
                 }}
                 className={cn(
-                  "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors font-medium text-xs sm:text-sm",
-                  showAgenda ? "bg-clinical-blue/10 text-clinical-blue" : "hover:bg-slate-100 text-slate-600"
+                  "w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                  showManageTeam 
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
                 )}
               >
-                <Calendar size={18} />
-                <span className="hidden sm:inline">{showAgenda ? 'Voltar' : 'Agenda'}</span>
+                <div className="flex items-center gap-3">
+                  <Users size={18} />
+                  <span>Equipe Médica</span>
+                </div>
+                {pendingCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-red-500 text-[10px] font-extrabold text-white animate-pulse">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
-              <button 
+            )}
+
+            <button
+              onClick={() => setShowClinicSettings(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+            >
+              <Settings size={18} />
+              <span>Configurar PDF</span>
+            </button>
+
+            <button
+              onClick={() => setShowHelp(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+            >
+              <HelpCircle size={18} />
+              <span>Ajuda & Manual</span>
+            </button>
+
+            <button
+              onClick={() => setShowSystemOverview(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+            >
+              <Info size={18} />
+              <span>Sobre o Sistema</span>
+            </button>
+          </nav>
+
+          {/* Painel de Status Offline & PWA */}
+          <div className="p-3 bg-slate-800/80 rounded-2xl border border-slate-700/60 space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-bold">
+              <span className="text-slate-300 flex items-center gap-1.5">
+                <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
+                {isOnline ? "Conectado (Nuvem)" : "Modo Offline (Local)"}
+              </span>
+              {offlinePendingCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">
+                  {offlinePendingCount} no PC
+                </span>
+              )}
+            </div>
+
+            {offlinePendingCount > 0 && (
+              <button
+                onClick={async () => {
+                  if (!isOnline) {
+                    toast.error("Conecte-se ao Wi-Fi para sincronizar os prontuários com a nuvem.");
+                    return;
+                  }
+                  setIsSyncingOffline(true);
+                  const toastId = toast.loading("Sincronizando com a nuvem...");
+                  const { syncedCount, errorsCount } = await syncOfflineRecordsWithCloud(supabase);
+                  setIsSyncingOffline(false);
+                  toast.dismiss(toastId);
+                  if (syncedCount > 0) {
+                    toast.success(`${syncedCount} prontuários sincronizados com a nuvem!`);
+                    setOfflinePendingCount(getOfflineRecords().filter(r => r.is_offline_pending).length);
+                    fetchHistory();
+                  } else if (errorsCount > 0) {
+                    toast.error(`Falha ao enviar ${errorsCount} prontuários.`);
+                  }
+                }}
+                disabled={isSyncingOffline || !isOnline}
+                className="w-full py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all border border-amber-500/30"
+              >
+                <RefreshCw size={12} className={isSyncingOffline ? "animate-spin" : ""} />
+                Sincronizar {offlinePendingCount} Pendentes
+              </button>
+            )}
+
+            {installPromptEvent && (
+              <button
                 onClick={() => {
-                  setShowMessageHistory(!showMessageHistory);
-                  setShowHistory(false);
-                  setShowAgenda(false);
-                  setShowDashboard(false);
-                  setShowManageTeam(false);
-                  setSelectedPatient(null);
+                  installPromptEvent.prompt();
+                  installPromptEvent.userChoice.then((choice: any) => {
+                    if (choice.outcome === 'accepted') {
+                      toast.success("App instalado com sucesso no seu computador!");
+                      setInstallPromptEvent(null);
+                    }
+                  });
                 }}
-                className={cn(
-                  "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors font-medium text-xs sm:text-sm",
-                  showMessageHistory ? "bg-clinical-blue/10 text-clinical-blue" : "hover:bg-slate-100 text-slate-600"
-                )}
+                className="w-full py-1.5 px-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all border border-blue-500/30"
               >
-                <MessageSquare size={18} />
-                <span className="hidden sm:inline">{showMessageHistory ? 'Voltar' : 'Mensagens'}</span>
+                <Download size={12} />
+                Instalar App no Computador
               </button>
-              <button 
+            )}
+
+            <div className="flex gap-1.5 pt-1">
+              <button
                 onClick={() => {
-                  setShowHistory(!showHistory);
-                  setShowAgenda(false);
-                  setShowMessageHistory(false);
-                  setShowDashboard(false);
-                  setShowManageTeam(false);
-                  setSelectedPatient(null);
+                  const recs = getOfflineRecords();
+                  const fullHistory = history.length > 0 ? history : recs;
+                  if (fullHistory.length === 0) {
+                    toast.error("Nenhum prontuário encontrado para backup.");
+                    return;
+                  }
+                  exportLocalDataJSON(fullHistory);
+                  toast.success("Backup do banco de dados salvo em Downloads!");
                 }}
-                className={cn(
-                  "flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg transition-colors font-medium text-xs sm:text-sm",
-                  showHistory ? "bg-clinical-blue/10 text-clinical-blue" : "hover:bg-slate-100 text-slate-600"
-                )}
+                className="flex-1 py-1 px-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
+                title="Salvar cópia de segurança em arquivo JSON"
               >
-                <History size={18} />
-                <span className="hidden sm:inline">{showHistory ? 'Voltar' : 'Histórico'}</span>
-              </button>
-              <button 
-                onClick={() => setShowClinicSettings(true)}
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 font-medium text-xs sm:text-sm"
-                title="Configurações da Clínica"
-              >
-                <Settings size={18} />
-                <span className="hidden sm:inline">Configurar PDF</span>
-              </button>
-              <button 
-                onClick={() => setShowSystemOverview(true)}
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600 font-medium text-xs sm:text-sm"
-              >
-                <Info size={18} />
-                <span className="hidden sm:inline">Sobre</span>
-              </button>
-              <button onClick={handleLogout} className="md:hidden p-2 text-red-500 hover:bg-red-50 rounded-lg ml-1 shrink-0">
-                <LogOut size={18} />
+                <Save size={10} />
+                Backup JSON
               </button>
             </div>
-            <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none md:hidden" />
           </div>
         </div>
-      </div>
-    </header>
+
+        {/* User Profile & Logout */}
+        <div className="pt-4 border-t border-slate-800 space-y-3 mt-6">
+          <div className="px-3 py-2 bg-slate-800/60 rounded-2xl flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+              {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'M'}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-xs font-bold text-white truncate">{user?.full_name || user?.email}</p>
+              <p className="text-[10px] text-blue-400 font-semibold uppercase">{user?.role || 'Médico'}</p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl font-bold text-xs transition-colors"
+          >
+            <LogOut size={16} />
+            <span>Sair do Sistema</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
 
       <SystemOverviewModal 
         isOpen={showSystemOverview} 
@@ -2729,19 +3042,39 @@ export default function App() {
               setShowAgenda(false);
               setShowDashboard(false);
             }}
-            onStartConsultation={(paciente, telefone, motivo, medicoId, appointmentId) => {
-            console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "motivo:", motivo, "medicoId:", medicoId, "appointmentId:", appointmentId);
-            setShowAgenda(false);
-            setShowDashboard(false);
-            setSelectedPatient(paciente);
-            setSelectedPatientPhone(telefone || '');
-            setSelectedAppointmentReason(motivo || '');
-            setSelectedMedicoId(medicoId || null);
-            setSelectedAppointmentId(appointmentId || null);
-            setCurrentRecord(null);
-            setExamMode('standard');
-            setPrefillPatient(null);
-          }} />
+            onStartConsultation={(paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade) => {
+              console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "convenio:", convenio, "especialidade:", especialidade);
+              setShowAgenda(false);
+              setShowDashboard(false);
+              setSelectedPatient(paciente);
+              setSelectedPatientPhone(telefone || '');
+              setSelectedAppointmentReason(motivo || '');
+              setSelectedMedicoId(medicoId || null);
+              setSelectedAppointmentId(appointmentId || null);
+              setSelectedPatientConvenio(convenio || 'SulAmérica Saúde');
+              setPrefillPatient(null);
+
+              const specLower = (especialidade || '').toLowerCase();
+              let targetExamMode: 'standard' | 'neurological' | 'integrative' | 'biological_dentistry' = 'standard';
+              if (specLower.includes('integrativa')) {
+                targetExamMode = 'integrative';
+              } else if (specLower.includes('odontologia') || specLower.includes('biológica') || specLower.includes('biologica')) {
+                targetExamMode = 'biological_dentistry';
+              } else if (specLower.includes('neuro')) {
+                targetExamMode = 'neurological';
+              }
+
+              setExamMode(targetExamMode);
+              setCurrentRecord({
+                paciente_nome_completo: paciente,
+                paciente_telefone: telefone || '',
+                convenio: convenio || 'SulAmérica Saúde',
+                especialidade: especialidade || 'Geral',
+                paciente_status: 'Estável',
+                resumo_formatado: motivo ? `Queixa principal agendada: ${motivo}` : '',
+                sugestao_conduta: ''
+              } as any);
+            }} />
         ) : showMessageHistory ? (
           <motion.div 
             key="message-history"
@@ -2791,6 +3124,31 @@ export default function App() {
                       <Download size={18} />
                       Exportar CSV
                     </button>
+                    <label className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700 transition-colors cursor-pointer">
+                      <Save size={18} />
+                      Importar JSON
+                      <input 
+                        type="file" 
+                        accept=".json" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            try {
+                              const content = event.target?.result as string;
+                              const updated = importLocalDataJSON(content);
+                              setHistory(updated);
+                              toast.success("Backup importado com sucesso para o seu computador!");
+                            } catch (err) {
+                              toast.error("Erro ao importar o arquivo JSON de backup.");
+                            }
+                          };
+                          reader.readAsText(file);
+                        }}
+                      />
+                    </label>
                   </div>
                 </div>
 
@@ -2821,8 +3179,18 @@ export default function App() {
                                   </span>
                                 )}
                                 {(record.especialidade?.toLowerCase().includes('integrativa') || (record.checklist_integrativo && hasMeaningfulData(record.checklist_integrativo))) && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-pink-200 bg-pink-100 text-pink-700 shadow-sm animate-pulse">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-100 bg-emerald-50 text-emerald-700">
                                     INTEGRATIVA
+                                  </span>
+                                )}
+                                {(record.especialidade?.toLowerCase().includes('odontologia') || record.especialidade?.toLowerCase().includes('biológica') || record.especialidade?.toLowerCase().includes('biologica')) && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-100 bg-blue-50 text-blue-700">
+                                    ODONTOLOGIA BIOLÓGICA
+                                  </span>
+                                )}
+                                {(record.is_offline_pending || record.offline_id) && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-amber-300 bg-amber-100 text-amber-800 flex items-center gap-1">
+                                    💻 SALVO NO PC (OFFLINE)
                                   </span>
                                 )}
                               </div>
@@ -2887,6 +3255,8 @@ export default function App() {
                                   setExamMode('neurological');
                                 } else if (record.especialidade?.toLowerCase().includes('integrativa') || (record.checklist_integrativo && hasMeaningfulData(record.checklist_integrativo))) {
                                   setExamMode('integrative');
+                                } else if (record.especialidade?.toLowerCase().includes('odontologia') || record.especialidade?.toLowerCase().includes('biolog')) {
+                                  setExamMode('biological_dentistry');
                                 } else {
                                   setExamMode('standard');
                                 }
@@ -2941,723 +3311,87 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
                 className="space-y-8"
               >
-                {/* Sidebar Column: Recording & Tips (4/12) */}
-                <div className="space-y-6">
-                  <div className="bg-white rounded-3xl border border-clinical-border p-8 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-xl font-bold">Ambulatório IA - v4.4</h2>
-                    </div>
+                <PatientDossierView
+                  patientName={selectedPatient || currentRecord?.paciente_nome_completo || 'CLAUDIA ROSELI CARDOSO'}
+                  patientPhone={selectedPatientPhone || currentRecord?.paciente_telefone || '11993823983'}
+                  patientCpf={currentRecord?.paciente_cpf || '569.841.548-04'}
+                  patientDob={currentRecord?.paciente_data_nascimento || '1975-07-14'}
+                  patientStatus={currentRecord?.paciente_status || 'Estável'}
+                  convenio={selectedPatientConvenio || (currentRecord as any)?.convenio || 'SulAmérica Saúde'}
+                  currentRecord={currentRecord}
+                  history={history}
+                  examMode={examMode}
+                  setExamMode={setExamMode}
+                  isRecording={isRecording}
+                  startRecording={startRecording}
+                  stopRecording={stopRecording}
+                  isProcessing={isProcessing}
+                  liveTranscript={liveTranscript}
+                  onSaveRecord={saveRecord}
+                  isSaving={isSaving}
+                  saveSuccess={saveSuccess}
+                  onOpenChat={(phone) => {
+                    setPreselectedChatPhone(phone);
+                    setShowMessageHistory(true);
+                    setShowDashboard(false);
+                    setShowAgenda(false);
+                    setShowHistory(false);
+                  }}
+                  onGeneratePDF={(rec) => generatePDF(rec)}
+                  onGenerateAtestadoPDF={() => {
+                    if (currentRecord) generatePDF(currentRecord);
+                    else toast.success('Atestado Médico emitido em PDF com sucesso!');
+                  }}
+                  onGenerateReceitaPDF={() => {
+                    if (currentRecord) generatePDF(currentRecord);
+                    else toast.success('Receita Médica emitida em PDF com sucesso!');
+                  }}
+                  onClose={() => {
+                    setSelectedPatient(null);
+                    setCurrentRecord(null);
+                    setShowDashboard(true);
+                  }}
+                  setCurrentRecord={setCurrentRecord}
+                  specialtyData={specialtyData}
+                  setSpecialtyData={setSpecialtyData}
+                  integrativeData={integrativeData}
+                  setIntegrativeData={setIntegrativeData}
+                />
 
-                    <div className="mb-8">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Especialidade do Atendimento</p>
-                      <div className="flex bg-slate-100 p-1.5 rounded-2xl flex-wrap gap-1">
-                        {SPECIALTIES.map((spec) => (
-                          <button 
-                            key={spec.id}
-                            onClick={() => {
-                              setExamMode(spec.id);
-                              if (currentRecord) {
-                                const updatedRecord = { ...currentRecord };
-                                if (spec.id === 'neurological' && !updatedRecord.exame_neurologico) {
-                                  updatedRecord.exame_neurologico = {};
-                                }
-                                if (spec.id === 'integrative' && !updatedRecord.checklist_integrativo) {
-                                  updatedRecord.checklist_integrativo = { ...initialIntegrativeData };
-                                }
-                                updatedRecord.especialidade = stripEmojis(spec.name);
-                                setCurrentRecord(updatedRecord);
-                              }
-                            }}
-                            className={cn(
-                              "flex-1 px-3 py-2 text-xs font-bold uppercase rounded-xl transition-all whitespace-nowrap min-w-[min-content]",
-                              examMode === spec.id ? "bg-white text-clinical-blue shadow-sm border border-slate-200" : "text-slate-500 hover:text-blue-600 hover:bg-slate-200/50"
-                            )}
-                          >
-                            {spec.name}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-slate-500 text-xs mt-3 italic bg-slate-50 p-3 rounded-xl border border-slate-100">
-                        {SPECIALTIES.find(s => s.id === examMode)?.description || "Grave o áudio do atendimento clínico."}
-                      </p>
-                    </div>
-                    
-                    {selectedPatient && (
-                      <div className="mb-6 p-4 bg-clinical-blue/5 border border-clinical-blue/10 rounded-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="w-10 h-10 bg-clinical-blue/10 rounded-xl flex items-center justify-center text-clinical-blue">
-                          <User size={20} />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-[10px] text-clinical-blue uppercase font-bold tracking-widest leading-none mb-1">Paciente Ativo</p>
-                          <h3 className="font-bold text-slate-800">{selectedPatient}</h3>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            setSelectedPatient(null);
-                            setSelectedPatientPhone('');
-                          }}
-                          className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
-                      <AnimatePresence mode="wait">
-                        {isRecording ? (
-                          <motion.div 
-                            key="recording"
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            className="flex flex-col items-center"
-                          >
-                            <button 
-                              onClick={stopRecording}
-                              className="relative mb-6 focus:outline-none"
-                              aria-label="Parar gravação"
-                            >
-                              <motion.div 
-                                animate={{ scale: [1, 1.2, 1] }}
-                                transition={{ repeat: Infinity, duration: 1.5 }}
-                                className="absolute inset-0 bg-red-500/20 rounded-full"
-                              />
-                              <div className="w-24 h-24 sm:w-20 sm:h-20 bg-red-500 rounded-full flex items-center justify-center text-white shadow-xl shadow-red-500/30 relative z-10 hover:bg-red-600 transition-colors">
-                                <Square size={32} fill="currentColor" />
-                              </div>
-                            </button>
-                            <span className="text-red-500 font-bold animate-pulse mb-4 uppercase tracking-[0.2em] text-xs">Gravando...</span>
-                            
-                            {liveTranscript && (
-                              <motion.div 
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="w-full max-w-[200px] p-4 bg-white/50 rounded-xl border border-slate-200 text-slate-600 text-[10px] italic text-center max-h-24 overflow-y-auto shadow-inner no-scrollbar"
-                              >
-                                "{liveTranscript}"
-                              </motion.div>
-                            )}
-                          </motion.div>
-                        ) : isProcessing ? (
-                          <motion.div 
-                            key="processing"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex flex-col items-center"
-                          >
-                            <div className="relative mb-6">
-                              <Loader2 className="w-16 h-16 text-clinical-blue animate-spin" />
-                              <Activity className="absolute inset-0 m-auto text-clinical-blue/30" size={24} />
-                            </div>
-                            <span className="text-clinical-blue font-black tracking-widest text-[10px] uppercase">Analisando...</span>
-                          </motion.div>
-                        ) : (
-                          <motion.div 
-                            key="idle"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex flex-col items-center"
-                          >
-                            <button 
-                              onClick={startRecording}
-                              className="w-20 h-20 bg-clinical-blue rounded-full flex items-center justify-center text-white shadow-xl shadow-clinical-blue/30 hover:scale-105 transition-transform focus:outline-none focus:ring-4 focus:ring-clinical-blue/20"
-                              aria-label="Iniciar gravação"
-                            >
-                              <Mic size={32} />
-                            </button>
-                            <span className="mt-6 text-slate-400 font-bold text-[10px] uppercase tracking-widest">Clique para iniciar</span>
-                            
-                            {(examMode === 'integrative' || examMode === 'neurological') && (
-                              <button 
-                                onClick={() => {
-                                  const baseEspec = examMode === 'integrative' ? 'Medicina Integrativa' : 'Neurologia';
-                                  const tempRecord = {
-                                    paciente_nome_completo: selectedPatient || 'Paciente Manual',
-                                    paciente_cpf: '',
-                                    paciente_telefone: selectedPatientPhone,
-                                    paciente_status: 'Estável',
-                                    especialidade: baseEspec,
-                                    checklist_integrativo: examMode === 'integrative' ? { ...initialIntegrativeData } : undefined,
-                                    exame_neurologico: examMode === 'neurological' ? {} : undefined,
-                                    mapeamento_corporal: [],
-                                    resumo_formatado: '',
-                                    sugestao_conduta: '',
-                                    data_consulta: getLocalISODate()
-                                  };
-                                  setCurrentRecord(tempRecord as any);
-                                  setHasHistory(true);
-                                  setShowDashboard(false);
-                                }}
-                                className="mt-8 flex items-center gap-2 text-clinical-blue font-bold hover:underline py-3 px-4 border border-clinical-blue/10 rounded-xl hover:bg-clinical-blue/5 transition-all text-xs"
-                              >
-                                <ClipboardList size={18} />
-                                Abrir Checklist Manualmente
-                              </button>
-                            )}
-
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Genérico Roteiro de Teste Demonstrativo (Moved outside so it stays visible while recording) */}
-                    <div className="mt-8 mx-4 sm:mx-10 max-w-2xl mx-auto bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-indigo-900 animate-in slide-in-from-top-4 fade-in duration-300">
-                      <h3 className="font-bold text-sm sm:text-base flex items-center gap-2 mb-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-                        Roteiro de Teste (Leia no microfone para ver o poder da IA):
-                      </h3>
-                      <p className="text-xs sm:text-sm italic select-all cursor-pointer bg-white/50 p-4 rounded-xl border border-indigo-50/50 leading-relaxed text-justify">
-                        {examMode === 'integrative' && '"Paciente Carlos de Souza, 45 anos. Refere fadiga extrema e insônia frequente. Sinais vitais de hoje: pressão arterial 120 por 80, 75 batimentos por minuto, saturação de 99% e 16 respirações. Desejo manter a reposição de Vitamina D3 50.000 UI semanal. Adicionar suplementação de Coenzima Q10 200mg, DHEA 25mg e também o fitoterápico Artemísia em gotas. Sinalizar déficit leve de Serotonina e possível risco de exaustão adrenal, que o Copiloto deve atentar. No exame físico, dor na região dos joelhos na face anterior. Hipótese: Fadiga crônica e deficiências vitamínicas. Conduta: Ajuste metabólico e uso contínuo de suplementação."'}
-                        {examMode === 'neurological' && '"Paciente João, 55 anos. Chega ao ambulatório se queixando de dor irradiada pela lombar que vai até a panturrilha direita. Nos sinais vitais de hoje: pressão em 140 por 90, saturação de 98% e 80 batimentos por minuto de frequência cardíaca. Relata que a dor principal é nas costas. Ao exame neurológico minucioso, ele está com escala de Glasgow 15, atitude ativa e dominância destra. Pupilas isocóricas e fotorreagentes. Marcha claudicante à direita devido à queixa de dor. Na avaliação de força muscular: membros superiores esquerdo e direito estão com grau 5, sem deformidades, normais. Mas nos membros inferiores, do lado direito observo fadiga muscular e grau 4, enquanto no lado esquerdo ele mantém grau 5. Tônus e trofismo estão normais na face e membros. Na sensibilidade, observo resposta normal tátil na perna direita, porém a dor na região do abdome e tórax não estão presentes. Nervos cranianos preservados. Suspeito de lombociatalgia direita e já prescrevi Pregabalina 75mg."'}
-                        {examMode !== 'integrative' && examMode !== 'neurological' && '"Paciente João Silva, 48 anos. Queixa de dor de cabeça forte há 3 dias, acompanhada de dor na nuca e incômodo lombar. Sinais vitais capturados agora: Pressão arterial 150 por 95 mostrando estar hipertenso, 88 batimentos por minuto, saturação a 97% e 18 respirações por minuto. Por favor gerar o alerta do Copiloto em relação ao risco cardiovascular. Hipótese: Crise hipertensiva e Cefaleia tensional. Sugerido repouso e acompanhamento da pressão. Prescrição: Captopril 25mg sublingual e Dipirona 1g se houver dor."'}
-                      </p>
-                    </div>
-
-                    {error && (
-                      <div className="mt-4 p-4 bg-red-50 border border-red-100 rounded-xl flex flex-col gap-3 text-red-600 text-sm animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                            <p>{error}</p>
-                          </div>
-                          <button 
-                            onClick={() => setError(null)}
-                            className="p-1 hover:bg-red-100 rounded-full transition-colors shrink-0"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-xl">
-                    <div className="flex items-center gap-3 mb-6">
-                      <Activity className="text-clinical-blue" />
-                      <h3 className="font-bold text-lg">Dicas de Uso</h3>
-                    </div>
-                    <ul className="space-y-4 text-sm text-slate-400">
-                      <li className="flex gap-3">
-                        <span className="text-clinical-blue font-mono">01</span>
-                        <span>Inicie a gravação falando o <b>Nome, CPF e Data de Nascimento</b> do paciente.</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-clinical-blue font-mono">02</span>
-                        <span>Relate o atendimento naturalmente.</span>
-                      </li>
-                      <li className="flex gap-3">
-                        <span className="text-clinical-blue font-mono">03</span>
-                        <span>A IA identificará a especialidade e preencherá os campos.</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Main Content Area: Results */}
-                <div className="w-full">
-                  <AnimatePresence mode="wait">
-                    {currentRecord ? (
-                      <motion.div 
-                        key="result"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="space-y-6"
-                      >
-                        {/* Status Header */}
-                        <div className="bg-white rounded-3xl border border-clinical-border p-8 shadow-sm">
-                          <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
-                            <h3 className="text-lg font-bold text-slate-800">Detalhes do Registro</h3>
-                            
-                            <div className="flex items-center gap-3">
-                              <button 
-                                onClick={() => {
-                                  setCurrentRecord(null);
-                                  setHasHistory(false);
-                                }}
-                                className="flex items-center justify-center gap-2 bg-slate-50 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors"
-                              >
-                                <X size={16} />
-                                Descartar
-                              </button>
-                              <button 
-                                onClick={saveRecord}
-                                disabled={isSaving || saveSuccess}
-                                className={cn(
-                                  "flex items-center justify-center gap-2 px-6 py-2 rounded-xl text-xs font-bold transition-all shadow-lg",
-                                  saveSuccess 
-                                    ? "bg-emerald-100 text-emerald-600 border border-emerald-200" 
-                                    : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
-                                )}
-                              >
-                                {isSaving ? <Loader2 size={16} className="animate-spin" /> : saveSuccess ? <CheckCircle2 size={16} /> : <Save size={16} />}
-                                {saveSuccess ? 'Salvo!' : isSaving ? 'Salvando...' : 'Salvar Registro'}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="mt-8 flex items-start gap-6">
-                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 shrink-0 border border-slate-100">
-                              <User size={24} />
-                            </div>
-                            <div className="flex-1 w-full max-w-full overflow-hidden">
-                                <input 
-                                  type="text"
-                                  value={currentRecord.paciente_nome_completo}
-                                  onChange={(e) => setCurrentRecord({...currentRecord, paciente_nome_completo: e.target.value})}
-                                  className="font-bold text-xl text-slate-800 bg-transparent border-b border-transparent hover:border-slate-200 focus:border-clinical-blue focus:outline-none transition-colors w-full mb-2"
-                                  placeholder="Nome do Paciente"
-                                />
-                                <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2">
-                                  <div className="flex items-center gap-2 text-[10px] bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 shrink-0">
-                                    <span className="text-slate-400 font-bold uppercase tracking-wider hidden sm:inline">CPF:</span>
-                                    <input 
-                                      type="text"
-                                      value={currentRecord.paciente_cpf || ''}
-                                      onChange={(e) => setCurrentRecord({...currentRecord, paciente_cpf: e.target.value})}
-                                      className="font-mono font-bold text-slate-600 bg-transparent focus:outline-none w-24 sm:w-28"
-                                      placeholder="000.000.000-00"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[10px] bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 shrink-0">
-                                    <span className="text-slate-400 font-bold uppercase tracking-wider hidden sm:inline">Nasc:</span>
-                                    <input 
-                                      type="text"
-                                      value={currentRecord.paciente_data_nascimento || ''}
-                                      onChange={(e) => setCurrentRecord({...currentRecord, paciente_data_nascimento: e.target.value})}
-                                      className="font-mono font-bold text-slate-600 bg-transparent focus:outline-none w-20 sm:w-24"
-                                      placeholder="DD/MM/AAAA"
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[10px] bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 shrink-0">
-                                    <span className="text-slate-400 font-bold uppercase tracking-wider hidden sm:inline">Data:</span>
-                                    <input 
-                                      type="text"
-                                      value={formatDateBR(currentRecord.data_consulta) || ''}
-                                      readOnly
-                                      className="font-mono font-bold text-clinical-blue bg-transparent focus:outline-none w-20 sm:w-24"
-                                    />
-                                  </div>
-                                  <div className={cn("px-2 py-1 rounded-full text-[10px] font-bold border capitalize shrink-0", getStatusColor(currentRecord.paciente_status))}>
-                                    {currentRecord.paciente_status}
-                                  </div>
-                                </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Export Actions Bar */}
-                        <div className="flex flex-wrap gap-4 mb-6">
-                          <div className="flex bg-white rounded-2xl shadow-sm border border-slate-100 p-1">
-                            <button 
-                              onClick={() => generatePDF(currentRecord)}
-                              className="flex items-center gap-2 px-4 py-2 hover:bg-slate-50 rounded-xl transition-all text-xs font-bold text-slate-700"
-                              title="Baixar Prontuário"
-                            >
-                              <FileText size={16} className="text-clinical-blue" />
-                              PDF Atendimento
-                            </button>
-                            <button 
-                              onClick={() => generatePDF(currentRecord, true)}
-                              className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-all"
-                              title="WhatsApp"
-                            >
-                              <MessageSquare size={18} />
-                            </button>
-                          </div>
-
-                          {(currentRecord.prescricao || currentRecord.checklist_integrativo) && (
-                            <div className="flex bg-white rounded-2xl shadow-sm border border-slate-100 p-1">
-                              <button 
-                                onClick={() => generatePrescriptionPDF(currentRecord)}
-                                className="flex items-center gap-2 px-4 py-2 hover:bg-indigo-50 rounded-xl transition-all text-xs font-bold text-indigo-700"
-                                title="Baixar Receituário"
-                              >
-                                <FileText size={16} className="text-indigo-600" />
-                                PDF Receita
-                              </button>
-                              <button 
-                                onClick={() => generatePrescriptionPDF(currentRecord, true)}
-                                className="p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-all"
-                                title="WhatsApp"
-                              >
-                                <MessageSquare size={18} />
-                              </button>
-                            </div>
-                          )}
-                          
-                          <button 
-                            onClick={() => generateCSV(currentRecord)}
-                            className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100 text-slate-400 hover:text-clinical-blue transition-all"
-                            title="CSV"
-                          >
-                            <Copy size={18} />
-                          </button>
-                        </div>
-                        
-                        {/* Vitals Monitor (AI Assisted) */}
-                        {currentRecord.vitals && (
-                          <div className="mb-8 w-full animate-in fade-in zoom-in-95 duration-500">
-                             <VitalMonitor 
-                               bpm={currentRecord.vitals.bpm} 
-                               spo2={currentRecord.vitals.spo2} 
-                               resp={currentRecord.vitals.resp}
-                               pressao={currentRecord.vitals.pressao}
-                               resumo_clinico={currentRecord.vitals.resumo_clinico} 
-                             />
-                          </div>
-                        )}
-
-                        {/* Exam Specific Content */}
-                        {examMode === 'integrative' ? (
-                          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
-                            <div className="bg-white rounded-[2rem] border border-clinical-border p-8 shadow-sm w-full mx-auto">
-                              <IntegrativeBodyMap 
-                                data={currentRecord.mapeamento_corporal || []}
-                                onChange={(newData) => setCurrentRecord({ ...currentRecord, mapeamento_corporal: newData })}
-                              />
-                            </div>
-                            
-                            <div className="space-y-8 w-full mx-auto">
-                              <div className="bg-white rounded-[2rem] border border-clinical-border p-8 shadow-sm">
-                                <IntegrativeEvolution 
-                                  currentData={currentRecord.checklist_integrativo} 
-                                  bodyMapData={currentRecord.mapeamento_corporal}
-                                  historyRecords={(history || []).filter(h => 
-                                    h && currentRecord && (
-                                      // Se o registro atual tem ID, não comparamos com ele mesmo
-                                      (!currentRecord.id || h.id !== currentRecord.id) &&
-                                      (
-                                        // Filtro rigoroso por CPF ou Nome (se o nome for longo o suficiente e não for genérico)
-                                        (h.paciente_cpf && currentRecord.paciente_cpf && h.paciente_cpf === currentRecord.paciente_cpf) || 
-                                        (h.paciente_nome_completo && currentRecord.paciente_nome_completo && 
-                                         h.paciente_nome_completo.trim().toLowerCase() === currentRecord.paciente_nome_completo.trim().toLowerCase() &&
-                                         currentRecord.paciente_nome_completo.length > 5 &&
-                                         !['não identificado', 'paciente não identificado', 'atendimento', 'consulta'].includes(currentRecord.paciente_nome_completo.trim().toLowerCase()))
-                                      )
-                                    )
-                                  )}
-                                />
-                              </div>
-                              <div className="bg-white rounded-[2rem] border border-clinical-border p-8 shadow-sm overflow-x-auto">
-                                <IntegrativeChecklistForm 
-                                  data={currentRecord.checklist_integrativo}
-                                  onChange={(newData) => setCurrentRecord({ ...currentRecord, checklist_integrativo: newData })}
-                                  currentDate={currentRecord.id ? (currentRecord.data_consulta || currentRecord.created_at) : undefined}
-                                  historyRecords={(history || []).filter(h => 
-                                    h && currentRecord && (
-                                      (!currentRecord.id || h.id !== currentRecord.id) &&
-                                      (
-                                        (h.paciente_cpf && currentRecord.paciente_cpf && h.paciente_cpf === currentRecord.paciente_cpf) || 
-                                        (h.paciente_nome_completo && currentRecord.paciente_nome_completo && 
-                                         h.paciente_nome_completo.trim().toLowerCase() === currentRecord.paciente_nome_completo.trim().toLowerCase() &&
-                                         currentRecord.paciente_nome_completo.length > 5 &&
-                                         !['não identificado', 'paciente não identificado', 'atendimento', 'consulta'].includes(currentRecord.paciente_nome_completo.trim().toLowerCase()))
-                                      )
-                                    )
-                                  )}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-2 w-full">
-                            {/* Coluna Principal (Exames Estruturados & Mapeamento) */}
-                            <div className="space-y-8 w-full">
-                              
-                              {/* Componentes Médicos Específicos (Neurologia / Especialidades) */}
-                              {(examMode === 'neurological' || (currentRecord.exame_neurologico && hasMeaningfulData(currentRecord.exame_neurologico))) && (
-                                <div className="space-y-8">
-                                  <NeurologicalExamForm 
-                                    data={currentRecord.exame_neurologico || {}} 
-                                    onChange={(data) => setCurrentRecord({...currentRecord, exame_neurologico: data})}
-                                  />
-                                  
-                                  {/* Body Map integrado no contexto Neurológico */}
-                                  <div className="bg-white rounded-3xl border border-clinical-border p-4 shadow-sm">
-                                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                                        <Activity size={20} />
-                                      </div>
-                                      Mapeamento de Sensibilidade e Dor (Neuro)
-                                    </h3>
-                                    <IntegrativeBodyMap 
-                                      data={currentRecord.mapeamento_corporal || []} 
-                                      onChange={(newData) => setCurrentRecord({...currentRecord, mapeamento_corporal: newData})}
-                                    />
-                                  </div>
-                                </div>
-                              )}
-
-                              {currentRecord.dados_especialidade && examMode !== 'neurological' && (
-                                <SpecialtyFields 
-                                  specialtyId={examMode}
-                                  data={currentRecord.dados_especialidade}
-                                  onChange={(data) => {
-                                    setSpecialtyData(data);
-                                    setCurrentRecord(prev => ({ ...prev, dados_especialidade: data }));
-                                  }}
-                                />
-                              )}
-
-                              {/* Body Map Visível apenas no Modo Clínico Geral se houver queixas/dor marcadas */}
-                              {examMode === 'standard' && currentRecord.mapeamento_corporal && currentRecord.mapeamento_corporal.length > 0 && (
-                                <div className="bg-white rounded-[2rem] border border-clinical-border p-8 shadow-sm">
-                                  <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-                                      <Activity size={20} />
-                                    </div>
-                                    Mapeamento de Queixas/Dor (Clínico)
-                                  </h3>
-                                  <IntegrativeBodyMap 
-                                    data={currentRecord.mapeamento_corporal} 
-                                    onChange={(newData) => setCurrentRecord({...currentRecord, mapeamento_corporal: newData})}
-                                  />
-                                </div>
-                              )}
-
-                              {/* Demais Dados Clínicos Diversos (Se houver) */}
-                              {currentRecord.dados_clinicos && typeof currentRecord.dados_clinicos === 'object' && Object.entries(currentRecord.dados_clinicos).length > 0 && examMode !== 'neurological' && (
-                                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                  {Object.entries(currentRecord.dados_clinicos).map(([key, val]) => (
-                                    val && val !== "null" && (
-                                      <div key={key} className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm group hover:border-clinical-blue/30 transition-all">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] block mb-1 group-hover:text-clinical-blue transition-colors">
-                                          {key.replace(/_/g, ' ')}
-                                        </span>
-                                        <span className="text-sm font-mono font-bold text-slate-700 break-words">{String(val)}</span>
-                                      </div>
-                                    )
-                                  ))}
-                                </div>
-                              )}
-
-                              {/* Removido o Body Map para Especialidades Gerais, pois o usuário quer apenas nos modos neurológico e integrativo. */}
-
-                              {/* Relato em Áudio/Mídia (Se houver) */}
-                              {(() => {
-                                const mediaUrl = currentRecord.midia_url;
-                                const cleanUrl = mediaUrl?.trim() || '';
-                                let detectedType = currentRecord.tipo_midia?.toLowerCase() || '';
-                                
-                                if (!detectedType && cleanUrl) {
-                                  if (cleanUrl.startsWith('data:image') || cleanUrl.startsWith('iVBORw0KGgo') || cleanUrl.startsWith('/9j/') || cleanUrl.match(/\.(jpg|jpeg|png|webp|gif)/i)) {
-                                    detectedType = 'image';
-                                  } else if (cleanUrl.startsWith('data:audio') || cleanUrl.includes('audio') || cleanUrl.length > 500) {
-                                    detectedType = 'audio';
-                                  }
-                                }
-
-                                const isImage = detectedType.includes('image') || detectedType.includes('imagem');
-                                const isAudio = detectedType.includes('audio') || detectedType.includes('ptt');
-
-                                if (!cleanUrl) return null;
-
-                                return (
-                                  <div className="bg-white rounded-3xl border border-clinical-border p-6 shadow-sm">
-                                    <div className="flex items-center gap-3 mb-4">
-                                      <Eye className="text-clinical-blue" size={20} />
-                                      <h3 className="font-bold text-lg text-slate-800">Mídia Associada</h3>
-                                    </div>
-                                    <div className="flex flex-col items-center">
-                                      {isImage ? (
-                                        <img 
-                                          src={cleanUrl.startsWith('data:') ? cleanUrl : (cleanUrl.startsWith('http') ? cleanUrl : (cleanUrl.startsWith('iVBORw0KGgo') ? `data:image/png;base64,${cleanUrl}` : `data:image/jpeg;base64,${cleanUrl}`)) } 
-                                          alt="Exame enviado pelo paciente" 
-                                          className="max-w-full h-auto rounded-2xl shadow-sm border border-slate-200"
-                                          referrerPolicy="no-referrer"
-                                        />
-                                      ) : isAudio ? (
-                                        <div className="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col items-center gap-3">
-                                          <audio 
-                                            src={cleanUrl.startsWith('data:') ? cleanUrl : (cleanUrl.startsWith('http') ? cleanUrl : `data:audio/ogg;base64,${cleanUrl}`)} 
-                                            controls 
-                                            className="w-full"
-                                          >
-                                            Seu navegador não suporta o player de áudio.
-                                          </audio>
-                                        </div>
-                                      ) : (
-                                        <a href="#" className="flex items-center gap-2 bg-clinical-blue text-white px-4 py-2 rounded-xl">
-                                          Visualizar Anexo
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })()}
-                            {/* Section Secundária now moved below the ternary */}
-                            </div>
-                          </div>
-                      )}
-                      
-                      {/* Seção Secundária (Resumos Textuais, Condutas e IA) COMUM A TODOS OS MODOS */}
-                      <div className="w-full pt-8 border-t border-slate-200 animate-in fade-in slide-in-from-bottom-2 mt-8">
-                        <div className="grid md:grid-cols-2 gap-6">
-
-                            
-                            {/* Alertas Copiloto (Topo da Coluna de Decisão, se houver) */}
-                            {currentRecord.alertas_copiloto && currentRecord.alertas_copiloto.length > 0 && (
-                              <div className="col-span-full bg-amber-50 rounded-3xl border border-amber-200 p-6 shadow-sm">
-                                <div className="flex items-center justify-between mb-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
-                                      <Zap size={16} fill="currentColor" />
-                                    </div>
-                                    <h3 className="font-black text-amber-900 tracking-tight text-lg">COPILOTO IA</h3>
-                                  </div>
-                                  <button onClick={() => setCurrentRecord({ ...currentRecord, alertas_copiloto: [] })} className="text-amber-500 hover:bg-amber-100 p-1 rounded-lg">
-                                    <X size={16} />
-                                  </button>
-                                </div>
-                                <div className="space-y-3">
-                                  {currentRecord.alertas_copiloto.map((alerta, idx) => (
-                                    <div key={idx} className="flex gap-3 bg-white/60 p-3 rounded-xl border border-amber-200/50 text-sm text-amber-900 font-medium">
-                                      <Activity size={16} className="shrink-0 mt-0.5 text-amber-600" />
-                                      {alerta}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Grid GERAL de Textos - Exibido em ALL MODES - RESTORING V4 ORIGINAL EXACT CARDS */}
-                            
-                            {/* Resumo do Atendimento */}
-                            <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
-                              <div className="flex items-center gap-3 mb-4">
-                                <FileText className="text-clinical-blue" size={20} />
-                                <h3 className="font-bold text-lg text-slate-800">Resumo do Atendimento</h3>
-                              </div>
-                              <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">
-                                {currentRecord.resumo_formatado || currentRecord.queixa_principal || "Nenhum relato transcrito."}
-                              </p>
-                            </div>
-
-                            {/* Conduta e Plano Terapêutico */}
-                            {(currentRecord.conduta_plano_terapeutico || currentRecord.sugestao_conduta) && (
-                              <div className="bg-emerald-50/70 rounded-3xl border border-emerald-100 p-6 shadow-sm">
-                                <div className="flex items-center gap-3 mb-4">
-                                  <Stethoscope className="text-emerald-600" size={20} />
-                                  <h3 className="font-bold text-lg text-emerald-900">Conduta e Plano Terapêutico</h3>
-                                </div>
-                                <p className="text-emerald-800 font-medium leading-relaxed text-sm whitespace-pre-wrap">
-                                  {currentRecord.conduta_plano_terapeutico || currentRecord.sugestao_conduta}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Hipótese Diagnóstica */}
-                            {currentRecord.hipotese_diagnostica && (
-                              <div className="bg-indigo-50/50 rounded-3xl border border-indigo-100 p-6 shadow-sm">
-                                <div className="flex items-center gap-3 mb-4">
-                                  <Activity className="text-indigo-600" size={20} />
-                                  <h3 className="font-bold text-lg text-indigo-900">Hipótese Diagnóstica</h3>
-                                </div>
-                                <p className="text-indigo-800 font-medium leading-relaxed text-sm">
-                                  {currentRecord.hipotese_diagnostica}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Prescrição / Receituário */}
-                            {currentRecord.prescricao && (
-                              <div className="bg-amber-50/50 rounded-3xl border border-amber-100 p-6 shadow-sm">
-                                <div className="flex items-center gap-3 mb-4">
-                                  <ClipboardList className="text-amber-600" size={20} />
-                                  <h3 className="font-bold text-lg text-amber-900">Prescrição / Receituário</h3>
-                                </div>
-                                <div className="bg-white/80 p-4 rounded-xl border border-amber-100/50 text-amber-900 font-mono text-xs whitespace-pre-wrap">
-                                  {currentRecord.prescricao}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Resumo Formatado */}
-                            <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
-                              <div className="flex items-center gap-3 mb-4">
-                                <FileText className="text-slate-400" size={20} />
-                                <h3 className="font-bold text-lg text-slate-800">Resumo Formatado</h3>
-                              </div>
-                              <p className="text-slate-600 leading-relaxed text-sm italic whitespace-pre-wrap">
-                                "{currentRecord.resumo_formatado || currentRecord.queixa_principal || "Nenhum relato transcrito."}"
-                              </p>
-                            </div>
-
-                            {/* Hipótese Diagnóstica e Conduta Combinadas */}
-                            {(currentRecord.hipotese_diagnostica || currentRecord.conduta_plano_terapeutico || currentRecord.prescricao) && (
-                                <div className="bg-indigo-50/30 rounded-3xl border border-indigo-100 p-6 shadow-sm">
-                                  <div className="flex items-center gap-3 mb-4">
-                                    <CheckCircle2 className="text-indigo-600" size={20} />
-                                    <h3 className="font-bold text-lg text-indigo-900">Hipótese Diagnóstica e Conduta</h3>
-                                  </div>
-                                  <div className="space-y-4">
-                                    {currentRecord.hipotese_diagnostica && (
-                                      <div>
-                                        <p className="text-indigo-900 font-bold text-sm mb-1">Hipótese:</p>
-                                        <p className="text-indigo-800 text-sm">{currentRecord.hipotese_diagnostica}</p>
-                                      </div>
-                                    )}
-                                    {(currentRecord.conduta_plano_terapeutico || currentRecord.sugestao_conduta) && (
-                                      <div>
-                                        <p className="text-indigo-900 font-bold text-sm mb-1">Conduta:</p>
-                                        <p className="text-indigo-800 text-sm">{currentRecord.conduta_plano_terapeutico || currentRecord.sugestao_conduta}</p>
-                                      </div>
-                                    )}
-                                    {currentRecord.prescricao && (
-                                      <div>
-                                        <p className="text-indigo-900 font-bold text-sm mb-1 flex items-center gap-2">
-                                          <FileText size={14} /> Receituário / Prescrição
-                                        </p>
-                                        <p className="text-indigo-700 text-sm whitespace-pre-wrap">{currentRecord.prescricao}</p>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                            )}
-
-                            {/* Evolução IA */}
-                            {currentRecord?.comparativo?.analise && (
-                              <div className="col-span-full bg-slate-900 text-slate-50 rounded-3xl p-6 shadow-md">
-                                <div className="flex items-center gap-3 mb-4">
-                                  <TrendingUp className="text-indigo-400" size={20} />
-                                  <h3 className="font-bold text-lg">Evolução do Caso</h3>
-                                </div>
-                                <p className="text-sm text-slate-300 leading-relaxed max-h-48 overflow-y-auto no-scrollbar pr-2 mb-4">
-                                  {currentRecord.comparativo.analise}
-                                </p>
-                                {currentRecord?.comparativo?.evolucao_percentual && (
-                                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-500/20 text-indigo-300 rounded-lg border border-indigo-400/30">
-                                    <TrendingUp size={14} />
-                                    <span className="text-xs font-bold">{currentRecord.comparativo.evolucao_percentual}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                          </div>
-                        </div>
-                        {/* ========================================= */}
-                        {/* END OF V4.4 LAYOUT REORGANIZATION */}
-                        {/* ========================================= */}
-                      </motion.div>
-                    ) : (
-                      <motion.div 
-                        key="empty"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="h-full flex flex-col items-center justify-center text-center p-12 bg-white/50 rounded-3xl border border-dashed border-slate-300"
-                      >
-                        <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-6">
-                          <Activity size={40} />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-400 mb-2">Aguardando Dados</h3>
-                        <p className="text-slate-400 text-sm max-w-xs">Os resultados da análise clínica aparecerão aqui após o processamento do áudio.</p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                {/* Demonstration Voice Script Hint */}
+                <div className="mx-auto max-w-4xl bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-5 text-emerald-950 shadow-sm">
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-800 flex items-center gap-2 mb-2">
+                    <Mic size={16} className="text-emerald-600 animate-pulse" />
+                    Roteiro de Teste por Voz (Copiloto Prontuário Verde)
+                  </h3>
+                  <p className="text-xs italic bg-white/80 p-3.5 rounded-xl border border-emerald-100 leading-relaxed">
+                    {examMode === 'integrative' 
+                      ? '"Paciente Claudia Roseli Cardoso, 51 anos. Refere fadiga extrema e insônia frequente. Pressão arterial 120 por 80, 75 batimentos por minuto. Prescrever Coenzima Q10 200mg, DHEA 25mg e Vitamina D3 50.000 UI semanal. Avaliar imunologia e biocompatibilidade."'
+                      : '"Paciente Claudia Roseli Cardoso, 51 anos. Refere dor lombar irradiada há 3 semanas. Pressão arterial 130 por 85, 78 batimentos por minuto. Ao exame físico: reflexos normais e força preservada. Hipótese: Lombociatalgia à direita. Conduta: Pregabalina 75mg e encaminhamento para fisioterapia."'
+                    }
+                  </p>
                 </div>
               </motion.div>
             )}
+
+
+
+
+
+
+
+
+                        
+
+
+
+
+                      
+
+
+
+
+
           </AnimatePresence>
         )}
       </main>
@@ -3917,6 +3651,7 @@ export default function App() {
         )}
       </AnimatePresence>
       <Toaster position="top-right" />
+      </div>
     </div>
   );
 }

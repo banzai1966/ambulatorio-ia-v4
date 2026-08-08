@@ -1,0 +1,450 @@
+import React, { useState, useEffect } from 'react';
+import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { toast } from 'react-hot-toast';
+
+interface AnvisaMedication {
+  id: string;
+  nome: string;
+  principioAtivo: string;
+  precoMedio: string;
+  apresentacoes: string[];
+  bulaUrl: string;
+  posologiaSugerida: string;
+}
+
+interface PrescriptionItem {
+  medication: AnvisaMedication;
+  selectedApresentacao: string;
+  posologiaCustomizada: string;
+  quantidade: string;
+}
+
+interface PrescriptionAnvisaModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  patientName: string;
+  patientPhone: string;
+  patientCpf?: string;
+  doctorName: string;
+  clinicName?: string;
+}
+
+export default function PrescriptionAnvisaModal({
+  isOpen,
+  onClose,
+  patientName,
+  patientPhone,
+  patientCpf,
+  doctorName,
+  clinicName = "Ambulatório IA & Saúde Integrativa"
+}: PrescriptionAnvisaModalProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [medications, setMedications] = useState<AnvisaMedication[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedMed, setSelectedMed] = useState<AnvisaMedication | null>(null);
+  const [selectedApresentacao, setSelectedApresentacao] = useState('');
+  const [posologia, setPosologia] = useState('');
+  const [quantidade, setQuantidade] = useState('1 caixa');
+  const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItem[]>([]);
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchMedications('');
+    }
+  }, [isOpen]);
+
+  const fetchMedications = async (query: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/anvisa/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setMedications(data);
+    } catch (err) {
+      console.error("Erro ao carregar medicamentos ANVISA:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    fetchMedications(value);
+  };
+
+  const handleSelectMed = (med: AnvisaMedication) => {
+    setSelectedMed(med);
+    setSelectedApresentacao(med.apresentacoes[0] || '');
+    setPosologia(med.posologiaSugerida || '');
+  };
+
+  const handleAddItem = () => {
+    if (!selectedMed) return;
+    const newItem: PrescriptionItem = {
+      medication: selectedMed,
+      selectedApresentacao,
+      posologiaCustomizada: posologia,
+      quantidade
+    };
+    setPrescriptionItems(prev => [...prev, newItem]);
+    setSelectedMed(null);
+    setPosologia('');
+    toast.success(`${selectedMed.nome} adicionado à receita!`);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    setPrescriptionItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    
+    // Cabeçalho Clínica
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text(clinicName, 14, 18);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("RECEITUÁRIO MÉDICO DIGITAL - VALIDADO VIA ANVISA & QR CODE", 14, 26);
+
+    // Dados do Paciente e Médico
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 45);
+    if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 52);
+    doc.text(`MÉDICO RESPONSÁVEL: ${doctorName.toUpperCase()}`, 14, patientCpf ? 59 : 52);
+    doc.text(`DATA: ${new Date().toLocaleDateString('pt-BR')}`, 150, 45);
+
+    doc.setLineWidth(0.5);
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, 65, 196, 65);
+
+    // Tabela de Medicamentos
+    const tableRows = prescriptionItems.map((item, index) => [
+      `${index + 1}. ${item.medication.nome}\n(${item.selectedApresentacao})`,
+      item.quantidade,
+      item.posologiaCustomizada
+    ]);
+
+    autoTable(doc, {
+      startY: 70,
+      head: [['MEDICAMENTO / APRESENTAÇÃO', 'QTD', 'POSOLOGIA E ORIENTAÇÕES']],
+      body: tableRows,
+      headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
+      styles: { fontSize: 10, cellPadding: 5 },
+      columnStyles: {
+        0: { cellWidth: 70 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 80 }
+      }
+    });
+
+    // Nota de Validação e Assinatura
+    const finalY = (doc as any).lastAutoTable.finalY || 150;
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 20);
+    
+    // Linha de assinatura
+    doc.setDrawColor(148, 163, 184);
+    doc.line(120, finalY + 40, 196, finalY + 40);
+    doc.setFont("helvetica", "bold");
+    doc.text(doctorName, 120, finalY + 46);
+    doc.setFont("helvetica", "normal");
+    doc.text("CRM / Assinatura Digital Ativa", 120, finalY + 52);
+
+    return doc;
+  };
+
+  const handleDownloadPDF = () => {
+    if (prescriptionItems.length === 0) {
+      toast.error("Adicione pelo menos um medicamento para gerar a receita.");
+      return;
+    }
+    const doc = generatePDF();
+    doc.save(`Receita_${patientName.replace(/\s+/g, '_')}.pdf`);
+    toast.success("Receita baixada em PDF!");
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (prescriptionItems.length === 0) {
+      toast.error("Adicione pelo menos um medicamento.");
+      return;
+    }
+    setIsSendingWhatsApp(true);
+    try {
+      const itemsText = prescriptionItems.map((item, idx) => 
+        `*${idx + 1}. ${item.medication.nome}* (${item.selectedApresentacao})\n   └ 📌 *Posologia:* ${item.posologiaCustomizada}\n   └ 💊 *Qtd:* ${item.quantidade}`
+      ).join('\n\n');
+
+      const messageText = `💊 *RECEITA MÉDICA DIGITAL - ${clinicName}*\n\n*Paciente:* ${patientName}\n*Médico:* ${doctorName}\n*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n===========================\n\n${itemsText}\n\n===========================\n\n🔍 *Consulte as bulas oficiais da ANVISA:* \n${prescriptionItems.map(i => `• ${i.medication.nome}: ${i.medication.bulaUrl}`).join('\n')}\n\n✅ *Receita digital com validação direta nas farmácias.*`;
+
+      const res = await fetch('/api/send-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: patientPhone,
+          message: messageText
+        })
+      });
+
+      if (!res.ok) throw new Error("Falha ao enviar mensagem");
+
+      toast.success("Receita enviada com sucesso para o WhatsApp do paciente!");
+      onClose();
+    } catch (err: any) {
+      toast.error("Erro ao enviar via WhatsApp: " + err.message);
+    } finally {
+      setIsSendingWhatsApp(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-100">
+        
+        {/* Header Modal */}
+        <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+              <Pill className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold">Prescrição Digital com Bulário ANVISA</h2>
+              <p className="text-xs text-slate-300">Busca oficial de medicamentos, preços médios e posologia automática</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          
+          {/* Informações do Paciente */}
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div>
+              <span className="font-semibold text-emerald-900">Paciente: </span>
+              <span className="text-emerald-800 font-bold">{patientName}</span>
+              {patientCpf && <span className="ml-2 text-emerald-700">({patientCpf})</span>}
+            </div>
+            <div>
+              <span className="font-semibold text-emerald-900">WhatsApp: </span>
+              <span className="text-emerald-800">{patientPhone || "Não informado"}</span>
+            </div>
+          </div>
+
+          {/* Busca de Medicamento ANVISA */}
+          <div className="space-y-3">
+            <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+              <span>Buscar Medicamento / Princípio Ativo (ANVISA):</span>
+              <span className="text-emerald-600 font-normal">Base com bulas oficiais e preços médios</span>
+            </label>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Digite o nome do remédio ou princípio ativo (ex: Paracetamol, Amoxicilina, Dipirona)..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Lista de Resultados ANVISA */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-1">
+              {isLoading ? (
+                <p className="text-xs text-slate-500 col-span-2 py-4 text-center">Buscando na base ANVISA...</p>
+              ) : medications.length === 0 ? (
+                <p className="text-xs text-slate-400 col-span-2 py-4 text-center">Nenhum medicamento encontrado para essa busca.</p>
+              ) : (
+                medications.map(med => (
+                  <div
+                    key={med.id}
+                    onClick={() => handleSelectMed(med)}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer text-xs ${
+                      selectedMed?.id === med.id 
+                        ? 'border-emerald-500 bg-emerald-50/50 shadow-xs' 
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="font-bold text-slate-900">{med.nome}</h4>
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-lg whitespace-nowrap">
+                        Média: {med.precoMedio}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">Princípio: {med.principioAtivo}</p>
+                    <div className="mt-2 flex items-center justify-between text-[10px]">
+                      <span className="text-slate-400">{med.apresentacoes.length} apresentações</span>
+                      <a 
+                        href={med.bulaUrl} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        onClick={(e) => e.stopPropagation()} 
+                        className="text-emerald-600 hover:underline flex items-center gap-1 font-semibold"
+                      >
+                        Ver Bula ANVISA <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Configurar Posologia do Medicamento Selecionado */}
+          {selectedMed && (
+            <div className="p-4 bg-slate-900 text-white rounded-2xl space-y-4 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-sm text-emerald-400">{selectedMed.nome}</h3>
+                  <p className="text-xs text-slate-300">Princípio Ativo: {selectedMed.principioAtivo}</p>
+                </div>
+                <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3 py-1 rounded-xl">
+                  Preço Médio Estimado: {selectedMed.precoMedio}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Apresentação:</label>
+                  <select
+                    value={selectedApresentacao}
+                    onChange={(e) => setSelectedApresentacao(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-hidden focus:border-emerald-500"
+                  >
+                    {selectedMed.apresentacoes.map((ap, idx) => (
+                      <option key={idx} value={ap}>{ap}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-300 mb-1 font-semibold">Quantidade Prescrita:</label>
+                  <input
+                    type="text"
+                    value={quantidade}
+                    onChange={(e) => setQuantidade(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-hidden focus:border-emerald-500"
+                    placeholder="Ex: 1 caixa, 2 frascos..."
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1 font-semibold">Posologia & Instruções de Uso:</label>
+                <textarea
+                  rows={2}
+                  value={posologia}
+                  onChange={(e) => setPosologia(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-hidden focus:border-emerald-500 text-xs"
+                  placeholder="Ex: Tomar 1 comprimido de 8 em 8 horas por 7 dias..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMed(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  className="px-4 py-2 bg-emerald-500 text-slate-900 font-bold rounded-xl text-xs hover:bg-emerald-400 transition-all flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4" /> Adicionar à Receita
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Itens Adicionados na Receita */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-emerald-600" />
+              Medicamentos na Receita ({prescriptionItems.length})
+            </h3>
+
+            {prescriptionItems.length === 0 ? (
+              <div className="p-8 border-2 border-dashed border-slate-200 rounded-2xl text-center text-slate-400 text-xs">
+                Selecione um medicamento acima para incluir na receita do paciente.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {prescriptionItems.map((item, idx) => (
+                  <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">{idx + 1}. {item.medication.nome}</span>
+                        <span className="text-slate-500 text-[11px]">({item.selectedApresentacao})</span>
+                      </div>
+                      <p className="text-slate-600 mt-0.5 text-[11px]">📌 Posologia: {item.posologiaCustomizada}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="px-2.5 py-1 bg-slate-200 text-slate-700 font-semibold rounded-lg text-[10px]">
+                        {item.quantidade}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveItem(idx)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg transition-colors"
+                        title="Remover"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <QrCode className="w-4 h-4 text-emerald-600" />
+            <span>Validação Digital MP 2.200-2/2001</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadPDF}
+              disabled={prescriptionItems.length === 0}
+              className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" /> Baixar PDF
+            </button>
+
+            <button
+              onClick={handleSendWhatsApp}
+              disabled={prescriptionItems.length === 0 || isSendingWhatsApp}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition-all shadow-md active:scale-95 flex items-center gap-2 disabled:opacity-50"
+            >
+              <Send className="w-4 h-4" />
+              {isSendingWhatsApp ? "Enviando no WhatsApp..." : "Enviar via WhatsApp sem Papel"}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}

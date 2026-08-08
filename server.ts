@@ -229,7 +229,7 @@ app.post("/api/process-clinical", async (req, res) => {
       - alertas_copiloto: Array de strings. Atue como um Copiloto Clínico Integrativo. Analise as suplementações/vitaminas e cite alertas CUIDADOSOS. Exemplos Obrigatórios: "Uso de altas doses de Vitamina D3 (como 50.000 UI) exige Vitamina K2 associada obrigatoriamente para evitar toxicidade e calcificação", "Zinco sem Cobre...". Seja breve e comece com "Atenção:". Mesmo riscos e dicas de controle devem ser pontuados.  Se a prescrição estiver 100% perfeita, retorne um array vazio [].
       - especialidade: Especialidade sugerida ou confirmada
       - paciente_status: Status ("Estável", "Atenção" ou "Crítico"). Avalie a gravidade. Se encontrar FC, SpO2, Pressão ou Respiração fora do normal, use "Atenção" ou "Crítico".
-      - vitals: Objeto contendo os sinais vitais extraídos do relato. Estrutura: { "bpm": numero, "spo2": numero, "resp": numero, "pressao": "string" }. Ex: { "bpm": 72, "spo2": 98, "resp": 16, "pressao": "120/80" }. Mantenha undefined para os não citados.
+      - vitals: Objeto contendo os sinais vitais extraídos do relato. Estrutura: { "bpm": numero, "spo2": numero, "resp": numero, "pressao": "string", "soroName": "string", "soroRate": "string" }. Ex: { "bpm": 72, "spo2": 98, "resp": 16, "pressao": "120/80", "soroName": "Soro Fisiológico 0.9% (500ml)", "soroRate": "21 gotas/min" }. Mantenha undefined para os não citados.
       - resumo_clinico: String curta justificando o paciente_status e os sinais vitais, ou preencha com a condição geral rápida se for normal.
       - mapeamento_corporal: Array de objetos marcando sintomas locais ou dores. IMPORTANTE: Extraia SEMPRE o mapeamento se o paciente relatar dor (ex: "dor na perna") ou outros sintomas físicos localizados (ex: "peso nas pernas", "formigamento na mão"). Use labels curtíssimos (ex: "Dor Joelho D", "Peso Pernas"). Se não houver sintoma localizado relatado, retorne []. 
         Estrutura de cada ponto: { "x": numero, "y": numero, "side": "front" ou "back", "label": "string curta" }. 
@@ -256,13 +256,20 @@ app.post("/api/process-clinical", async (req, res) => {
           "sensibilidade": { "cabeca": {"proprio":"","vibrat":"","temp":"","dor":"","toque":""}, "torax": {...}, "mmss": {...}, "abdome": {...}, "mmii": {...} },
           "forca_muscular": { "face": {"tonus":"","trofismo":"","mov_anormais":"","deformidades":"","fatigabilidade":""}, "lingua": {...}, "msd": {...}, "mse": {...}, "mid": {...}, "mie": {...}, "coluna": {...} }
         }
-      - checklist_integrativo: Se o modo for 'integrative', preencha conforme as regras abaixo. Se o modo NÃO for 'integrative', retorne null. É PROIBIDO USAR BOOLEAN (true/false) AQUI. O valor DEVE SER UMA STRING. Preencha com a dosagem exata (ex: "500 mg", "50.000 UI"). Se disser apenas o nome do item sem valor, preencha com a string "Sinalizado". 
-       ATENÇÃO: Números no nome do item (ex: "Coenzima Q10", "Mix D9", "Vit K2") NÃO são dosagens! O "10" em "Coenzima Q10" faz parte do nome. Se o médico disser apenas "Coenzima Q 10", preencha "coenzima_q10" com "Sinalizado".
-        Estrutura esperada: { "suplementos": { "coenzima_q10": "Sinalizado" }, "biomarcadores": { "cortisol": "5 < 10" }, "vitaminas_minerais": { "vit_d3": "50.000 UI" } }
-        Chaves disponíveis:
+      - checklist_integrativo: SEMPRE extraia este objeto se houver menção a suplementos, vitaminas, fitoterápicos, biomarcadores ou patógenos no relato, MESMO QUE O MODO NÃO SEJA 'integrative'! É PROIBIDO USAR BOOLEAN (true/false) AQUI. O valor DEVE SER UMA STRING.
+        REGRA CRÍTICA DE ABSOLUTA FIDELIDADE (APENAS ITENS CITADOS NO RELATO):
+        1. Inclua no objeto JSON APENAS E EXCLUSIVAMENTE as chaves dos itens que FORAM REALMENTE MENCIONADOS/DITADOS NO RELATO DO PACIENTE!
+        2. É ESTRITAMENTE PROIBIDO "preencher", "sinalizar" ou incluir itens que NÃO foram falados ou escritos no relato. Se o médico NÃO citou "Silimarina", "Quercetina", "Saw Palmetto", "Biomarcadores", etc., NÃO INCLUA NENHUMA DESSAS CHAVES NO JSON!
+        3. Se o item foi citado COM dosagem/percentual (ex: "Lugol 5%", "Coenzima Q10 100mg", "Vitamina D3 50.000 UI"), coloque a dosagem exata (ex: "5%", "100 mg", "50.000 UI").
+        4. Se o item foi citado SEM dosagem nem percentual (ex: apenas "uso de Própolis", "histórico de Candida"), preencha ESTRITAMENTE com a string "Sinalizado".
+        5. Se o item NÃO foi citado no texto, OMITA COMPLETAMENTE A CHAVE DELE DO JSON!
+        
+        ATENÇÃO: Números no nome do item (ex: "Coenzima Q10", "Mix D9", "Vit K2") NÃO são dosagens! O "10" em "Coenzima Q10" faz parte do nome. Se o médico disser apenas "Coenzima Q10", preencha "coenzima_q10" com "Sinalizado".
+        Estrutura esperada (exemplo para relato que cita apenas Coenzima Q10 e Lugol 5%): { "suplementos": { "coenzima_q10": "Sinalizado" }, "vitaminas_minerais": { "lugol": "5%" } }
+        Chaves disponíveis para mapeamento:
         ${checklistSchema}
       
-      IMPORTANTE: Para o checklist_integrativo, você DEVE mapear os itens mencionados no relato para as chaves exatas acima e NUNCA usar true.`;
+      IMPORTANTE: Para o checklist_integrativo, você DEVE mapear APENAS e EXCLUSIVAMENTE os itens mencionados no relato para as chaves exatas acima. Se um item não foi mencionado, NÃO inclua sua chave.`;
 
     let parts: any[];
     if (typeof input === 'string') {
@@ -401,6 +408,171 @@ app.get("/api/health", (req, res) => {
     processedDatabaseIds: Array.from(processedDatabaseIds).slice(-10),
     lastProcessedMessages: Array.from(lastProcessedMessages.entries()).slice(-5)
   });
+});
+
+// --- ROTA DE BUSCA DE CEP (ViaCEP) ---
+app.get("/api/cep/:cep", async (req, res) => {
+  try {
+    const cleanCep = req.params.cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) {
+      return res.status(400).json({ error: "CEP inválido. Deve conter 8 dígitos." });
+    }
+    const response = await axios.get(`https://viacep.com.br/ws/${cleanCep}/json/`, { timeout: 5000 });
+    if (response.data.erro) {
+      return res.status(404).json({ error: "CEP não encontrado." });
+    }
+    res.json(response.data);
+  } catch (err: any) {
+    res.status(500).json({ error: "Erro ao consultar CEP", details: err.message });
+  }
+});
+
+// --- ROTA BULÁRIO ANVISA & BASE DE MEDICAMENTOS ---
+const ANVISA_DATABASE = [
+  { id: "1", nome: "Paracetamol", principioAtivo: "Paracetamol", precoMedio: "R$ 11,50", apresentacoes: ["500mg - Caixa com 20 comprimidos", "750mg - Caixa com 20 comprimidos", "200mg/mL - Frasco com 15mL (Gotas)"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=PARACETAMOL", posologiaSugerida: "Tomar 1 comprimido de 8 em 8 horas em caso de dor ou febre (Máx 4g/dia)." },
+  { id: "2", nome: "Novalgina / Dipirona Sódica", principioAtivo: "Dipirona Monoidratada", precoMedio: "R$ 13,30", apresentacoes: ["1g - Caixa com 10 comprimidos efervescentes", "500mg - Caixa com 30 comprimidos", "500mg/mL - Frasco 20mL"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=DIPIRONA", posologiaSugerida: "Tomar 1 comprimido de 6 em 6 horas se houver dor ou febre elevada." },
+  { id: "3", nome: "Amoxicilina", principioAtivo: "Amoxicilina Tri-idratada", precoMedio: "R$ 28,90", apresentacoes: ["500mg - Caixa com 21 cápsulas", "875mg - Caixa com 14 comprimidos", "250mg/5mL - Suspensão Oral 150mL"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=AMOXICILINA", posologiaSugerida: "Tomar 1 cápsula de 8 em 8 horas durante 7 dias seguidos." },
+  { id: "4", nome: "Ibuprofeno", principioAtivo: "Ibuprofeno", precoMedio: "R$ 16,80", apresentacoes: ["600mg - Caixa com 20 comprimidos", "400mg - Caixa com 10 cápsulas gelatinosas", "50mg/mL - Gotas 30mL"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=IBUPROFENO", posologiaSugerida: "Tomar 1 comprimido de 8 em 8 horas após as refeições durante 5 dias." },
+  { id: "5", nome: "Omeprazol", principioAtivo: "Omeprazol", precoMedio: "R$ 19,40", apresentacoes: ["20mg - Caixa com 28 cápsulas", "40mg - Caixa com 14 cápsulas"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=OMEPRAZOL", posologiaSugerida: "Tomar 1 cápsula em jejum, 30 minutos antes do café da manhã." },
+  { id: "6", nome: "Azitromicina", principioAtivo: "Azitromicina Di-idratada", precoMedio: "R$ 32,50", apresentacoes: ["500mg - Caixa com 3 comprimidos", "500mg - Caixa com 5 comprimidos"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=AZITROMICINA", posologiaSugerida: "Tomar 1 comprimido ao dia durante 3 a 5 dias." },
+  { id: "7", nome: "Dexametasona", principioAtivo: "Dexametasona", precoMedio: "R$ 14,20", apresentacoes: ["4mg - Caixa com 10 comprimidos", "0.1mg/mL - Elixir 120mL"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=DEXAMETASONA", posologiaSugerida: "Tomar 1 comprimido de 12 em 12 horas por 3 dias." },
+  { id: "8", nome: "Losartana Potássica", principioAtivo: "Losartana Potássica", precoMedio: "R$ 12,00", apresentacoes: ["50mg - Caixa com 30 comprimidos", "100mg - Caixa com 30 comprimidos"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=LOSARTANA", posologiaSugerida: "Tomar 1 comprimido pela manhã diariamente." },
+  { id: "9", nome: "Metformina (Glucofage)", principioAtivo: "Cloridrato de Metformina", precoMedio: "R$ 15,30", apresentacoes: ["500mg - Caixa com 30 comprimidos", "850mg - Caixa com 30 comprimidos", "1000mg XR - Caixa com 30 comprimidos"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=METFORMINA", posologiaSugerida: "Tomar 1 comprimido durante as refeições principais." },
+  { id: "10", nome: "Clordiazepóxido + Clidinio (Librax)", principioAtivo: "Clordiazepóxido + Brometo de Clidínio", precoMedio: "R$ 44,00", apresentacoes: ["5mg/2.5mg - Caixa com 30 drágeas"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=CLORDIAZEPOXIDO", posologiaSugerida: "Tomar 1 drágea de 8 em 8 horas antes das refeições." },
+  { id: "11", nome: "Nimesulida", principioAtivo: "Nimesulida", precoMedio: "R$ 18,60", apresentacoes: ["100mg - Caixa com 12 comprimidos", "50mg/mL - Gotas 15mL"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=NIMESULIDA", posologiaSugerida: "Tomar 1 comprimido de 12 em 12 horas após alimentação por até 5 dias." },
+  { id: "12", nome: "Clonazepam (Rivotril)", principioAtivo: "Clonazepam", precoMedio: "R$ 22,00", apresentacoes: ["2mg - Caixa com 30 comprimidos", "2.5mg/mL - Frasco Gotas 20mL"], bulaUrl: "https://consultas.anvisa.gov.br/#/bulario/q/?nomeProduto=CLONAZEPAM", posologiaSugerida: "Tomar conforme estrita prescrição médica controlada." }
+];
+
+app.get("/api/anvisa/search", (req, res) => {
+  const query = (req.query.q as string || '').toLowerCase().trim();
+  if (!query) {
+    return res.json(ANVISA_DATABASE);
+  }
+  const filtered = ANVISA_DATABASE.filter(m => 
+    m.nome.toLowerCase().includes(query) || 
+    m.principioAtivo.toLowerCase().includes(query) ||
+    m.apresentacoes.some(a => a.toLowerCase().includes(query))
+  );
+  res.json(filtered);
+});
+
+// --- ROTA DISPARO DE CONFIRMAÇÃO DE AGENDAMENTO VIA WHATSAPP ---
+app.post("/api/whatsapp/send-confirmation", async (req, res) => {
+  try {
+    const { phone, patientName, doctorName, date, time, appointmentId } = req.body;
+    if (!phone) {
+      return res.status(400).json({ error: "Telefone é obrigatório" });
+    }
+    const cleanPhone = phone.split('@')[0].replace(/\D/g, '');
+    const origin = req.headers.origin || `http://localhost:${PORT}`;
+    const anamneseLink = `${origin}/#anamnese?phone=${cleanPhone}&id=${appointmentId || '1'}`;
+
+    const msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde e envie sua foto pelo link:\n${anamneseLink}`;
+
+    // Tenta enviar via Evolution API se configurada
+    try {
+      await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+        number: cleanPhone,
+        text: msgText,
+        linkPreview: true
+      }, { headers: { 'apikey': EVOLUTION_API_KEY } });
+      addLog(`✅ Confirmação enviada via Evolution para ${cleanPhone}`);
+    } catch (e: any) {
+      addLog(`⚠️ Evolution indisponível para confirmação, registrando no banco: ${e.message}`);
+    }
+
+    // Registra na tabela de mensagens do Supabase
+    await supabase.from('mensagens').insert([{
+      telefone_cliente: cleanPhone,
+      mensagem: msgText,
+      direcao: 'enviada',
+      lida: true,
+      created_at: new Date().toISOString()
+    }]);
+
+    res.json({ success: true, message: "Solicitação de confirmação e link de anamnese enviados!", anamneseLink });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ROTA DISPARO DE PESQUISA NPS E GOOGLE MEU NEGÓCIO ---
+app.post("/api/whatsapp/send-survey", async (req, res) => {
+  try {
+    const { phone, patientName, doctorName } = req.body;
+    if (!phone) return res.status(400).json({ error: "Telefone é obrigatório" });
+    
+    const cleanPhone = phone.split('@')[0].replace(/\D/g, '');
+    const msgText = `Olá *${patientName || 'Paciente'}*! 😊\n\nAgradecemos por sua consulta com *${doctorName || 'nosso especialista'}*.\n\nComo foi sua experiência no atendimento hoje?\n\n1️⃣ *Excelente* ⭐⭐⭐⭐⭐\n2️⃣ *Bom* ⭐⭐⭐⭐\n3️⃣ *Regular* ⭐⭐⭐\n4️⃣ *Ruim* ⭐⭐\n5️⃣ *Péssimo* ⭐\n\nResponda com o número de 1 a 5 ou clique nas opções!`;
+
+    try {
+      await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+        number: cleanPhone,
+        text: msgText,
+        linkPreview: true
+      }, { headers: { 'apikey': EVOLUTION_API_KEY } });
+    } catch (e: any) {
+      console.warn("Survey Evolution fail:", e.message);
+    }
+
+    await supabase.from('mensagens').insert([{
+      telefone_cliente: cleanPhone,
+      mensagem: msgText,
+      direcao: 'enviada',
+      created_at: new Date().toISOString()
+    }]);
+
+    res.json({ success: true, message: "Pesquisa de satisfação NPS disparada com sucesso!" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ROTA PROCESSAR RESPOSTA NPS & GOOGLE REVIEWS ---
+app.post("/api/whatsapp/process-survey-response", async (req, res) => {
+  try {
+    const { phone, rating, feedbackText } = req.body;
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    const googleBusinessReviewUrl = process.env.GOOGLE_BUSINESS_REVIEW_URL || "https://search.google.com/local/writereview?placeid=ChIJN1t_t_UzxAAR1111111111";
+
+    let responseMsg = "";
+    let isPromoter = false;
+
+    if (rating === '1' || rating === '2' || rating === 'Excelente' || rating === 'Bom' || Number(rating) >= 4) {
+      isPromoter = true;
+      responseMsg = `🌟 *Ficamos muito felizes com a sua avaliação positiva!*\n\nSua opinião é fundamental para ajudarmos mais pessoas. Poderia deixar esse depoimento em nossa página oficial do Google Meu Negócio? Leva menos de 30 segundos:\n\n👉 ${googleBusinessReviewUrl}\n\nMuito obrigado pela confiança! ❤️`;
+    } else {
+      isPromoter = false;
+      responseMsg = `Agradecemos honestamente pelo seu feedback! Sinto muito que sua experiência não tenha sido 100% perfeita. Já encaminhei sua nota e observação para a diretoria clínica para melhorarmos imediatamente. 🙏`;
+    }
+
+    try {
+      await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+        number: cleanPhone,
+        text: responseMsg,
+        linkPreview: true
+      }, { headers: { 'apikey': EVOLUTION_API_KEY } });
+    } catch (e) {
+      console.warn("NPS response evolution error", e);
+    }
+
+    // Salva ou atualiza a reputação do paciente no banco
+    try {
+      await supabase.from('paciente_avaliacoes').upsert([{
+        telefone: cleanPhone,
+        nota: rating,
+        feedback: feedbackText || '',
+        is_promoter: isPromoter,
+        updated_at: new Date().toISOString()
+      }], { onConflict: 'telefone' });
+    } catch (e) {
+      addLog(`⚠️ Aviso: Não foi possível salvar na tabela paciente_avaliacoes: ${e}`);
+    }
+
+    res.json({ success: true, isPromoter, responseMsg, googleReviewUrl: googleBusinessReviewUrl });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/api/reconfigure-webhook", async (req, res) => {

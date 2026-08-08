@@ -1,31 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#059669" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
-    <title>Ambulatório IA v4.4</title>
+    <title>Ambulatório IA v4.5 - Offline Hybrid</title>
     <script>
-      // Cache buster v4.4
-      console.log("Loading HTML v4.4 Focus - " + new Date().getTime());
+      console.log("Loading Ambulatório IA v4.5 Hybrid Offline - " + new Date().getTime());
       
-      // Forçar limpeza de Service Workers ao carregar a página
+      // Registrar Service Worker para PWA Offline
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for(var i = 0; i < registrations.length; i++) {
-            registrations[i].unregister();
-          }
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+            console.log('[SW] Registrado com sucesso:', registration.scope);
+          }).catch(function(err) {
+            console.warn('[SW] Falha ao registrar Service Worker:', err);
+          });
         });
       }
       
-      // 1. Polyfill de segurança: Evita que bibliotecas que procuram o "process.env" (comum no Node) quebrem o React no navegador.
+      // Polyfill de segurança
       window.process = { env: {} };
       
-      // 2. Dedo-duro de Erros: Se algo der errado, mostra na tela em vez de deixar tudo branco.
+      // Captura de erros
       window.addEventListener('error', function(e) {
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = 'padding: 20px; color: #ef4444; background: #fef2f2; font-family: monospace; margin: 20px; border-radius: 8px; border: 1px solid #fecaca; z-index: 9999; position: relative;';
@@ -37,7 +36,7 @@
   <body>
     <div id="root">
       <div style="padding: 40px; text-align: center; font-family: system-ui, sans-serif; color: #334155;">
-        <h2 style="margin-bottom: 10px;">Iniciando o Ambulatório IA v4.4...</h2>
+        <h2 style="margin-bottom: 10px;">Iniciando o Ambulatório IA v4.5...</h2>
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-clinical-blue mx-auto mt-4"></div>
       </div>
     </div>

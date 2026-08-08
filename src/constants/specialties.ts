@@ -37,8 +37,22 @@ export const SPECIALTIES: SpecialtyTemplate[] = [
     name: '⚡ Integrativo',
     icon: 'Zap',
     description: 'Checklist de bioressonância e suplementação.',
-    promptContext: 'Foque em medicina integrativa. Mapeie suplementos, fitoterápicos, vitaminas, minerais e biomarcadores para as chaves exatas do checklist_integrativo. Ex: "Silimarina" -> vitaminas_minerais.silimarina: true.',
+    promptContext: 'Foque em medicina integrativa. Mapeie APENAS os suplementos, fitoterápicos, vitaminas, minerais, biomarcadores e patógenos que foram EXPLICITAMENTE MENCIONADOS no relato. É ESTRITAMENTE PROIBIDO incluir ou marcar itens que NÃO foram citados no texto.',
     fields: []
+  },
+  {
+    id: 'biological_dentistry',
+    name: '🦷 Odonto Biológica & Harmonização',
+    icon: 'Sparkles',
+    description: 'Odontologia biológica, remoção segura de amálgama, focos de interferência, ATM e harmonização orofacial.',
+    promptContext: 'Foque em Odontologia Biológica e Saúde Integrativa (módulo Dra. Lucy). Mapeie focos dentários de inflamação crônica, amálgama/metais pesados, biocompatibilidade, ATM, terapia neural orofacial e harmonização facial.',
+    fields: [
+      { id: 'presenca_amalgama', label: 'Presença de Amálgama/Metais?', type: 'boolean' },
+      { id: 'focos_interferencia', label: 'Focos de Interferência Dentária', type: 'text', placeholder: 'Ex: Dentes tratados canal, cavitações, sisos' },
+      { id: 'dor_atm_bruxismo', label: 'Disfunção de ATM / Bruxismo', type: 'boolean' },
+      { id: 'terapia_neural_odontologica', label: 'Aplicação Terapia Neural / Procaína', type: 'boolean' },
+      { id: 'pontos_harmonizacao', label: 'Pontos Harmonização Orofacial', type: 'text', placeholder: 'Ex: Masseter, terço inferior, ácido hialurônico, toxina' }
+    ]
   },
   {
     id: 'pediatrics',

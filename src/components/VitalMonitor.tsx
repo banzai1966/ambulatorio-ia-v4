@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Droplets, Activity } from 'lucide-react';
 
 interface VitalMonitorProps {
   bpm?: number;
   spo2?: number;
   resp?: number;
   pressao?: string;
+  soroName?: string;
+  soroRate?: string;
   resumo_clinico?: string;
   className?: string;
 }
@@ -14,6 +17,8 @@ const VitalMonitor: React.FC<VitalMonitorProps> = ({
   spo2 = 0, 
   resp = 0,
   pressao,
+  soroName,
+  soroRate,
   resumo_clinico,
   className 
 }) => {
@@ -208,6 +213,34 @@ const VitalMonitor: React.FC<VitalMonitorProps> = ({
 
       </div>
       
+      {/* Infusão IV / Soro Virtual */}
+      <div className="mt-5 pt-4 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+        <div className="flex items-center gap-3 bg-blue-950/40 border border-blue-500/20 rounded-xl p-3">
+          <div className="relative w-10 h-10 bg-blue-500/10 border border-blue-400/30 rounded-lg flex items-center justify-center shrink-0">
+            <Droplets className="w-6 h-6 text-blue-400 animate-bounce" />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-slate-900 animate-ping" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono text-blue-400 font-bold uppercase tracking-wider">Infusão Parenteral / Soro</span>
+              <span className="px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 text-[9px] font-bold rounded">Em Curso</span>
+            </div>
+            <p className="text-xs font-bold text-white tracking-tight">{soroName || 'Soro Fisiológico 0.9% (500ml)'}</p>
+            <p className="text-[11px] text-slate-400 font-mono mt-0.5">{soroRate || '21 gotas/min • 63 mL/h'}</p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5 bg-slate-900/60 border border-white/5 rounded-xl p-3">
+          <div className="flex justify-between text-[11px] font-mono text-slate-300">
+            <span>Volume Infundido / Total:</span>
+            <span className="text-emerald-400 font-bold">380 mL / 500 mL (76%)</span>
+          </div>
+          <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-white/5">
+            <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full rounded-full w-[76%] transition-all duration-1000 animate-pulse" />
+          </div>
+        </div>
+      </div>
+
       {/* Resumo Clínico Inferior */}
       {resumo_clinico && (
         <div className="mt-6 border-t border-white/10 pt-4 flex items-center justify-center animate-in fade-in slide-in-from-bottom-2">

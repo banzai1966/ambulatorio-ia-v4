@@ -108,7 +108,9 @@ export async function processClinicalInput(
           "bpm": "Extraia número (ex: 72)",
           "spo2": "Extraia número (ex: 98)",
           "resp": "Extraia número de respirações",
-          "pressao": "Extraia valor de pressão arterial, ex: 120/80"
+          "pressao": "Extraia valor de pressão arterial, ex: 120/80",
+          "soroName": "Nome do soro/infusão citado",
+          "soroRate": "Gotejamento ou taxa citada"
         },
         "alertas_copiloto": [
           "Gere 1 a 3 alertas médicos rápidos e inteligentes baseados na transcrição (riscos, alterações, observações clínicas cruciais)"
@@ -146,7 +148,7 @@ export async function processClinicalInput(
       3. exame_neurologico: Preencha este objeto se o modo for 'neurological'. Caso contrário, retorne null!
          - IMPORTANTE: "Glasgow" refere-se a "escala_glasgow" (um número, máx 15). NUNCA coloque 'Glasgow 15' dentro de 'cognitivo.total_score'.
          - "cognitivo.total_score" é exclusivo do Mini Mental / MEEM (um número, máx 30).
-      4. checklist_integrativo: Somente preencha do schema definido abaixo. Valores exatos (ex: 500mg). Se apenas nome, use 'Sinalizado'. Se não for modo integrativo, retorne null!
+      4. checklist_integrativo: SEMPRE extraia e preencha este objeto APENAS E EXCLUSIVAMENTE se houver qualquer menção a suplementos, vitaminas, fitoterápicos, biomarcadores ou patógenos no relato! É ESTRITAMENTE PROIBIDO incluir ou sinalizar itens que NÃO foram citados no texto. Se o item não foi falado, NÃO inclua a chave. Valores exatos (ex: 500mg, 50.000 UI, 25mg, 5%). Se apenas o nome for citado, use 'Sinalizado'.
       5. Ignore pausas e ruídos.
 
       Schema Checklist:\n${checklistSchema}`;
