@@ -246,6 +246,8 @@ export default function App() {
   const [currentRecord, setCurrentRecord] = useState<ClinicalRecord | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [selectedPatientPhone, setSelectedPatientPhone] = useState('');
+  const [selectedPatientCpf, setSelectedPatientCpf] = useState('');
+  const [selectedPatientDob, setSelectedPatientDob] = useState('');
   const [selectedPatientConvenio, setSelectedPatientConvenio] = useState<string>('SulAmérica Saúde');
   const [selectedAppointmentReason, setSelectedAppointmentReason] = useState('');
   const [selectedMedicoId, setSelectedMedicoId] = useState<string | null>(null);
@@ -544,7 +546,7 @@ export default function App() {
                 supabase.from('prontuarios').update({ medico_id: authUser.id }).eq('medico_id', oldId),
                 supabase.from('mensagens').update({ user_id: authUser.id }).eq('user_id', oldId),
                 supabase.from('agendamentos').update({ medico_id: authUser.id }).eq('medico_id', oldId)
-              ]).then(() => console.log("Referências de dados atualizadas para o novo ID."));
+              ]).then(() => console.log("Referências de dados atualizadas para o novo ID.")).catch(e => console.warn("Erro ao atualizar referências:", e));
             } else {
               console.error("Erro ao atualizar ID do perfil:", updateError);
             }
@@ -1604,10 +1606,10 @@ export default function App() {
     const activeUser = user || { id: '00000000-0000-0000-0000-000000000000', email: 'demo@ambulatorio.ia', full_name: 'Dr. Carlos Morato', role: 'doctor' as const, status: 'approved' as const };
     
     const rec: any = recordOverride || currentRecord || {
-      paciente_nome_completo: selectedPatient || "CLAUDIA ROSELI CARDOSO",
-      paciente_cpf: "123.456.789-00",
-      paciente_data_nascimento: "1975-05-12",
-      paciente_telefone: selectedPatientPhone || "(11) 99876-5432",
+      paciente_nome_completo: selectedPatient || "Paciente em Atendimento",
+      paciente_cpf: selectedPatientCpf || "",
+      paciente_data_nascimento: selectedPatientDob || "",
+      paciente_telefone: selectedPatientPhone || "",
       especialidade: examMode === 'integrative' ? 'Integrativa' : 'Geral',
       paciente_status: 'Estável',
       dados_clinicos: {},
@@ -1765,15 +1767,15 @@ export default function App() {
       }
         
         // Atualiza o status do agendamento se houver um ID selecionado
-        if (selectedAppointmentId) {
-          supabase.from('agendamentos').update({ status: 'Concluído' }).eq('id', selectedAppointmentId).then(({ error: upError }) => {
+        if (selectedAppointmentId && isOnline) {
+          try {
+            const { error: upError } = await supabase.from('agendamentos').update({ status: 'Concluído' }).eq('id', selectedAppointmentId);
             if (upError) {
-              // Tenta na tabela fallback se a primeira falhar
-              supabase.from('appointments').update({ status: 'Concluído' }).eq('id', selectedAppointmentId).then(({ error: fallbackError }) => {
-                if (fallbackError) console.warn("Erro ao atualizar status fallback:", fallbackError);
-              });
+              await supabase.from('appointments').update({ status: 'Concluído' }).eq('id', selectedAppointmentId);
             }
-          });
+          } catch (e) {
+            console.warn("Erro ao atualizar status do agendamento:", e);
+          }
         }
 
         setTimeout(() => {
@@ -3111,7 +3113,7 @@ export default function App() {
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input 
                         type="text"
-                        placeholder="Buscar por nome ou CPF..."
+                        placeholder="Buscar por nome, CPF, nascimento..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-clinical-blue/20 focus:border-clinical-blue w-full sm:w-64 transition-all"
@@ -3153,8 +3155,30 @@ export default function App() {
                 </div>
 
                 <div className="grid gap-4">
-                  {history.length > 0 ? (
-                    history.map((record) => (
+                  {(() => {
+                    const cleanTerm = searchTerm.toLowerCase().trim();
+                    const cleanDigits = cleanTerm.replace(/\D/g, '');
+                    const filtered = history.filter((record) => {
+                      if (!cleanTerm) return true;
+                      const nameMatch = record.paciente_nome_completo?.toLowerCase().includes(cleanTerm);
+                      const cpfMatch = (cleanDigits.length > 0 && record.paciente_cpf?.replace(/\D/g, '').includes(cleanDigits)) || record.paciente_cpf?.toLowerCase().includes(cleanTerm);
+                      const dobMatch = record.paciente_data_nascimento?.includes(cleanTerm);
+                      const phoneMatch = record.paciente_telefone?.includes(cleanTerm);
+                      const specMatch = record.especialidade?.toLowerCase().includes(cleanTerm);
+                      const dateMatch = record.data_consulta?.includes(cleanTerm) || record.created_at?.includes(cleanTerm);
+                      return nameMatch || cpfMatch || dobMatch || phoneMatch || specMatch || dateMatch;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="text-center py-12 bg-white rounded-3xl border border-clinical-border">
+                          <FileText size={48} className="mx-auto text-slate-300 mb-3" />
+                          <p className="text-slate-500 font-medium">Nenhum prontuário encontrado para "{searchTerm}".</p>
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((record) => (
                       <motion.div 
                         key={record.id}
                         layout
@@ -3291,16 +3315,8 @@ export default function App() {
                           </div>
                         </div>
                       </motion.div>
-                    ))
-                  ) : (
-                    <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
-                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mx-auto mb-4">
-                        <Search size={32} />
-                      </div>
-                      <h3 className="font-bold text-slate-400">Nenhum registro encontrado</h3>
-                      <p className="text-slate-400 text-sm">Tente buscar por outro nome ou CPF.</p>
-                    </div>
-                  )}
+                    ));
+                  })()}
                 </div>
               </motion.div>
             ) : (
@@ -3312,12 +3328,12 @@ export default function App() {
                 className="space-y-8"
               >
                 <PatientDossierView
-                  patientName={selectedPatient || currentRecord?.paciente_nome_completo || 'CLAUDIA ROSELI CARDOSO'}
-                  patientPhone={selectedPatientPhone || currentRecord?.paciente_telefone || '11993823983'}
-                  patientCpf={currentRecord?.paciente_cpf || '569.841.548-04'}
-                  patientDob={currentRecord?.paciente_data_nascimento || '1975-07-14'}
+                  patientName={selectedPatient || currentRecord?.paciente_nome_completo || 'Consulta em Andamento'}
+                  patientPhone={selectedPatientPhone || currentRecord?.paciente_telefone || ''}
+                  patientCpf={currentRecord?.paciente_cpf || selectedPatientCpf || ''}
+                  patientDob={currentRecord?.paciente_data_nascimento || selectedPatientDob || ''}
                   patientStatus={currentRecord?.paciente_status || 'Estável'}
-                  convenio={selectedPatientConvenio || (currentRecord as any)?.convenio || 'SulAmérica Saúde'}
+                  convenio={selectedPatientConvenio || (currentRecord as any)?.convenio || 'Particular'}
                   currentRecord={currentRecord}
                   history={history}
                   examMode={examMode}

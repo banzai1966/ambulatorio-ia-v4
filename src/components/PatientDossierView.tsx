@@ -75,10 +75,10 @@ interface PatientDossierViewProps {
 }
 
 // Precise age calculation function according to AGENTS.md Rule 1
-function calculateAgeExact(dobString?: string): number {
-  if (!dobString) return 51; // default mockup fallback
+function calculateAgeExact(dobString?: string): number | string {
+  if (!dobString) return '--';
   const dob = new Date(dobString);
-  if (isNaN(dob.getTime())) return 51;
+  if (isNaN(dob.getTime())) return '--';
   
   const today = new Date();
   let age = today.getFullYear() - dob.getFullYear();
@@ -86,7 +86,19 @@ function calculateAgeExact(dobString?: string): number {
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
     age--;
   }
-  return age;
+  return age >= 0 ? age : '--';
+}
+
+function getPatientDisplayId(record: any, name: string): string {
+  if (record?.id) return String(record.id).substring(0, 8).toUpperCase();
+  if (record?.offline_id) return String(record.offline_id).replace('OFFLINE_', '').substring(0, 6).toUpperCase();
+  if (!name) return '33867';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash << 5) - hash + name.charCodeAt(i);
+    hash |= 0;
+  }
+  return String(Math.abs(hash) % 90000 + 10000);
 }
 
 function getActiveIntegrativeItems(data: any): { key: string; label: string; value: string }[] {
@@ -166,11 +178,11 @@ function getActiveIntegrativeItems(data: any): { key: string; label: string; val
 
 export default function PatientDossierView({
   patientName,
-  patientPhone = '11993823983',
-  patientCpf = '569.841.548-04',
-  patientDob = '1975-07-14',
+  patientPhone = '',
+  patientCpf = '',
+  patientDob = '',
   patientStatus = 'Estável',
-  convenio = 'SUL AMÉRICA EMPRESA',
+  convenio = 'Particular',
   currentRecord,
   history,
   examMode,
@@ -364,10 +376,10 @@ export default function PatientDossierView({
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{patientName || 'PACIENTE NÃO INFORMADO'}</h1>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                    ID: 33867
+                    ID: {getPatientDisplayId(currentRecord, patientName)}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                    {convenio}
+                    {convenio || 'Particular'}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {patientStatus}
@@ -375,9 +387,9 @@ export default function PatientDossierView({
                 </div>
 
                 <p className="text-xs text-slate-500 font-medium mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span>🎂 {patientDob ? new Date(patientDob).toLocaleDateString('pt-BR') : '14/07/1975'} • <strong>{age} anos</strong></span>
+                  <span>🎂 {patientDob ? (isNaN(new Date(patientDob).getTime()) ? patientDob : new Date(patientDob).toLocaleDateString('pt-BR')) : 'N/D'} • <strong>{age !== '--' ? `${age} anos` : 'Idade N/D'}</strong></span>
                   <span>👤 Paciente Ativo</span>
-                  <span>📄 CPF: {patientCpf}</span>
+                  {patientCpf && <span>📄 CPF: {patientCpf}</span>}
                   {patientPhone && <span>📞 Tel: {patientPhone}</span>}
                 </p>
 
@@ -714,7 +726,7 @@ export default function PatientDossierView({
                     <div 
                       onClick={() => setSelectedHistoryRecord({
                         data_consulta: '2026-07-28',
-                        paciente_nome_completo: patientName || 'CLAUDIA ROSELI CARDOSO',
+                        paciente_nome_completo: patientName || 'Paciente Exemplo',
                         especialidade: 'Medicina Integrativa & Bloqueio',
                         profissional_responsavel: 'Dr. Carlos Morato',
                         queixa_principal: 'Queixas de dores articulares e fadiga crônica persistente. Paciente relata melhora após bloqueio de nervo PE.',
@@ -1549,11 +1561,29 @@ export default function PatientDossierView({
 
               {/* Specialty specific summary if exists */}
               {selectedHistoryRecord.checklist_integrativo && hasMeaningfulData(selectedHistoryRecord.checklist_integrativo) && (
-                <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100 space-y-2">
-                  <span className="text-xs font-bold text-purple-800 uppercase tracking-wider block">🌿 Prescrição & Checklist Integrativo</span>
-                  <p className="text-xs text-purple-900 font-medium">
-                    Suplementações e protocolo da medicina integrativa devidamente associados ao prontuário.
-                  </p>
+                <div className="bg-purple-50/90 p-4 rounded-2xl border border-purple-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1.5">
+                      🌿 Prescrição & Checklist Integrativo ({selectedHistoryRecord.data_consulta ? (selectedHistoryRecord.data_consulta.includes('-') ? new Date(selectedHistoryRecord.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : selectedHistoryRecord.data_consulta) : 'Data do Prontuário'})
+                    </span>
+                    <span className="text-[10px] bg-purple-200/60 text-purple-900 font-extrabold px-2 py-0.5 rounded-md">
+                      {getActiveIntegrativeItems(selectedHistoryRecord.checklist_integrativo).length} Itens Registrados
+                    </span>
+                  </div>
+                  {getActiveIntegrativeItems(selectedHistoryRecord.checklist_integrativo).length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {getActiveIntegrativeItems(selectedHistoryRecord.checklist_integrativo).map((item) => (
+                        <div key={item.key} className="bg-white p-2.5 rounded-xl border border-purple-200/80 text-xs flex justify-between items-center shadow-2xs">
+                          <span className="font-bold text-purple-950">{item.label}</span>
+                          <span className="bg-purple-100 text-purple-800 text-[10px] font-extrabold px-2 py-0.5 rounded-md">{item.value || 'Prescrito/Ativo'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-purple-900 font-medium">
+                      Suplementações e protocolo da medicina integrativa devidamente associados ao prontuário.
+                    </p>
+                  )}
                 </div>
               )}
 
