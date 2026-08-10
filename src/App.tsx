@@ -348,9 +348,9 @@ export default function App() {
     window.addEventListener('offline', handleOffline);
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
 
-    toast.success("Ambulatório IA v4.5 - Módulo Híbrido Offline Ativo!");
-    console.log("App Version: v4.5 (Hybrid Offline + PWA + Vital Monitor)");
-    document.title = "AMB IA v4.5 - Prontuário Médico Offline";
+    toast.success("Ambulatório IA - Conectado à Nuvem!");
+    console.log("App Version: v4.5 (PWA Cloud)");
+    document.title = "Ambulatório IA - Prontuário Médico Inteligente";
 
     return () => {
       window.removeEventListener('online', handleOnline);
