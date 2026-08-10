@@ -3370,19 +3370,7 @@ export default function App() {
                   setIntegrativeData={setIntegrativeData}
                 />
 
-                {/* Demonstration Voice Script Hint */}
-                <div className="mx-auto max-w-4xl bg-emerald-50/80 border border-emerald-200/80 rounded-2xl p-5 text-emerald-950 shadow-sm">
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-emerald-800 flex items-center gap-2 mb-2">
-                    <Mic size={16} className="text-emerald-600 animate-pulse" />
-                    Roteiro de Teste por Voz (Copiloto Prontuário Verde)
-                  </h3>
-                  <p className="text-xs italic bg-white/80 p-3.5 rounded-xl border border-emerald-100 leading-relaxed">
-                    {examMode === 'integrative' 
-                      ? '"Paciente Claudia Roseli Cardoso, 51 anos. Refere fadiga extrema e insônia frequente. Pressão arterial 120 por 80, 75 batimentos por minuto. Prescrever Coenzima Q10 200mg, DHEA 25mg e Vitamina D3 50.000 UI semanal. Avaliar imunologia e biocompatibilidade."'
-                      : '"Paciente Claudia Roseli Cardoso, 51 anos. Refere dor lombar irradiada há 3 semanas. Pressão arterial 130 por 85, 78 batimentos por minuto. Ao exame físico: reflexos normais e força preservada. Hipótese: Lombociatalgia à direita. Conduta: Pregabalina 75mg e encaminhamento para fisioterapia."'
-                    }
-                  </p>
-                </div>
+
               </motion.div>
             )}
           </AnimatePresence>
