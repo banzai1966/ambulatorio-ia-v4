@@ -36,7 +36,11 @@ import {
   Brain,
   ChevronRight,
   Baby,
-  Crosshair
+  Crosshair,
+  Laptop,
+  Smartphone,
+  Image,
+  FolderOpen
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -2822,19 +2826,11 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setShowHelp(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
-            >
-              <HelpCircle size={18} />
-              <span>Ajuda & Manual</span>
-            </button>
-
-            <button
               onClick={() => setShowSystemOverview(true)}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
             >
-              <Info size={18} />
-              <span>Sobre o Sistema</span>
+              <HelpCircle size={18} />
+              <span>Ajuda, Manual & Sobre o Sistema</span>
             </button>
           </nav>
 
@@ -3389,25 +3385,6 @@ export default function App() {
                 </div>
               </motion.div>
             )}
-
-
-
-
-
-
-
-
-                        
-
-
-
-
-                      
-
-
-
-
-
           </AnimatePresence>
         )}
       </main>
@@ -3416,256 +3393,6 @@ export default function App() {
         © 2026 Ambulatório IA • Tecnologia para Saúde Voluntária
       </footer>
 
-      {/* Help Modal */}
-      <AnimatePresence>
-        {showHelp && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowHelp(false)}
-              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-[40px] shadow-2xl overflow-hidden flex flex-col"
-            >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-clinical-blue rounded-2xl flex items-center justify-center text-white shadow-lg shadow-clinical-blue/20">
-                    <HelpCircle size={24} />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Guia do Ambulatório Digital</h2>
-                    <p className="text-sm text-slate-500 font-medium">Como extrair o máximo da sua ferramenta de IA</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowHelp(false)}
-                  className="p-3 hover:bg-white rounded-2xl transition-all border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 sm:p-12">
-                <div className="grid md:grid-cols-2 gap-12">
-                  <section className="space-y-6">
-                    <div className="flex items-center gap-3 text-clinical-blue">
-                      <Zap size={20} />
-                      <h3 className="font-bold text-lg">Como relatar (Passo a Passo)</h3>
-                    </div>
-                    <div className="space-y-4 pt-2">
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-clinical-blue/10 text-clinical-blue flex items-center justify-center font-bold text-sm">1</div>
-                        <p className="text-slate-600 text-sm leading-relaxed">Clique no botão de <strong>Microfone</strong> e dite os dados do paciente (Nome, CPF e Data de Nascimento).</p>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-clinical-blue/10 text-clinical-blue flex items-center justify-center font-bold text-sm">2</div>
-                        <p className="text-slate-600 text-sm leading-relaxed">Relate o atendimento de forma natural. Fale sobre sintomas, exames realizados e valores (ex: Pressão 12 por 8).</p>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-clinical-blue/10 text-clinical-blue flex items-center justify-center font-bold text-sm">3</div>
-                        <p className="text-slate-600 text-sm leading-relaxed">Clique em <strong>Parar</strong> e aguarde a IA processar. Em segundos, os dados estarão estruturados na tela.</p>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-clinical-blue/10 text-clinical-blue flex items-center justify-center font-bold text-sm">4</div>
-                        <p className="text-slate-600 text-sm leading-relaxed"><strong>Especialidades:</strong> Selecione o modo (Pediatria, Cardio, Psiquiatria, etc.) antes de gravar. A IA preencherá os campos específicos automaticamente.</p>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-sm">5</div>
-                        <p className="text-slate-600 text-sm leading-relaxed"><strong>Mesclagem Inteligente:</strong> Você pode marcar itens manualmente no checklist antes do áudio. A IA irá apenas <strong>adicionar</strong> novas informações sem apagar o que você já marcou.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-amber-500 pt-6">
-                      <Brain size={20} />
-                      <h3 className="font-bold text-lg">Recursos Avançados (Copiloto IA)</h3>
-                    </div>
-                    <div className="space-y-4 pt-2">
-                      <div className="flex items-start gap-4">
-                        <div className="mt-1 text-amber-500"><Crosshair size={18} /></div>
-                        <p className="text-slate-600 text-sm leading-relaxed"><strong>Mapeamento Corporal (Bonecos Autoclicáveis):</strong> Ao ditar dores e sintomas, a IA identifica a região anatômica e plota pontos no Body Map com a queixa e localização, eliminando cliques manuais.</p>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="mt-1 text-amber-500"><Clock size={18} /></div>
-                        <p className="text-slate-600 text-sm leading-relaxed"><strong>Cronobiologia (Receituário por Períodos):</strong> Se você citar horários na prescrição ("Tome de manhã", "Antes de dormir"), a IA organiza o Receituário em blocos formatados com ícones, garantindo precisão cronológica.</p>
-                      </div>
-                      <div className="flex items-start gap-4">
-                        <div className="mt-1 text-amber-500"><Activity size={18} /></div>
-                        <p className="text-slate-600 text-sm leading-relaxed"><strong>Copiloto IA de Sinergia:</strong> Na Especialidade Integrativa, a IA monitora as combinações de suplementos. O sistema exibe um alerta de "Anjo da Guarda" silencioso se notar riscos clássicos (ex: Zinco isolado depletando cobre).</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-clinical-blue pt-6">
-                      <FileText size={20} />
-                      <h3 className="font-bold text-lg">Exemplos Práticos</h3>
-                    </div>
-                    <div className="space-y-4 pt-2">
-                      <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
-                        <h4 className="font-bold text-emerald-800 text-sm mb-1">Roteiro de Teste Rápido (3 em 1):</h4>
-                        <p className="text-emerald-700 text-sm italic">
-                          "Paciente Carlos, 45 anos. Apresenta dor no joelho esquerdo. Prescrição: Ibuprofeno 400mg."
-                        </p>
-                        <p className="text-[10px] text-emerald-600 mt-2">
-                          * Este texto testa: Extração de nome/idade, Marcação no Boneco e Geração de Receita.
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-2">Modo Clínico (Geral)</h4>
-                        <p className="text-slate-600 text-sm bg-slate-50 p-3 rounded-lg border border-slate-100">
-                          "Paciente: João Silva, CPF 123.456.789-00, nascido em 10/05/1975. Queixa de dor de cabeça forte há 3 dias, acompanhada de náuseas. Pressão arterial 140 por 90, pulso 80. Sugiro analgésico e repouso."
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-2">Modo Neurológico</h4>
-                        <p className="text-slate-600 text-sm bg-slate-50 p-3 rounded-lg border border-slate-100">
-                          "Paciente: Maria Oliveira, nascida em 20/03/1980. Exame neurológico: marcha atáxica, força muscular grau 4 em membros superiores, reflexo patelar diminuído à direita. Nervos cranianos sem alterações. Cognitivo preservado."
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-2">Modo Psiquiatria</h4>
-                        <p className="text-slate-600 text-sm bg-slate-50 p-3 rounded-lg border border-slate-100">
-                          "Paciente: Roberto Souza. Relato: Humor deprimido há 2 semanas, insônia de manutenção. Em uso de Sertralina 50mg. Nega ideação suicida."
-                        </p>
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 mb-2">Modo Integrativo</h4>
-                        <p className="text-slate-600 text-sm bg-slate-50 p-3 rounded-lg border border-slate-100">
-                          "Paciente: Carlos Lima, CPF 987.654.321-00. Relato integrativo: paciente com fadiga crônica, exames mostram Cortisol baixo e presença de Alumínio. Prescrevo Silimarina e Quercetina."
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-clinical-blue pt-6">
-                      <FileText size={20} />
-                      <h3 className="font-bold text-lg">Prontuários e Prescrições PDF</h3>
-                    </div>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-slate-600 text-sm leading-relaxed">O sistema permite a exportação de dados clínicos para facilitar a gestão do seu ambulatório.</p>
-                      <ul className="list-disc list-inside text-slate-600 text-sm space-y-2 ml-2">
-                        <li><strong>Prontuários:</strong> Gere PDFs estruturados e profissionais. O título e o slogan mudam automaticamente conforme a especialidade (ex: Prontuário de Cardiologia).</li>
-                        <li><strong>Prescrições:</strong> Ao gerar um resumo clínico via IA, o sistema extrai automaticamente a prescrição. O PDF da receita também se adapta à especialidade.</li>
-                      </ul>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-clinical-blue pt-6">
-                      <MessageSquare size={20} />
-                      <h3 className="font-bold text-lg">Mídias e Caminho da Mensagem</h3>
-                    </div>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-slate-600 text-sm leading-relaxed">O sistema processa automaticamente <strong>imagens, áudios e chamadas</strong> enviados pelos pacientes via WhatsApp.</p>
-                      <ul className="list-disc list-inside text-slate-600 text-sm space-y-2 ml-2">
-                        <li><strong>Imagens:</strong> Visualize exames e fotos diretamente no histórico.</li>
-                        <li><strong>Áudios:</strong> Ouça relatos com o player integrado. Se um áudio não aparecer, use o botão de <strong>Atualizar</strong> no topo do chat.</li>
-                        <li><strong>Chamadas:</strong> O sistema registra chamadas perdidas ou recebidas como eventos na conversa.</li>
-                        <li><strong>Caminho da Mensagem:</strong> Toda comunicação é centralizada via API do WhatsApp. Se o paciente ligar ou enviar de um número novo, o sistema tentará identificar pelo telefone.</li>
-                      </ul>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-clinical-blue pt-6">
-                      <Zap size={20} />
-                      <h3 className="font-bold text-lg">Automação de Lembretes (WhatsApp)</h3>
-                    </div>
-                    <div className="space-y-4 pt-2">
-                      <p className="text-slate-600 text-sm leading-relaxed">O sistema verifica diariamente sua agenda e envia lembretes automáticos para os pacientes via WhatsApp.</p>
-                      <ul className="list-disc list-inside text-slate-600 text-sm space-y-2 ml-2">
-                        <li>Identifica consultas do dia seguinte.</li>
-                        <li>Envia mensagem personalizada automaticamente.</li>
-                        <li>Marca o lembrete como enviado para evitar duplicidade.</li>
-                      </ul>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-emerald-500 pt-6">
-                      <ShieldCheck size={20} />
-                      <h3 className="font-bold text-lg">Segurança, Banco de Dados e Acesso</h3>
-                    </div>
-                    <div className="bg-emerald-50/50 rounded-3xl p-6 border border-emerald-100/50 space-y-4">
-                      <div className="flex items-start gap-3">
-                        <Info size={16} className="text-emerald-600 mt-1 flex-shrink-0" />
-                        <p className="text-xs text-emerald-800 leading-relaxed"><strong>Banco de Dados em Nuvem:</strong> O sistema inteiro está conectado a um banco de dados seguro em nuvem. Isso significa que todos os prontuários, históricos de pacientes e evoluções clínicas ficam salvos permanentemente e podem ser acessados de qualquer dispositivo.</p>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Info size={16} className="text-emerald-600 mt-1 flex-shrink-0" />
-                        <p className="text-xs text-emerald-800 leading-relaxed"><strong>Autenticação (Fase de Degustação):</strong> Atualmente, o sistema permite o cadastro livre para fins de demonstração e degustação da tecnologia. Na versão oficial, o controle de acesso será centralizado, onde a administração fornecerá as credenciais (login e senha) diretamente aos profissionais autorizados, garantindo total controle e segurança hospitalar.</p>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Search size={16} className="text-emerald-600 mt-1 flex-shrink-0" />
-                        <p className="text-xs text-emerald-800 leading-relaxed">No <strong>Histórico</strong>, você pode buscar pacientes por nome ou CPF. O sistema organiza tudo em uma linha do tempo cronológica, puxando os dados diretamente do banco de dados.</p>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section className="space-y-8">
-                    <div className="bg-slate-50 rounded-[32px] p-8 space-y-6">
-                      <h3 className="font-bold text-slate-800 flex items-center gap-3">
-                        <ClipboardList size={20} className="text-slate-400" />
-                        O que a IA oferece?
-                      </h3>
-                      <ul className="space-y-4">
-                        <li className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-clinical-blue mt-1.5 flex-shrink-0" />
-                          <div>
-                            <span className="block text-sm font-bold text-slate-700">Transcrição Inteligente</span>
-                            <span className="text-xs text-slate-500">Converte sua voz em texto estruturado em tempo real para documentação rápida.</span>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-clinical-blue mt-1.5 flex-shrink-0" />
-                          <div>
-                            <span className="block text-sm font-bold text-slate-700">Extração de Parâmetros</span>
-                            <span className="text-xs text-slate-500">Identifica automaticamente Glicemia, Pressão, IMC, Peso e mais.</span>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-clinical-blue mt-1.5 flex-shrink-0" />
-                          <div>
-                            <span className="block text-sm font-bold text-slate-700">Análise de Evolução</span>
-                            <span className="text-xs text-slate-500">Compara os dados atuais com atendimentos anteriores do mesmo paciente.</span>
-                          </div>
-                        </li>
-                        <li className="flex items-start gap-3">
-                          <div className="w-1.5 h-1.5 rounded-full bg-clinical-blue mt-1.5 flex-shrink-0" />
-                          <div>
-                            <span className="block text-sm font-bold text-slate-700">Sugestão de Conduta</span>
-                            <span className="text-xs text-slate-500">Oferece uma segunda opinião clínica baseada nos dados extraídos.</span>
-                          </div>
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div className="bg-indigo-600 rounded-[32px] p-8 text-white shadow-xl shadow-indigo-200">
-                      <h4 className="font-bold mb-2 flex items-center gap-2">
-                        <FileText size={18} />
-                        Exportação Profissional
-                      </h4>
-                      <p className="text-indigo-100 text-xs leading-relaxed mb-4">
-                        Todos os atendimentos podem ser exportados em PDF com um clique. O documento é formatado seguindo padrões médicos, pronto para ser anexado ou impresso.
-                      </p>
-                      <div className="pt-4 border-t border-indigo-500/30 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider opacity-80">
-                        <span>Suporte à LGPD</span>
-                        <span>Dados Criptografados</span>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-              </div>
-
-              <div className="p-8 bg-slate-50 border-t border-slate-100 flex justify-center">
-                <button 
-                  onClick={() => setShowHelp(false)}
-                  className="px-8 py-3 bg-clinical-blue text-white rounded-2xl font-bold shadow-lg shadow-clinical-blue/20 hover:scale-105 transition-transform"
-                >
-                  Entendi, vamos começar!
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
       <Toaster position="top-right" />
       </div>
     </div>
