@@ -254,6 +254,7 @@ app.post("/api/process-clinical", async (req, res) => {
           "nervos_cranianos": { "ii": "", "iii": "", "iv": "", "vi": "", "v": "", "vii": "", "viii": "", "ix": "", "x": "", "xi": "", "xii": "", "pupilas_d": "", "pupilas_e": "", "fundo_olho": "normal"|"alterado", "campo": "" },
           "coordenacao": { "status": "normal"|"alterado", "lado": "D"|"E", "index_nariz": true|false, "romberg": true|false, "calcanhar_joelho": true|false, "diadococinesia": true|false },
           "sensibilidade": { "cabeca": {"proprio":"","vibrat":"","temp":"","dor":"","toque":""}, "torax": {...}, "mmss": {...}, "abdome": {...}, "mmii": {...} },
+          "dermatomos_marcardos": { "C2": "hipoestesia", "C3": "hipoestesia", "C4": "dor", "L4": "parestesia" },
           "forca_muscular": { "face": {"tonus":"","trofismo":"","mov_anormais":"","deformidades":"","fatigabilidade":""}, "lingua": {...}, "msd": {...}, "mse": {...}, "mid": {...}, "mie": {...}, "coluna": {...} }
         }
       - checklist_integrativo: SEMPRE extraia este objeto se houver menção a suplementos, vitaminas, fitoterápicos, biomarcadores ou patógenos no relato, MESMO QUE O MODO NÃO SEJA 'integrative'! É PROIBIDO USAR BOOLEAN (true/false) AQUI. O valor DEVE SER UMA STRING.

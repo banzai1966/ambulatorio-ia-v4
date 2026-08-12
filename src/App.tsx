@@ -40,7 +40,8 @@ import {
   Laptop,
   Smartphone,
   Image,
-  FolderOpen
+  FolderOpen,
+  UploadCloud
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -70,6 +71,7 @@ import {
   syncOfflineRecordsWithCloud, 
   exportLocalDataJSON, 
   importLocalDataJSON,
+  importLocalDataCSV,
   OfflineRecord 
 } from './services/offlineStorageService';
 import type { NeurologicalExamData, MuscleAssessment, SensitivityAssessment } from './types/neurologicalExam';
@@ -3117,14 +3119,46 @@ export default function App() {
                     </div>
                     <button 
                       onClick={exportToCSV}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-colors"
+                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+                      title="Exportar prontuários filtrados em planilha CSV"
                     >
-                      <Download size={18} />
+                      <Download size={16} />
                       Exportar CSV
                     </button>
-                    <label className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700 transition-colors cursor-pointer">
-                      <Save size={18} />
-                      Importar JSON
+                    <label 
+                      className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm"
+                      title="Importar lista de pacientes a partir de planilha Excel (.csv)"
+                    >
+                      <UploadCloud size={16} />
+                      Importar Planilha (CSV)
+                      <input 
+                        type="file" 
+                        accept=".csv,.txt" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            try {
+                              const content = event.target?.result as string;
+                              const updated = importLocalDataCSV(content);
+                              setHistory(updated);
+                              toast.success(`Planilha importada com sucesso! ${updated.length} prontuários no sistema.`);
+                            } catch (err) {
+                              toast.error("Erro ao importar a planilha CSV. Verifique o formato.");
+                            }
+                          };
+                          reader.readAsText(file, 'ISO-8859-1');
+                        }}
+                      />
+                    </label>
+                    <label 
+                      className="flex items-center gap-2 px-3.5 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors cursor-pointer shadow-sm"
+                      title="Restaurar backup completo em formato JSON"
+                    >
+                      <Save size={16} />
+                      Importar Backup (JSON)
                       <input 
                         type="file" 
                         accept=".json" 
@@ -3138,7 +3172,7 @@ export default function App() {
                               const content = event.target?.result as string;
                               const updated = importLocalDataJSON(content);
                               setHistory(updated);
-                              toast.success("Backup importado com sucesso para o seu computador!");
+                              toast.success("Backup JSON importado com sucesso!");
                             } catch (err) {
                               toast.error("Erro ao importar o arquivo JSON de backup.");
                             }

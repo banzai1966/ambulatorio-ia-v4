@@ -58,6 +58,31 @@ export interface NeurologicalExamData {
   };
   fluencia_verbal?: string | null;
   escala_glasgow?: number | null;
+  reflexos_wexler?: {
+    biceps_d?: string;
+    biceps_e?: string;
+    triceps_d?: string;
+    triceps_e?: string;
+    estiloradial_d?: string;
+    estiloradial_e?: string;
+    patelar_d?: string;
+    patelar_e?: string;
+    aquileu_d?: string;
+    aquileu_e?: string;
+    axiais_face?: string;
+    grasping?: string;
+    groping?: string;
+    hoffmann?: string;
+    palmo_mentoniano?: string;
+    wartenberg?: string;
+  };
+  dermatomos_marcardos?: Record<string, 'normal' | 'hipoestesia' | 'parestesia' | 'hiperestesia' | 'dor'>;
+  campo_visual_quadrantes?: {
+    olho_d?: { sup_temp?: boolean; sup_nasal?: boolean; inf_temp?: boolean; inf_nasal?: boolean };
+    olho_e?: { sup_temp?: boolean; sup_nasal?: boolean; inf_temp?: boolean; inf_nasal?: boolean };
+  };
+  desenho_pentagonos?: string | null; // base64 canvas drawing
+  anotacao_diagrama_imagem?: string | null; // base64 freehand drawing overlay on anatomical sheet
 }
 
 export interface MuscleAssessment {

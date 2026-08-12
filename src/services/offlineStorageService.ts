@@ -206,3 +206,81 @@ export function importLocalDataJSON(fileContent: string): OfflineRecord[] {
     throw err;
   }
 }
+
+/**
+ * Importa pacientes/prontuários a partir de uma planilha CSV (Excel)
+ */
+export function importLocalDataCSV(csvText: string): OfflineRecord[] {
+  try {
+    const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length < 2) {
+      throw new Error('O arquivo CSV deve conter ao menos um cabeçalho e uma linha de dados.');
+    }
+
+    // Identificar separador (, ou ;)
+    const headerLine = lines[0];
+    const delimiter = headerLine.includes(';') ? ';' : ',';
+    const headers = headerLine.split(delimiter).map(h => h.trim().toLowerCase().replace(/"/g, ''));
+
+    const findIndex = (keywords: string[]) => {
+      return headers.findIndex(h => keywords.some(k => h.includes(k)));
+    };
+
+    const idxName = findIndex(['nome', 'paciente', 'cliente']);
+    const idxCPF = findIndex(['cpf', 'documento']);
+    const idxDOB = findIndex(['nascimento', 'dob', 'data_nasc', 'data nascimento']);
+    const idxPhone = findIndex(['telefone', 'celular', 'phone', 'whatsapp']);
+    const idxDate = findIndex(['data', 'consulta', 'atendimento']);
+    const idxNotes = findIndex(['obs', 'observacao', 'queixa', 'historico', 'anotacao']);
+
+    const currentOffline = getOfflineRecords();
+    const newRecords: OfflineRecord[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+
+      // Regex para separar por vírgula/ponto e vírgula respeitando aspas
+      const values = line.split(new RegExp(`${delimiter}(?=(?:(?:[^"]*"){2})*[^"]*$)`)).map(v => v.trim().replace(/^"|"$/g, ''));
+
+      const name = idxName !== -1 && values[idxName] ? values[idxName] : `Paciente Importado ${i}`;
+      const cpf = idxCPF !== -1 && values[idxCPF] ? values[idxCPF] : '';
+      const dob = idxDOB !== -1 && values[idxDOB] ? values[idxDOB] : '';
+      const phone = idxPhone !== -1 && values[idxPhone] ? values[idxPhone] : '';
+      const date = idxDate !== -1 && values[idxDate] ? values[idxDate] : new Date().toISOString().split('T')[0];
+      const notes = idxNotes !== -1 && values[idxNotes] ? values[idxNotes] : 'Cadastro importado via planilha CSV/Excel';
+
+      const record: OfflineRecord = {
+        id: `imp_csv_${Date.now()}_${i}`,
+        paciente_nome_completo: name,
+        paciente_cpf: cpf,
+        paciente_data_nascimento: dob,
+        paciente_telefone: phone,
+        data_consulta: date,
+        especialidade: 'integrativa',
+        queixa_principal: notes,
+        status: 'estavel',
+        medico_responsavel: 'Médico de Atendimento'
+      };
+
+      newRecords.push(record);
+    }
+
+    const merged = [...newRecords, ...currentOffline];
+    const uniqueMap = new Map();
+    merged.forEach(item => {
+      const key = item.id || `${item.paciente_nome_completo}_${item.data_consulta}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, item);
+      }
+    });
+
+    const result = Array.from(uniqueMap.values());
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(result));
+    return result;
+  } catch (err) {
+    console.error('[OfflineStorage] Erro ao importar CSV:', err);
+    throw err;
+  }
+}
+

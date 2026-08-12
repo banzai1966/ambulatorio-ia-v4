@@ -14,7 +14,8 @@ import {
   Send, 
   Loader2, 
   RefreshCw,
-  Activity
+  Activity,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -65,9 +66,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     motivo: '', 
     medico_id: user?.role === 'doctor' ? user.id : '',
     especialidade_id: '',
-    convenio: 'SulAmérica Saúde',
-    valor_consulta: '350',
-    status_pagamento: 'Pago',
+    convenio: 'Particular / Convênio',
+    valor_consulta: '',
+    status_pagamento: 'Cortesia / Isento',
     tipo_consulta: 'Primeira Consulta'
   });
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -88,6 +89,21 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       case 'não confirmado':
       default:
         return 'bg-blue-100 text-blue-900 border-blue-300 font-bold'; // Azul
+    }
+  };
+
+  const handleDeleteAppointment = async (id: string, name: string) => {
+    if (!window.confirm(`Deseja realmente remover/cancelar o agendamento de "${name}"?`)) return;
+    try {
+      const { error } = await supabase.from('agendamentos').delete().eq('id', id);
+      if (error) {
+        await supabase.from('appointments').delete().eq('id', id);
+      }
+      toast.success("Agendamento removido com sucesso.");
+      setAppointments(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error("Erro ao remover agendamento:", err);
+      toast.error("Erro ao remover agendamento.");
     }
   };
 
@@ -344,9 +360,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           }
           if (!dataHoraInicio) dataHoraInicio = new Date().toISOString();
 
-          const convenio = app.convenio || app.health_insurance || 'SulAmérica Saúde';
-          const valor_consulta = app.valor_consulta || '350';
-          const status_pagamento = app.status_pagamento || 'Pago';
+          const convenio = app.convenio || app.health_insurance || '';
+          const valor_consulta = app.valor_consulta || '';
+          const status_pagamento = app.status_pagamento || '';
           const tipo_consulta = app.tipo_consulta || 'Primeira Consulta';
 
           return {
@@ -477,9 +493,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         motivo: '', 
         medico_id: user?.role === 'doctor' ? user.id : '',
         especialidade_id: '',
-        convenio: 'SulAmérica Saúde',
-        valor_consulta: '350',
-        status_pagamento: 'Pago',
+        convenio: 'Particular / Convênio',
+        valor_consulta: '',
+        status_pagamento: 'Cortesia / Isento',
         tipo_consulta: 'Primeira Consulta'
       });
       setAvailableSlots([]);
@@ -618,9 +634,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                           {app.convenio}
                         </span>
                       )}
-                      {app.status_pagamento && (
+                      {(app.valor_consulta || (app.status_pagamento && app.status_pagamento !== 'Cortesia / Isento')) && (
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${app.status_pagamento === 'Pago' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                          {app.status_pagamento} • R$ {app.valor_consulta || '350'}
+                          {app.status_pagamento ? `${app.status_pagamento}` : ''}{app.valor_consulta ? ` • R$ ${app.valor_consulta}` : ''}
                         </span>
                       )}
                       {app.tipo_consulta && (
@@ -665,6 +681,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     title="Enviar Mensagem"
                   >
                     <MessageSquare size={20} />
+                  </button>
+
+                  <button 
+                    onClick={() => handleDeleteAppointment(app.id, app.paciente_nome)}
+                    className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                    title="Remover / Cancelar Agendamento"
+                  >
+                    <Trash2 size={20} />
                   </button>
                   <button 
                     onClick={() => {

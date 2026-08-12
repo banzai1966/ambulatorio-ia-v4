@@ -185,56 +185,95 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
               <section className="space-y-4">
                 <div className="flex items-center gap-3">
                   <FolderOpen className="text-clinical-blue" size={22} />
-                  <h3 className="text-xl font-bold text-slate-800">Tudo o que Você Pode Acessar no Sistema</h3>
+                  <h3 className="text-xl font-bold text-slate-800">Guia Completo de Recursos para o Médico</h3>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <Activity size={16} className="text-clinical-blue" />
-                      Dashboard Geral
+                  {/* Modos Clínicos & Especialidades */}
+                  <div className="p-5 bg-purple-50/80 rounded-2xl border border-purple-200/80 space-y-2">
+                    <h4 className="font-bold text-purple-900 text-sm flex items-center gap-2">
+                      <Activity size={18} className="text-purple-600" />
+                      1. Exame Neurológico Interativo
                     </h4>
-                    <p className="text-xs text-slate-500">Visão panorâmica em tempo real com estatísticas de consultas do dia, status de agendamentos e atalhos rápidos.</p>
+                    <p className="text-xs text-purple-950 leading-relaxed">
+                      Possui <strong>Diagrama de Dermátomos</strong> reativo com mapa anatômico (clique nas raízes cerebrais/espinhais para marcar hipoestesia em azul), <strong>Boneco de Reflexos de Wexler</strong> (com ciclo de notas de 0 a 4+ e botão de reset rápido) e a <strong>Lousa Digital do MEEM</strong> para o paciente desenhar e copiar os pentágonos no teste cognitivo.
+                    </p>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <Stethoscope size={16} className="text-clinical-blue" />
-                      Atendimento Clínico & Especialidades
+                  <div className="p-5 bg-emerald-50/80 rounded-2xl border border-emerald-200/80 space-y-2">
+                    <h4 className="font-bold text-emerald-900 text-sm flex items-center gap-2">
+                      <Sparkles size={18} className="text-emerald-600" />
+                      2. Exames de Imagem, Raios-X, Tomografias & Anotações HD
                     </h4>
-                    <p className="text-xs text-slate-500">Tela de consulta com gravação por IA, Boneco Anatômico Interativo de dores (Body Map) e suporte a 6 especialidades médicas.</p>
+                    <p className="text-xs text-emerald-950 leading-relaxed mb-2">
+                      Na aba <strong>Anexos / Imagens</strong> do prontuário do paciente:
+                    </p>
+                    <ul className="text-xs text-slate-700 space-y-1.5 list-disc list-inside leading-relaxed">
+                      <li><strong>Segurança Absoluta do Prontuário:</strong> Cada exame enviado fica vinculado e selado ao nome e CPF do paciente ativo (evitando qualquer risco de troca de imagens entre pacientes).</li>
+                      <li><strong>Negatoscópio Digital / Tela Cheia:</strong> Abra a imagem no modo de tela cheia do seu monitor com zoom de alta precisão (até 400%), giro de orientação (90°) e <strong>Contraste Negativo para Radiologia</strong> (inversão de tons de preto/branco).</li>
+                      <li><strong>Estúdio de Anotações:</strong> Clique em <strong>"Riscar / Anotar"</strong> para apontar fraturas ou lesões com caneta colorida e salvar no histórico.</li>
+                      <li><strong>Download em HD:</strong> Baixe o arquivo original na resolução nativa inteira do exame a qualquer momento.</li>
+                    </ul>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <Calendar size={16} className="text-clinical-blue" />
-                      Agenda Médica & Lembretes
+                  <div className="p-5 bg-teal-50/80 rounded-2xl border border-teal-200/80 space-y-2">
+                    <h4 className="font-bold text-teal-900 text-sm flex items-center gap-2">
+                      <Stethoscope size={18} className="text-teal-600" />
+                      3. Medicina Integrativa & Odontologia Biológica
                     </h4>
-                    <p className="text-xs text-slate-500">Organize os horários de atendimento e envie lembretes automáticos para o WhatsApp do paciente para confirmar presença.</p>
+                    <p className="text-xs text-teal-950 leading-relaxed">
+                      Formulário de checklist integrativo cobrindo mais de 40 suplementos (Colina, Coenzima Q10, DHEA, Melatonina), minerais/vitaminas (D3, K2, Lugol) e detecção de patógenos crônicos (Cândida, Zóster, HSV).
+                    </p>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
-                    <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <MessageSquare size={16} className="text-clinical-blue" />
-                      Mensagens & WhatsApp
+                  <div className="p-5 bg-blue-50/80 rounded-2xl border border-blue-200/80 space-y-2">
+                    <h4 className="font-bold text-blue-900 text-sm flex items-center gap-2">
+                      <Mic size={18} className="text-blue-600" />
+                      4. Gravador de Consulta por Voz (IA)
                     </h4>
-                    <p className="text-xs text-slate-500">Conversas diretas com pacientes. Receba fotos de exames (raios-X, ultrassons), áudios e registro de chamadas diretamente no chat.</p>
+                    <p className="text-xs text-blue-950 leading-relaxed">
+                      Ligue o microfone na consulta. A Inteligência Artificial ouve o atendimento em tempo real e transcreve a anamnese, hipóteses diagnósticas e prescrições automaticamente para os campos corretos do prontuário.
+                    </p>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <Image size={16} className="text-clinical-blue" />
-                      Anexos & Exames de Imagem (X-Ray / TC)
+                      <Calendar size={18} className="text-clinical-blue" />
+                      5. Agenda Médica & Confirmação por WhatsApp
                     </h4>
-                    <p className="text-xs text-slate-500">Galeria no dossiê do paciente para guardar radiografias, tomografias, laudos e fotos do tratamento organizado por data.</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Organize os horários de consulta e envie mensagens padronizadas de lembrete com um clique no WhatsApp do paciente.
+                    </p>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                      <FileText size={16} className="text-clinical-blue" />
-                      Configuração de PDF & Impressão
+                      <FileText size={18} className="text-clinical-blue" />
+                      6. Receituário Anvisa & PDF Personalizado
                     </h4>
-                    <p className="text-xs text-slate-500">Personalize o logotipo da clínica, nome do médico, CRM e endereço para imprimir prontuários e receitas profissionais em PDF A4.</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Emita receituários especiais, atestados e laudos com o timbre da clínica, CRM e QR Code de verificação digital para impressão A4.
+                    </p>
+                  </div>
+
+                  <div className="p-5 bg-indigo-50/80 rounded-2xl border border-indigo-200/80 space-y-2">
+                    <h4 className="font-bold text-indigo-900 text-sm flex items-center gap-2">
+                      <Laptop size={18} className="text-indigo-600" />
+                      7. Conexão e Sincronização entre Computadores da Clínica
+                    </h4>
+                    <p className="text-xs text-indigo-950 leading-relaxed">
+                      O sistema funciona em nuvem em tempo real. A recepção pode cadastrar o paciente ou agendar na entrada, e os dados aparecem instantaneamente no computador da sala de atendimento do médico.
+                    </p>
+                  </div>
+
+                  <div className="p-5 bg-amber-50/80 rounded-2xl border border-amber-200/80 space-y-2">
+                    <h4 className="font-bold text-amber-900 text-sm flex items-center gap-2">
+                      <Activity size={18} className="text-amber-600" />
+                      8. Módulo Financeiro & Controle de Caixa
+                    </h4>
+                    <p className="text-xs text-amber-950 leading-relaxed">
+                      Acompanhe entradas diárias de consultas, formas de pagamento (PIX, Cartão, Dinheiro), emissão de recibos e relatórios de faturamento do consultório.
+                    </p>
                   </div>
                 </div>
               </section>

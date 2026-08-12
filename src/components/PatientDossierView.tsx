@@ -42,6 +42,7 @@ import NPSAndGoogleReviewModal from './NPSAndGoogleReviewModal';
 import { initialIntegrativeData } from '../types/integrativeChecklist';
 import { hasMeaningfulData } from '../lib/utils';
 import { toast } from 'react-hot-toast';
+import { processClinicalInput } from '../services/clinicalService';
 
 interface PatientDossierViewProps {
   patientName: string;
@@ -235,6 +236,37 @@ export default function PatientDossierView({
   const [clinicalAlerts, setClinicalAlerts] = useState<string[]>(
     currentRecord?.alertas_copiloto || currentRecord?.alertas_clinicos || []
   );
+  const [isLocalProcessing, setIsLocalProcessing] = useState(false);
+
+  const handleProcessTextAI = async (textToProcess?: string) => {
+    const text = textToProcess || currentRecord?.resumo_formatado;
+    if (!text || !text.trim()) {
+      toast.error("Por favor, digite ou cole um texto antes de processar com a IA.");
+      return;
+    }
+    setIsLocalProcessing(true);
+    try {
+      const result = await processClinicalInput(text, examMode || 'standard', 'Atendimento em Bloco Único');
+      if (result) {
+        if (result.queixa_principal) setQueixaPrincipal(result.queixa_principal);
+        if (result.exame_fisico) setExameFisico(result.exame_fisico);
+        if (result.hipotese_diagnostica) setHipoteseDiag(result.hipotese_diagnostica);
+        if (result.conduta_plano_terapeutico) setCondutaPlano(result.conduta_plano_terapeutico);
+        if (setCurrentRecord) {
+          setCurrentRecord((prev: any) => ({
+            ...prev,
+            ...result
+          }));
+        }
+        toast.success("IA extraiu e preencheu a ficha do paciente com sucesso!");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao processar texto com a IA.");
+    } finally {
+      setIsLocalProcessing(false);
+    }
+  };
 
   const handleSaveRecord = (e?: React.FormEvent) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -895,16 +927,40 @@ export default function PatientDossierView({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex-1 flex flex-col">
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                      Evolução Livre / Copiloto de IA
-                    </label>
+                  <div className="flex-1 flex flex-col space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Evolução Livre / Copiloto de IA
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleProcessTextAI(currentRecord?.resumo_formatado)}
+                        disabled={isLocalProcessing || isProcessing || !currentRecord?.resumo_formatado?.trim()}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ${
+                          currentRecord?.resumo_formatado?.trim() 
+                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white cursor-pointer' 
+                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        }`}
+                        title="Clique para a IA analisar o texto e preencher automaticamente a ficha do paciente"
+                      >
+                        <Sparkles size={14} />
+                        <span>{isLocalProcessing || isProcessing ? 'Processando com IA...' : '✨ Processar com IA / Auto-Preencher'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Este campo é ideal para colar um texto corrido. Para extrair os dados e preencher a ficha do paciente, basta clicar no botão roxo <strong className="text-purple-700 font-bold">"✨ Processar com IA"</strong> acima.
+                    </p>
                     <textarea
-                      rows={12}
+                      rows={10}
                       value={currentRecord?.resumo_formatado || ''}
-                      onChange={(e) => setCurrentRecord({ ...currentRecord, resumo_formatado: e.target.value })}
-                      placeholder="Digite ou fale a evolução da consulta..."
-                      className="w-full flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (setCurrentRecord) {
+                          setCurrentRecord({ ...currentRecord, resumo_formatado: val });
+                        }
+                      }}
+                      placeholder="Digite ou cole a evolução da consulta aqui..."
+                      className="w-full flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none font-sans leading-relaxed"
                     />
                   </div>
                 )}
@@ -914,8 +970,13 @@ export default function PatientDossierView({
                   <div className="border-t pt-4">
                     <h4 className="font-bold text-xs uppercase text-purple-700 mb-2">Formulário Especializado: Neurologia</h4>
                     <NeurologicalExamForm
-                      data={currentRecord?.exame_neurologico || {}}
-                      onChange={(data) => setSpecialtyData(data)}
+                      data={currentRecord?.exame_neurologico || specialtyData || {}}
+                      onChange={(data) => {
+                        setSpecialtyData(data);
+                        if (setCurrentRecord) {
+                          setCurrentRecord({ ...(currentRecord || {}), exame_neurologico: data });
+                        }
+                      }}
                     />
                   </div>
                 )}
@@ -1049,8 +1110,13 @@ export default function PatientDossierView({
                 </div>
 
                 <NeurologicalExamForm
-                  data={currentRecord?.exame_neurologico || {}}
-                  onChange={(data) => setSpecialtyData(data)}
+                  data={currentRecord?.exame_neurologico || specialtyData || {}}
+                  onChange={(data) => {
+                    setSpecialtyData(data);
+                    if (setCurrentRecord) {
+                      setCurrentRecord({ ...(currentRecord || {}), exame_neurologico: data });
+                    }
+                  }}
                 />
               </div>
             )}
