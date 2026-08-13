@@ -15,7 +15,9 @@ import {
   Loader2, 
   RefreshCw,
   Activity,
-  Trash2
+  Trash2,
+  MapPin,
+  ShieldCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -26,6 +28,14 @@ interface Appointment {
   id: string;
   paciente_nome: string;
   paciente_telefone?: string;
+  paciente_cpf?: string;
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
   data_hora_inicio: string;
   status: string;
   motivo: string;
@@ -59,9 +69,19 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+
   const [newAppointment, setNewAppointment] = useState({ 
     paciente_nome: prefillPatient?.name || '', 
     paciente_telefone: prefillPatient?.phone || '', 
+    paciente_cpf: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
     data_hora_inicio: '', 
     motivo: '', 
     medico_id: user?.role === 'doctor' ? user.id : '',
@@ -73,6 +93,35 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   });
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [testPhone, setTestPhone] = useState('');
+
+  const handleCepSearch = async (cepValue?: string) => {
+    const cleanCep = (cepValue || newAppointment.cep).replace(/\D/g, '');
+    if (cleanCep.length !== 8) {
+      toast.error("Informe um CEP válido com 8 números.");
+      return;
+    }
+    setIsSearchingCep(true);
+    try {
+      const res = await fetch(`/api/cep/${cleanCep}`);
+      const data = await res.json();
+      if (data.error) {
+        toast.error("CEP não encontrado.");
+      } else {
+        setNewAppointment(prev => ({
+          ...prev,
+          logradouro: data.logradouro || prev.logradouro,
+          bairro: data.bairro || prev.bairro,
+          cidade: data.localidade || prev.cidade,
+          estado: data.uf || prev.estado
+        }));
+        toast.success("Endereço preenchido automaticamente!");
+      }
+    } catch (e) {
+      toast.error("Erro ao buscar CEP.");
+    } finally {
+      setIsSearchingCep(false);
+    }
+  };
 
   const getStatusBadgeClass = (status: string) => {
     switch (status?.toLowerCase()) {
@@ -458,6 +507,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         user_id: user?.id,
         paciente_nome: newAppointment.paciente_nome,
         paciente_telefone: newAppointment.paciente_telefone,
+        paciente_cpf: newAppointment.paciente_cpf,
+        cep: newAppointment.cep,
+        logradouro: newAppointment.logradouro,
+        numero: newAppointment.numero,
+        complemento: newAppointment.complemento,
+        bairro: newAppointment.bairro,
+        cidade: newAppointment.cidade,
+        estado: newAppointment.estado,
         data_consulta: date,
         hora_consulta: formattedTime,
         data_hora: isoDateTime, 
@@ -489,6 +546,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       setNewAppointment({ 
         paciente_nome: '', 
         paciente_telefone: '', 
+        paciente_cpf: '',
+        cep: '',
+        logradouro: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
         data_hora_inicio: '', 
         motivo: '', 
         medico_id: user?.role === 'doctor' ? user.id : '',
@@ -656,6 +721,17 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       <span className="flex items-center gap-1.5 text-clinical-blue font-medium">
                         <Stethoscope size={14} /> {app.medico_nome} {app.medico_especialidade && `(${app.medico_especialidade})`}
                       </span>
+                      {app.paciente_cpf && (
+                        <span className="flex items-center gap-1.5 text-slate-600 font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                          <ShieldCheck size={13} className="text-slate-500" /> CPF: {app.paciente_cpf}
+                        </span>
+                      )}
+                      {(app.logradouro || app.cidade) && (
+                        <span className="flex items-center gap-1.5 text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
+                          <MapPin size={13} className="text-rose-500" /> 
+                          {[app.logradouro, app.numero, app.bairro, app.cidade && `${app.cidade}${app.estado ? `/${app.estado}` : ''}`].filter(Boolean).join(', ')}
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-slate-600 mt-2 bg-slate-50 px-3 py-1 rounded-lg inline-block">{app.motivo}</p>
                   </div>
@@ -738,18 +814,121 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               </button>
             </div>
             <div className="space-y-4">
-              <input 
-                className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
-                placeholder="Nome do Paciente"
-                value={newAppointment.paciente_nome}
-                onChange={e => setNewAppointment({...newAppointment, paciente_nome: e.target.value})}
-              />
-              <input 
-                className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
-                placeholder="Telefone (ex: 5511999999999)"
-                value={newAppointment.paciente_telefone}
-                onChange={e => setNewAppointment({...newAppointment, paciente_telefone: e.target.value})}
-              />
+              {/* Seção 1: Dados do Paciente */}
+              <div className="space-y-3">
+                <input 
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs font-semibold"
+                  placeholder="Nome Completo do Paciente *"
+                  value={newAppointment.paciente_nome}
+                  onChange={e => setNewAppointment({...newAppointment, paciente_nome: e.target.value})}
+                />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <input 
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
+                    placeholder="Telefone (ex: 11999998888)"
+                    value={newAppointment.paciente_telefone}
+                    onChange={e => setNewAppointment({...newAppointment, paciente_telefone: e.target.value})}
+                  />
+                  <input 
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
+                    placeholder="CPF (000.000.000-00)"
+                    value={newAppointment.paciente_cpf}
+                    onChange={e => setNewAppointment({...newAppointment, paciente_cpf: e.target.value})}
+                  />
+                </div>
+              </div>
+
+              {/* Seção 2: Endereço do Paciente (ViaCEP) */}
+              <div className="p-3.5 bg-blue-50/50 rounded-2xl border border-blue-100/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-extrabold text-blue-900 flex items-center gap-1.5">
+                    <MapPin size={14} className="text-clinical-blue" />
+                    Endereço & Localização (ViaCEP)
+                  </label>
+                  {isSearchingCep && (
+                    <span className="text-[10px] text-clinical-blue font-bold flex items-center gap-1">
+                      <Loader2 size={12} className="animate-spin" /> Buscando CEP...
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <input 
+                    className="flex-1 p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-bold"
+                    placeholder="CEP (ex: 01001-000)"
+                    value={newAppointment.cep}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setNewAppointment({...newAppointment, cep: val});
+                      const clean = val.replace(/\D/g, '');
+                      if (clean.length === 8 && !isSearchingCep) {
+                        setTimeout(() => handleCepSearch(clean), 100);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (newAppointment.cep.replace(/\D/g, '').length === 8) {
+                        handleCepSearch();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleCepSearch()}
+                    disabled={isSearchingCep}
+                    className="px-3 py-2 bg-clinical-blue hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs"
+                  >
+                    <Search size={12} /> Buscar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <input 
+                    className="col-span-2 p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs"
+                    placeholder="Rua / Logradouro"
+                    value={newAppointment.logradouro}
+                    onChange={e => setNewAppointment({...newAppointment, logradouro: e.target.value})}
+                  />
+                  <input 
+                    className="p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs"
+                    placeholder="Número"
+                    value={newAppointment.numero}
+                    onChange={e => setNewAppointment({...newAppointment, numero: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <input 
+                    className="p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs"
+                    placeholder="Complemento"
+                    value={newAppointment.complemento}
+                    onChange={e => setNewAppointment({...newAppointment, complemento: e.target.value})}
+                  />
+                  <input 
+                    className="p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs"
+                    placeholder="Bairro"
+                    value={newAppointment.bairro}
+                    onChange={e => setNewAppointment({...newAppointment, bairro: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <input 
+                    className="col-span-2 p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs"
+                    placeholder="Cidade"
+                    value={newAppointment.cidade}
+                    onChange={e => setNewAppointment({...newAppointment, cidade: e.target.value})}
+                  />
+                  <input 
+                    className="p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs uppercase"
+                    placeholder="UF"
+                    maxLength={2}
+                    value={newAppointment.estado}
+                    onChange={e => setNewAppointment({...newAppointment, estado: e.target.value})}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Data da Consulta</label>
                 <input 
