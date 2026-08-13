@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Stethoscope, Mic, MessageSquare, Clock, ShieldCheck, Zap, Calendar, FileText, Activity, Settings, Laptop, Smartphone, Search, Save, Download, CheckCircle, FolderOpen, Image } from 'lucide-react';
+import { X, Stethoscope, Mic, MessageSquare, Clock, ShieldCheck, Zap, Calendar, FileText, Activity, Settings, Laptop, Smartphone, Search, Save, Download, CheckCircle, FolderOpen, Image, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 import DoctorSettings from './DoctorSettings';
 

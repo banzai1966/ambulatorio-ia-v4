@@ -251,6 +251,9 @@ export function importLocalDataCSV(csvText: string): OfflineRecord[] {
       const notes = idxNotes !== -1 && values[idxNotes] ? values[idxNotes] : 'Cadastro importado via planilha CSV/Excel';
 
       const record: OfflineRecord = {
+        offline_id: `imp_csv_${Date.now()}_${i}`,
+        saved_at: new Date().toISOString(),
+        is_offline_pending: false,
         id: `imp_csv_${Date.now()}_${i}`,
         paciente_nome_completo: name,
         paciente_cpf: cpf,
@@ -259,8 +262,9 @@ export function importLocalDataCSV(csvText: string): OfflineRecord[] {
         data_consulta: date,
         especialidade: 'integrativa',
         queixa_principal: notes,
-        status: 'estavel',
-        medico_responsavel: 'Médico de Atendimento'
+        paciente_status: 'estavel',
+        resumo_formatado: notes,
+        sugestao_conduta: 'Cadastro Importado'
       };
 
       newRecords.push(record);
