@@ -257,8 +257,20 @@ export default function PreConsultationAnamneseModal({
                   <input
                     type="text"
                     value={cep}
-                    onChange={(e) => setCep(e.target.value)}
-                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCep(val);
+                      const clean = val.replace(/\D/g, '');
+                      if (clean.length === 8 && !isSearchingCep) {
+                        setTimeout(() => handleCepSearch(), 100);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (cep.replace(/\D/g, '').length === 8) {
+                        handleCepSearch();
+                      }
+                    }}
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     placeholder="00000-000"
                   />
                   <button

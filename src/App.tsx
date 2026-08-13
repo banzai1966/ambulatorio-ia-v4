@@ -41,7 +41,8 @@ import {
   Smartphone,
   Image,
   FolderOpen,
-  UploadCloud
+  UploadCloud,
+  DollarSign
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -58,6 +59,7 @@ import SystemOverviewModal from './components/SystemOverviewModal';
 import NeurologicalExamForm from './components/NeurologicalExamForm';
 import ClinicSettings from './components/ClinicSettings';
 import IntegrativeChecklistForm from './components/IntegrativeChecklistForm';
+import FinancialModule from './components/FinancialModule';
 import IntegrativeBodyMap from './components/IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './components/IntegrativeEvolution';
 import SpecialtyFields from './components/SpecialtyFields';
@@ -282,6 +284,7 @@ export default function App() {
   }, []);
   const [showHelp, setShowHelp] = useState(false);
   const [showManageTeam, setShowManageTeam] = useState(false);
+  const [showFinancial, setShowFinancial] = useState(false);
   const [showDashboard, setShowDashboard] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [user, setUser] = useState<{ email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string } | null>(null);
@@ -2777,6 +2780,7 @@ export default function App() {
                 setShowMessageHistory(false);
                 setShowDashboard(false);
                 setShowManageTeam(false);
+                setShowFinancial(false);
                 setSelectedPatient(null);
               }}
               className={cn(
@@ -2788,6 +2792,27 @@ export default function App() {
             >
               <History size={18} />
               <span>Histórico de Prontuários</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowFinancial(!showFinancial);
+                setShowHistory(false);
+                setShowAgenda(false);
+                setShowMessageHistory(false);
+                setShowDashboard(false);
+                setShowManageTeam(false);
+                setSelectedPatient(null);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                showFinancial 
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25" 
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+              )}
+            >
+              <DollarSign size={18} />
+              <span>Financeiro & Caixa</span>
             </button>
 
             {user?.role === 'admin' && (
@@ -3008,6 +3033,15 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
               >
                 <ManageTeam onClose={() => setShowManageTeam(false)} />
+              </motion.div>
+            ) : showFinancial ? (
+              <motion.div
+                key="financial"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <FinancialModule />
               </motion.div>
             ) : showDashboard ? (
               <motion.div
