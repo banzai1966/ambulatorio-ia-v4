@@ -19,9 +19,11 @@ import {
   Activity,
   ChevronRight,
   ChevronLeft,
-  FileText
+  FileText,
+  QrCode
 } from 'lucide-react';
 import { sendWhatsAppMessage } from '../services/whatsappService';
+import WhatsAppQRModal from './WhatsAppQRModal';
 
 interface Message {
   id: number;
@@ -46,6 +48,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [pendingMedia, setPendingMedia] = useState<{ base64: string, type: string, name: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -652,16 +655,26 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         <div className="p-4 border-b border-slate-100 font-bold text-slate-800 flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <span>Conversas</span>
-            <button 
-              onClick={() => {
-                setLoading(true);
-                fetchMessages();
-              }} 
-              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-              title="Atualizar conversas"
-            >
-              <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => setIsQrModalOpen(true)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all border border-emerald-200"
+                title="Conectar WhatsApp via QR Code"
+              >
+                <QrCode size={14} />
+                <span>Conectar QR</span>
+              </button>
+              <button 
+                onClick={() => {
+                  setLoading(true);
+                  fetchMessages();
+                }} 
+                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                title="Atualizar conversas"
+              >
+                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+              </button>
+            </div>
           </div>
           <input 
             type="text"
@@ -684,11 +697,19 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
             
             <div className="flex flex-col gap-3 w-full max-w-xs">
               <button 
-                onClick={() => fetchMessages()}
-                className="flex items-center justify-center gap-2 w-full py-3 bg-clinical-blue text-white rounded-xl font-bold hover:bg-clinical-blue-hover transition-all shadow-lg shadow-blue-100"
+                onClick={() => setIsQrModalOpen(true)}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
               >
-                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-                Tentar Novamente
+                <QrCode size={18} />
+                Conectar WhatsApp (QR Code)
+              </button>
+
+              <button 
+                onClick={() => fetchMessages()}
+                className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all"
+              >
+                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                Atualizar Mensagens
               </button>
               
               <div className="p-4 bg-white rounded-xl border border-slate-200 text-left">
@@ -962,6 +983,8 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
           </div>
         )}
       </div>
+
+      <WhatsAppQRModal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} />
     </div>
   );
 }

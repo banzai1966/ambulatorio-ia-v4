@@ -42,6 +42,14 @@ const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 const OLD_SUPABASE_URL = "https://supabase.makprojetosmake.com.br";
 const OLD_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.MkkmMW-v8x41OGDFjXuJnJf0BxR_hWyHH8d2ESgtyrg";
 
+// Configuração Evolution API (Customizável por variáveis de ambiente)
+const EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || "https://api.makprojetosmake.com.br").replace(/\/$/, "");
+const EVOLUTION_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "ambulatorio";
+const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 
+                          process.env.WHATSAPP_API_KEY || 
+                          process.env.EVOLUTION_API_K || 
+                          "E6247913DB92-48B4-8B54-5C7449EA639B";
+
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     persistSession: false
@@ -472,7 +480,7 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
 
     // Tenta enviar via Evolution API se configurada
     try {
-      await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+      await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
         number: cleanPhone,
         text: msgText,
         linkPreview: true
@@ -507,7 +515,7 @@ app.post("/api/whatsapp/send-survey", async (req, res) => {
     const msgText = `Olá *${patientName || 'Paciente'}*! 😊\n\nAgradecemos por sua consulta com *${doctorName || 'nosso especialista'}*.\n\nComo foi sua experiência no atendimento hoje?\n\n1️⃣ *Excelente* ⭐⭐⭐⭐⭐\n2️⃣ *Bom* ⭐⭐⭐⭐\n3️⃣ *Regular* ⭐⭐⭐\n4️⃣ *Ruim* ⭐⭐\n5️⃣ *Péssimo* ⭐\n\nResponda com o número de 1 a 5 ou clique nas opções!`;
 
     try {
-      await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+      await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
         number: cleanPhone,
         text: msgText,
         linkPreview: true
@@ -548,7 +556,7 @@ app.post("/api/whatsapp/process-survey-response", async (req, res) => {
     }
 
     try {
-      await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+      await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
         number: cleanPhone,
         text: responseMsg,
         linkPreview: true
@@ -573,6 +581,74 @@ app.post("/api/whatsapp/process-survey-response", async (req, res) => {
     res.json({ success: true, isPromoter, responseMsg, googleReviewUrl: googleBusinessReviewUrl });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ROTAS DE GESTÃO DA CONEXÃO WHATSAPP (EVOLUTION API / QR CODE) ---
+app.get("/api/whatsapp/status", async (req, res) => {
+  try {
+    const response = await axios.get(`${EVOLUTION_API_URL}/instance/connectionState/${EVOLUTION_INSTANCE_NAME}`, {
+      headers: { 'apikey': EVOLUTION_API_KEY },
+      timeout: 5000
+    });
+    const instanceData = response.data?.instance || response.data || {};
+    const state = instanceData.state || 'close';
+    const connected = state === 'open';
+    res.json({
+      success: true,
+      connected,
+      state,
+      ownerJid: instanceData.ownerJid || null,
+      profileName: instanceData.profileName || null
+    });
+  } catch (err: any) {
+    res.json({ success: true, connected: false, state: 'close', error: err.message });
+  }
+});
+
+app.post("/api/whatsapp/connect", async (req, res) => {
+  try {
+    let response;
+    try {
+      response = await axios.get(`${EVOLUTION_API_URL}/instance/connect/${EVOLUTION_INSTANCE_NAME}`, {
+        headers: { 'apikey': EVOLUTION_API_KEY },
+        timeout: 10000
+      });
+    } catch (e: any) {
+      // Se a instância não existir, cria a instância na Evolution
+      response = await axios.post(`${EVOLUTION_API_URL}/instance/create`, {
+        instanceName: EVOLUTION_INSTANCE_NAME,
+        token: EVOLUTION_API_KEY,
+        qrcode: true
+      }, {
+        headers: { 'apikey': EVOLUTION_API_KEY },
+        timeout: 10000
+      });
+    }
+
+    const data = response.data || {};
+    const base64 = data.base64 || data.qrcode?.base64 || data.code;
+    const pairingCode = data.pairingCode || data.qrcode?.pairingCode;
+
+    res.json({
+      success: true,
+      qrcode: base64 || null,
+      pairingCode: pairingCode || null
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
+  }
+});
+
+app.post("/api/whatsapp/logout", async (req, res) => {
+  try {
+    const response = await axios.delete(`${EVOLUTION_API_URL}/instance/logout/${EVOLUTION_INSTANCE_NAME}`, {
+      headers: { 'apikey': EVOLUTION_API_KEY },
+      timeout: 7000
+    });
+    res.json({ success: true, message: "Instância desconectada com sucesso", data: response.data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
   }
 });
 
@@ -699,7 +775,7 @@ app.post("/api/simulate-webhook", async (req, res) => {
 
 app.get("/api/evolution-status", async (req, res) => {
   try {
-    const response = await axios.get(`https://api.makprojetosmake.com.br/instance/connectionState/ambulatorio`, {
+    const response = await axios.get(`${EVOLUTION_API_URL}/instance/connectionState/${EVOLUTION_INSTANCE_NAME}`, {
       headers: { 'apikey': EVOLUTION_API_KEY }
     });
     res.json(response.data);
@@ -710,7 +786,7 @@ app.get("/api/evolution-status", async (req, res) => {
 
 app.get("/api/evolution-webhook-status", async (req, res) => {
   try {
-    const response = await axios.get(`https://api.makprojetosmake.com.br/webhook/find/ambulatorio`, {
+    const response = await axios.get(`${EVOLUTION_API_URL}/webhook/find/${EVOLUTION_INSTANCE_NAME}`, {
       headers: { 'apikey': EVOLUTION_API_KEY }
     });
     res.json(response.data);
@@ -978,12 +1054,6 @@ app.post("/evolution-webhook", (req, res, next) => {
   }
 });
 
-// Tenta pegar a chave de várias fontes possíveis para ser resiliente
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 
-                          process.env.WHATSAPP_API_KEY || 
-                          process.env.EVOLUTION_API_K || // Caso o usuário tenha cortado o nome
-                          "E6247913DB92-48B4-8B54-5C7449EA639B";
-
 async function updateEvolutionWebhook() {
   try {
     addLog(`🔄 Tentando atualizar webhook da Evolution...`);
@@ -995,7 +1065,7 @@ async function updateEvolutionWebhook() {
     addLog(`📍 URL Alvo: ${webhookUrl}`);
     addLog(`🔑 Usando API Key: ${EVOLUTION_API_KEY.substring(0, 5)}...`);
     
-    const response = await axios.post("https://api.makprojetosmake.com.br/webhook/set/ambulatorio", {
+    const response = await axios.post(`${EVOLUTION_API_URL}/webhook/set/${EVOLUTION_INSTANCE_NAME}`, {
       webhook: {
         url: webhookUrl,
         enabled: true,
@@ -1147,7 +1217,7 @@ async function processAndReply(phone: string, message: string) {
       
       // Enviar via Evolution
       try {
-        const evoResponse = await axios.post("https://api.makprojetosmake.com.br/message/sendText/ambulatorio", {
+        const evoResponse = await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
           number: cleanPhone,
           text: finalResp,
           linkPreview: true
@@ -1341,7 +1411,7 @@ app.post("/api/send-message", async (req, res) => {
     addLog(`🚀 Chamando Evolution: ${endpoint} para ${cleanPhone}`);
 
     try {
-      const evoResponse = await axios.post(`https://api.makprojetosmake.com.br/message/${endpoint}/ambulatorio`, payload, { 
+      const evoResponse = await axios.post(`${EVOLUTION_API_URL}/message/${endpoint}/${EVOLUTION_INSTANCE_NAME}`, payload, { 
         headers: { 'apikey': EVOLUTION_API_KEY } 
       });
 

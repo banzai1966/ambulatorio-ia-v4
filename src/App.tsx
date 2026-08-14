@@ -2858,7 +2858,7 @@ export default function App() {
               className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
             >
               <Settings size={18} />
-              <span>Configurar PDF</span>
+              <span>Configurações da Clínica & WhatsApp</span>
             </button>
 
             <button
