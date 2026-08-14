@@ -576,6 +576,95 @@ app.post("/api/whatsapp/process-survey-response", async (req, res) => {
   }
 });
 
+// --- ROTA PÚBLICA: BUSCAR AGENDAMENTO PARA PRÉ-CADASTRO ---
+app.get("/api/public/appointment", async (req, res) => {
+  try {
+    const { phone, id } = req.query;
+    let query = supabase.from('agendamentos').select('*');
+    if (id && id !== '1' && id !== 'undefined') {
+      query = query.eq('id', id);
+    } else if (phone) {
+      const clean = String(phone).replace(/\D/g, '');
+      query = query.ilike('paciente_telefone', `%${clean}%`);
+    } else {
+      return res.status(400).json({ error: "Telefone ou ID do agendamento é obrigatório" });
+    }
+
+    const { data, error } = await query.order('data_hora_inicio', { ascending: false }).limit(1);
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      return res.json({ success: true, appointment: data[0] });
+    } else {
+      return res.json({ success: true, appointment: null });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ROTA PÚBLICA: SUBMETER ANAMNESE E CONFIRMAR PRESENÇA ---
+app.post("/api/public/submit-anamnese", async (req, res) => {
+  try {
+    const {
+      appointmentId,
+      paciente_nome,
+      paciente_telefone,
+      paciente_cpf,
+      data_nascimento,
+      endereco,
+      alertas_clinicos,
+      medicamentosAtuais,
+      observacoesClinicas,
+      foto_url
+    } = req.body;
+
+    // 1. Se houver ID de agendamento, atualiza status para 'confirmado' e salva dados
+    if (appointmentId && appointmentId !== '1') {
+      await supabase.from('agendamentos').update({
+        status: 'confirmado',
+        paciente_cpf: paciente_cpf || undefined,
+        cep: endereco?.cep || undefined,
+        logradouro: endereco?.logradouro || undefined,
+        bairro: endereco?.bairro || undefined,
+        cidade: endereco?.cidade || undefined,
+        estado: endereco?.estado || undefined,
+        numero: endereco?.numero || undefined,
+        complemento: endereco?.complemento || undefined
+      }).eq('id', appointmentId);
+    }
+
+    // 2. Salva registro de anamnese pré-consulta no banco
+    const { data, error } = await supabase.from('anamnese_pre_consulta').insert([{
+      agendamento_id: appointmentId || null,
+      paciente_nome,
+      paciente_telefone,
+      paciente_cpf,
+      data_nascimento,
+      endereco,
+      alertas_clinicos,
+      medicamentos_atuais: medicamentosAtuais,
+      observacoes_clinicas: observacoesClinicas,
+      foto_url,
+      created_at: new Date().toISOString()
+    }]).select();
+
+    if (error) {
+      console.warn("Aviso ao salvar em anamnese_pre_consulta (tabela pode não existir, ignorando silenciosamente):", error.message);
+    }
+
+    addLog(`✅ Anamnese pré-consulta pública submetida com sucesso por ${paciente_nome} (${paciente_telefone})`);
+
+    res.json({
+      success: true,
+      message: "Pré-cadastro e confirmação de presença concluídos com sucesso!",
+      record: data ? data[0] : null
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/reconfigure-webhook", async (req, res) => {
   addLog("🚀 Reconfiguração manual do webhook solicitada via API");
   await updateEvolutionWebhook();

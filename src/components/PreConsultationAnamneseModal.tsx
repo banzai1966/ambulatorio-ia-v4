@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User, Phone, MapPin, Camera, AlertTriangle, ShieldCheck, Check, Search, X, Heart, AlertCircle, Sparkles } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { User, Phone, MapPin, Camera, AlertTriangle, ShieldCheck, Check, Search, X, Heart, AlertCircle, Sparkles, Upload, Video } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface PreConsultationAnamneseModalProps {
@@ -7,6 +7,14 @@ interface PreConsultationAnamneseModalProps {
   onClose: () => void;
   patientNamePrefill?: string;
   patientPhonePrefill?: string;
+  patientCpfPrefill?: string;
+  patientCepPrefill?: string;
+  patientLogradouroPrefill?: string;
+  patientBairroPrefill?: string;
+  patientCidadePrefill?: string;
+  patientEstadoPrefill?: string;
+  patientNumeroPrefill?: string;
+  patientComplementoPrefill?: string;
   onAnamneseSubmitted?: (updatedData: any) => void;
 }
 
@@ -15,19 +23,54 @@ export default function PreConsultationAnamneseModal({
   onClose,
   patientNamePrefill = '',
   patientPhonePrefill = '',
+  patientCpfPrefill = '',
+  patientCepPrefill = '',
+  patientLogradouroPrefill = '',
+  patientBairroPrefill = '',
+  patientCidadePrefill = '',
+  patientEstadoPrefill = '',
+  patientNumeroPrefill = '',
+  patientComplementoPrefill = '',
   onAnamneseSubmitted
 }: PreConsultationAnamneseModalProps) {
   const [nome, setNome] = useState(patientNamePrefill);
   const [telefone, setTelefone] = useState(patientPhonePrefill);
-  const [cpf, setCpf] = useState('');
+  const [cpf, setCpf] = useState(patientCpfPrefill);
   const [dataNascimento, setDataNascimento] = useState('');
-  const [cep, setCep] = useState('');
-  const [logradouro, setLogradouro] = useState('');
-  const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [estado, setEstado] = useState('');
-  const [numero, setNumero] = useState('');
-  const [complemento, setComplemento] = useState('');
+  const [cep, setCep] = useState(patientCepPrefill);
+  const [logradouro, setLogradouro] = useState(patientLogradouroPrefill);
+  const [bairro, setBairro] = useState(patientBairroPrefill);
+  const [cidade, setCidade] = useState(patientCidadePrefill);
+  const [estado, setEstado] = useState(patientEstadoPrefill);
+  const [numero, setNumero] = useState(patientNumeroPrefill);
+  const [complemento, setComplemento] = useState(patientComplementoPrefill);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (patientNamePrefill) setNome(patientNamePrefill);
+      if (patientPhonePrefill) setTelefone(patientPhonePrefill);
+      if (patientCpfPrefill) setCpf(patientCpfPrefill);
+      if (patientCepPrefill) setCep(patientCepPrefill);
+      if (patientLogradouroPrefill) setLogradouro(patientLogradouroPrefill);
+      if (patientBairroPrefill) setBairro(patientBairroPrefill);
+      if (patientCidadePrefill) setCidade(patientCidadePrefill);
+      if (patientEstadoPrefill) setEstado(patientEstadoPrefill);
+      if (patientNumeroPrefill) setNumero(patientNumeroPrefill);
+      if (patientComplementoPrefill) setComplemento(patientComplementoPrefill);
+    }
+  }, [
+    isOpen,
+    patientNamePrefill,
+    patientPhonePrefill,
+    patientCpfPrefill,
+    patientCepPrefill,
+    patientLogradouroPrefill,
+    patientBairroPrefill,
+    patientCidadePrefill,
+    patientEstadoPrefill,
+    patientNumeroPrefill,
+    patientComplementoPrefill
+  ]);
   
   // Perguntas Clínicas / Alertas
   const [isHipertenso, setIsHipertenso] = useState(false);
@@ -39,11 +82,66 @@ export default function PreConsultationAnamneseModal({
   const [medicamentosAtuais, setMedicamentosAtuais] = useState('');
   const [observacoesClinicas, setObservacoesClinicas] = useState('');
 
-  // Foto / Selfie
+  // Foto / Selfie / Câmera
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [aceitouTermoVeracidade, setAceitouTermoVeracidade] = useState(true);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Iniciar Câmera ao Vivo
+  const startWebcam = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
+        audio: false
+      });
+      setIsWebcamActive(true);
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 150);
+    } catch (err) {
+      toast.error("Não foi possível acessar a câmera. Permita o acesso ou envie um arquivo de foto.");
+    }
+  };
+
+  // Parar Câmera
+  const stopWebcam = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsWebcamActive(false);
+  };
+
+  // Capturar Foto do Vídeo ao Vivo
+  const capturePhotoFromWebcam = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      setPhotoPreview(dataUrl);
+      toast.success("Foto capturada com sucesso!");
+    }
+    stopWebcam();
+  };
+
+  useEffect(() => {
+    return () => {
+      stopWebcam();
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -179,28 +277,72 @@ export default function PreConsultationAnamneseModal({
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-              {/* Foto Selfie */}
-              <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl">
+              {/* Foto Selfie & Câmera */}
+              <div className="flex flex-col items-center justify-center p-4 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl min-h-[160px]">
                 {photoPreview ? (
-                  <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-blue-500 shadow-md">
-                    <img src={photoPreview} alt="Selfie Paciente" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => setPhotoPreview(null)}
-                      className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-blue-600 shadow-md">
+                      <img src={photoPreview} alt="Selfie Paciente" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setPhotoPreview(null)}
+                        className="absolute top-1 right-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-sm"
+                        title="Remover Foto"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Foto Anexada
+                    </span>
+                  </div>
+                ) : isWebcamActive ? (
+                  <div className="flex flex-col items-center gap-2 w-full">
+                    <div className="relative w-full max-w-[200px] h-36 bg-black rounded-xl overflow-hidden shadow-inner border border-slate-300">
+                      <video ref={videoRef} className="w-full h-full object-cover transform -scale-x-100" autoPlay playsInline muted />
+                    </div>
+                    <div className="flex gap-2 w-full justify-center">
+                      <button
+                        type="button"
+                        onClick={capturePhotoFromWebcam}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                      >
+                        <Camera className="w-3.5 h-3.5" /> Bater Foto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopWebcam}
+                        className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <label className="flex flex-col items-center justify-center cursor-pointer text-center">
-                    <div className="p-3 bg-blue-100 text-blue-600 rounded-full mb-2">
+                  <div className="flex flex-col items-center text-center space-y-2 w-full">
+                    <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
                       <Camera className="w-6 h-6" />
                     </div>
-                    <span className="text-[11px] font-bold text-slate-700">Tirar / Anexar Selfie</span>
-                    <span className="text-[9px] text-slate-400">Reconhecimento na Recepção</span>
-                    <input type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="hidden" />
-                  </label>
+                    <div className="text-center">
+                      <span className="text-xs font-bold text-slate-800 block">Identificação por Foto</span>
+                      <span className="text-[10px] text-slate-400 block">Reconhecimento na Recepção</span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 w-full pt-1">
+                      <button
+                        type="button"
+                        onClick={startWebcam}
+                        className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all"
+                      >
+                        <Video className="w-3.5 h-3.5" /> Webcam ao Vivo
+                      </button>
+                      
+                      <label className="flex-1 px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-xs">
+                        <Upload className="w-3.5 h-3.5 text-slate-500" /> Galeria / Arquivo
+                        <input type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
                 )}
               </div>
 

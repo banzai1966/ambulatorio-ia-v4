@@ -17,12 +17,14 @@ import {
   Activity,
   Trash2,
   MapPin,
-  ShieldCheck
+  ShieldCheck,
+  ClipboardList
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getAvailableSlots, getDoctorsBySpecialty } from '../services/schedulingService';
+import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
 
 interface Appointment {
   id: string;
@@ -66,6 +68,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
   const [selectedMedicoId, setSelectedMedicoId] = useState<string>(user?.role === 'doctor' ? user.id : '');
   const [showModal, setShowModal] = useState(false);
+  const [isAnamneseModalOpen, setIsAnamneseModalOpen] = useState(false);
+  const [selectedAppointmentForAnamnese, setSelectedAppointmentForAnamnese] = useState<Appointment | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
@@ -738,6 +742,17 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => {
+                      setSelectedAppointmentForAnamnese(app);
+                      setIsAnamneseModalOpen(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold transition-all shadow-xs"
+                    title="Abrir Anamnese Pré-Consulta preenchida com os dados do agendamento"
+                  >
+                    <ClipboardList size={14} /> Ficha Pré-Consulta
+                  </button>
+
+                  <button
                     onClick={() => handleSendConfirmation(app)}
                     className="flex items-center gap-1 px-3 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-all shadow-xs"
                     title="Disparar confirmação de consulta com link de Anamnese no WhatsApp"
@@ -1114,6 +1129,27 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           </div>
         </div>
       )}
+
+      <PreConsultationAnamneseModal
+        isOpen={isAnamneseModalOpen}
+        onClose={() => {
+          setIsAnamneseModalOpen(false);
+          setSelectedAppointmentForAnamnese(null);
+        }}
+        patientNamePrefill={selectedAppointmentForAnamnese?.paciente_nome || ''}
+        patientPhonePrefill={selectedAppointmentForAnamnese?.paciente_telefone || ''}
+        patientCpfPrefill={selectedAppointmentForAnamnese?.paciente_cpf || ''}
+        patientCepPrefill={selectedAppointmentForAnamnese?.cep || ''}
+        patientLogradouroPrefill={selectedAppointmentForAnamnese?.logradouro || ''}
+        patientBairroPrefill={selectedAppointmentForAnamnese?.bairro || ''}
+        patientCidadePrefill={selectedAppointmentForAnamnese?.cidade || ''}
+        patientEstadoPrefill={selectedAppointmentForAnamnese?.estado || ''}
+        patientNumeroPrefill={selectedAppointmentForAnamnese?.numero || ''}
+        patientComplementoPrefill={selectedAppointmentForAnamnese?.complemento || ''}
+        onAnamneseSubmitted={() => {
+          toast.success("Ficha Pré-Consulta vinculada com sucesso!");
+        }}
+      />
     </div>
   );
 }

@@ -66,6 +66,7 @@ import SpecialtyFields from './components/SpecialtyFields';
 import VitalMonitor from './components/VitalMonitor';
 import PatientDossierView from './components/PatientDossierView';
 import PatientMediaGallery from './components/PatientMediaGallery';
+import PublicAnamneseView from './components/PublicAnamneseView';
 import { SPECIALTIES } from './constants/specialties';
 import { 
   getOfflineRecords, 
@@ -2439,6 +2440,14 @@ export default function App() {
         </motion.div>
       </div>
     );
+  }
+
+  if (typeof window !== 'undefined' && (
+    window.location.hash.includes('anamnese') ||
+    window.location.search.includes('anamnese') ||
+    window.location.search.includes('publicAnamnese')
+  )) {
+    return <PublicAnamneseView />;
   }
 
   if (!user) {

@@ -1713,6 +1713,7 @@ export default function PatientDossierView({
         onClose={() => setIsAnamneseModalOpen(false)}
         patientNamePrefill={patientName}
         patientPhonePrefill={patientPhone}
+        patientCpfPrefill={patientCpf}
         onAnamneseSubmitted={(data) => {
           if (data.alertas_clinicos) {
             setClinicalAlerts(data.alertas_clinicos);
