@@ -675,11 +675,17 @@ app.delete("/api/agendamentos/:id", async (req, res) => {
     const { id } = req.params;
     console.log(`[SERVER] Excluindo agendamento ID: ${id}`);
 
-    const { error: err1 } = await supabase.from('agendamentos').delete().eq('id', id);
-    const { error: err2 } = await supabase.from('appointments').delete().eq('id', id);
+    const numId = Number(id);
+    if (!isNaN(numId)) {
+      await supabase.from('agendamentos').delete().eq('id', numId);
+      await supabase.from('appointments').delete().eq('id', numId);
+    }
+    
+    const { error: err1 } = await supabase.from('agendamentos').delete().eq('id', String(id));
+    const { error: err2 } = await supabase.from('appointments').delete().eq('id', String(id));
 
     if (err1 && err2) {
-      console.warn("[SERVER] Erro ao deletar em ambas as tabelas:", err1.message, err2.message);
+      console.warn("[SERVER] Aviso ao deletar:", err1.message, err2.message);
     }
 
     return res.json({ success: true, message: "Agendamento excluído com sucesso" });

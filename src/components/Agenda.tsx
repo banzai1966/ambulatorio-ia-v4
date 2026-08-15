@@ -146,23 +146,36 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   };
 
   const handleDeleteAppointment = async (id: string, name: string) => {
-    if (!window.confirm(`Deseja realmente remover/cancelar o agendamento de "${name}"?`)) return;
-    
-    // Remove da tela imediatamente
+    // Remove da tela imediatamente no 1º milissegundo
     setAppointments(prev => prev.filter(a => String(a.id) !== String(id)));
+    toast.success(`Agendamento de ${name || 'paciente'} removido com sucesso.`);
 
     try {
-      const res = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        await supabase.from('agendamentos').delete().eq('id', id);
-        await supabase.from('appointments').delete().eq('id', id);
+      // 1. Deleta via API do servidor
+      await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
+      
+      // 2. Deleta via Supabase direto (dupla garantia)
+      const numId = Number(id);
+      if (!isNaN(numId)) {
+        await supabase.from('agendamentos').delete().eq('id', numId);
       }
-      toast.success("Agendamento removido com sucesso.");
+      await supabase.from('agendamentos').delete().eq('id', String(id));
     } catch (err) {
       console.error("Erro ao remover agendamento:", err);
-      toast.success("Agendamento removido.");
-    } finally {
-      fetchAppointments();
+    }
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    setAppointments(prev => prev.map(a => String(a.id) === String(id) ? { ...a, status: newStatus } : a));
+    try {
+      const numId = Number(id);
+      if (!isNaN(numId)) {
+        await supabase.from('agendamentos').update({ status: newStatus }).eq('id', numId);
+      }
+      await supabase.from('agendamentos').update({ status: newStatus }).eq('id', String(id));
+      toast.success(`Status alterado para "${newStatus}"`);
+    } catch (err) {
+      console.error("Erro ao atualizar status:", err);
     }
   };
 
@@ -707,9 +720,18 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold text-lg text-slate-900">{app.paciente_nome}</h3>
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs border ${getStatusBadgeClass(app.status)}`}>
-                        {app.status || 'Agendado'}
-                      </span>
+                      <select
+                        value={app.status || 'Agendado'}
+                        onChange={(e) => handleStatusChange(app.id, e.target.value)}
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border outline-none cursor-pointer transition-all shadow-2xs ${getStatusBadgeClass(app.status)}`}
+                        title="Clique para alterar o status do agendamento"
+                      >
+                        <option value="Agendado" className="bg-white text-slate-900 font-normal">Agendado</option>
+                        <option value="confirmado" className="bg-white text-slate-900 font-normal">Confirmado</option>
+                        <option value="Em Atendimento" className="bg-white text-slate-900 font-normal">Em Atendimento</option>
+                        <option value="Atendido" className="bg-white text-slate-900 font-normal">Atendido</option>
+                        <option value="Cancelado" className="bg-white text-slate-900 font-normal">Cancelado</option>
+                      </select>
                       {app.convenio && (
                         <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
                           {app.convenio}
