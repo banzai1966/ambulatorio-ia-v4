@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { User, Phone, MapPin, Camera, AlertTriangle, ShieldCheck, Check, Search, X, Heart, AlertCircle, Sparkles, Upload, Video } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { calculateAge, formatDateMask } from '../lib/utils';
 
 interface PreConsultationAnamneseModalProps {
   isOpen: boolean;
@@ -45,33 +46,6 @@ export default function PreConsultationAnamneseModal({
   const [numero, setNumero] = useState(patientNumeroPrefill);
   const [complemento, setComplemento] = useState(patientComplementoPrefill);
 
-  useEffect(() => {
-    if (isOpen) {
-      if (patientNamePrefill) setNome(patientNamePrefill);
-      if (patientPhonePrefill) setTelefone(patientPhonePrefill);
-      if (patientCpfPrefill) setCpf(patientCpfPrefill);
-      if (patientCepPrefill) setCep(patientCepPrefill);
-      if (patientLogradouroPrefill) setLogradouro(patientLogradouroPrefill);
-      if (patientBairroPrefill) setBairro(patientBairroPrefill);
-      if (patientCidadePrefill) setCidade(patientCidadePrefill);
-      if (patientEstadoPrefill) setEstado(patientEstadoPrefill);
-      if (patientNumeroPrefill) setNumero(patientNumeroPrefill);
-      if (patientComplementoPrefill) setComplemento(patientComplementoPrefill);
-    }
-  }, [
-    isOpen,
-    patientNamePrefill,
-    patientPhonePrefill,
-    patientCpfPrefill,
-    patientCepPrefill,
-    patientLogradouroPrefill,
-    patientBairroPrefill,
-    patientCidadePrefill,
-    patientEstadoPrefill,
-    patientNumeroPrefill,
-    patientComplementoPrefill
-  ]);
-  
   // Perguntas Clínicas / Alertas
   const [isHipertenso, setIsHipertenso] = useState(false);
   const [isDiabetico, setIsDiabetico] = useState(false);
@@ -90,6 +64,75 @@ export default function PreConsultationAnamneseModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (patientNamePrefill) setNome(patientNamePrefill);
+      if (patientPhonePrefill) setTelefone(patientPhonePrefill);
+      if (patientCpfPrefill) setCpf(patientCpfPrefill);
+      if (patientCepPrefill) setCep(patientCepPrefill);
+      if (patientLogradouroPrefill) setLogradouro(patientLogradouroPrefill);
+      if (patientBairroPrefill) setBairro(patientBairroPrefill);
+      if (patientCidadePrefill) setCidade(patientCidadePrefill);
+      if (patientEstadoPrefill) setEstado(patientEstadoPrefill);
+      if (patientNumeroPrefill) setNumero(patientNumeroPrefill);
+      if (patientComplementoPrefill) setComplemento(patientComplementoPrefill);
+
+      // Buscar anamnese pré-existente no servidor
+      const fetchAnamneseData = async () => {
+        try {
+          const res = await fetch(`/api/public/anamnese-data?phone=${encodeURIComponent(patientPhonePrefill)}`);
+          const data = await res.json();
+          if (data.success && data.data) {
+            const rec = data.data;
+            if (rec.paciente_nome) setNome(rec.paciente_nome);
+            if (rec.paciente_telefone) setTelefone(rec.paciente_telefone);
+            if (rec.paciente_cpf) setCpf(rec.paciente_cpf);
+            if (rec.data_nascimento) setDataNascimento(rec.data_nascimento);
+
+            if (rec.endereco) {
+              if (rec.endereco.cep) setCep(rec.endereco.cep);
+              if (rec.endereco.logradouro) setLogradouro(rec.endereco.logradouro);
+              if (rec.endereco.bairro) setBairro(rec.endereco.bairro);
+              if (rec.endereco.cidade) setCidade(rec.endereco.cidade);
+              if (rec.endereco.estado) setEstado(rec.endereco.estado);
+              if (rec.endereco.numero) setNumero(rec.endereco.numero);
+              if (rec.endereco.complemento) setComplemento(rec.endereco.complemento);
+            }
+
+            if (rec.alertas_clinicos && Array.isArray(rec.alertas_clinicos)) {
+              setIsHipertenso(rec.alertas_clinicos.some((a: string) => a.includes("HIPERTENSO")));
+              setIsDiabetico(rec.alertas_clinicos.some((a: string) => a.includes("DIABÉTICO")));
+              setTemCardiopatia(rec.alertas_clinicos.some((a: string) => a.includes("CARDIOPATIA")));
+              setUsaAnticoagulante(rec.alertas_clinicos.some((a: string) => a.includes("ANTICOAGULANTE")));
+            }
+
+            if (rec.medicamentos_atuais || rec.medicamentosAtuais) setMedicamentosAtuais(rec.medicamentos_atuais || rec.medicamentosAtuais);
+            if (rec.observacoes_clinicas || rec.observacoesClinicas) setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas);
+            if (rec.foto_url) setPhotoPreview(rec.foto_url);
+          }
+        } catch (err) {
+          console.error("Erro ao carregar dados da anamnese:", err);
+        }
+      };
+
+      fetchAnamneseData();
+    }
+  }, [
+    isOpen,
+    patientNamePrefill,
+    patientPhonePrefill,
+    patientCpfPrefill,
+    patientCepPrefill,
+    patientLogradouroPrefill,
+    patientBairroPrefill,
+    patientCidadePrefill,
+    patientEstadoPrefill,
+    patientNumeroPrefill,
+    patientComplementoPrefill
+  ]);
 
   // Iniciar Câmera ao Vivo
   const startWebcam = async () => {
@@ -334,13 +377,33 @@ export default function PreConsultationAnamneseModal({
                         onClick={startWebcam}
                         className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all"
                       >
-                        <Video className="w-3.5 h-3.5" /> Webcam ao Vivo
+                        <Video className="w-3.5 h-3.5" /> Webcam / Câmera
                       </button>
                       
-                      <label className="flex-1 px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-xs">
-                        <Upload className="w-3.5 h-3.5 text-slate-500" /> Galeria / Arquivo
-                        <input type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="hidden" />
-                      </label>
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="flex-1 px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-xs"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-blue-600" /> Galeria / Arquivo
+                      </button>
+
+                      {/* Inputs ocultos de câmera e galeria */}
+                      <input 
+                        ref={cameraInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        capture="user" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
+                      <input 
+                        ref={galleryInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
                     </div>
                   </div>
                 )}
@@ -372,12 +435,22 @@ export default function PreConsultationAnamneseModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Data de Nascimento</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">Data de Nascimento (DD/MM/AAAA)</label>
+                      {calculateAge(dataNascimento) !== null && (
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-md">
+                          {calculateAge(dataNascimento)} anos
+                        </span>
+                      )}
+                    </div>
                     <input
-                      type="date"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={10}
+                      placeholder="Ex: 08/05/1966"
                       value={dataNascimento}
-                      onChange={(e) => setDataNascimento(e.target.value)}
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      onChange={(e) => setDataNascimento(formatDateMask(e.target.value))}
+                      className="w-full p-2.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-blue-600 focus:bg-white"
                     />
                   </div>
                 </div>

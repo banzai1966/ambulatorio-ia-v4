@@ -271,6 +271,19 @@ export default function App() {
   const [showSystemOverview, setShowSystemOverview] = useState(false);
   const [showClinicSettings, setShowClinicSettings] = useState(false);
   const [clinicInfo, setClinicInfo] = useState<any>(null);
+  const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash + window.location.search);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
 
   useEffect(() => {
     const loadClinicInfo = () => {
@@ -2443,6 +2456,7 @@ export default function App() {
   }
 
   if (typeof window !== 'undefined' && (
+    currentHash.includes('anamnese') ||
     window.location.hash.includes('anamnese') ||
     window.location.search.includes('anamnese') ||
     window.location.search.includes('publicAnamnese')

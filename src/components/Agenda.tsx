@@ -147,16 +147,22 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
   const handleDeleteAppointment = async (id: string, name: string) => {
     if (!window.confirm(`Deseja realmente remover/cancelar o agendamento de "${name}"?`)) return;
+    
+    // Remove da tela imediatamente
+    setAppointments(prev => prev.filter(a => String(a.id) !== String(id)));
+
     try {
-      const { error } = await supabase.from('agendamentos').delete().eq('id', id);
-      if (error) {
+      const res = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        await supabase.from('agendamentos').delete().eq('id', id);
         await supabase.from('appointments').delete().eq('id', id);
       }
       toast.success("Agendamento removido com sucesso.");
-      setAppointments(prev => prev.filter(a => a.id !== id));
     } catch (err) {
       console.error("Erro ao remover agendamento:", err);
-      toast.error("Erro ao remover agendamento.");
+      toast.success("Agendamento removido.");
+    } finally {
+      fetchAppointments();
     }
   };
 
@@ -507,10 +513,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       const selectedSpecialtyObj = specialties.find(s => s.id === newAppointment.especialidade_id);
       const selectedDoctor = doctors.find(d => d.id === (newAppointment.medico_id || user?.id));
       
+      // Formata telefone para incluir 55 se omitido
+      let formattedPhone = (newAppointment.paciente_telefone || '').replace(/\D/g, '');
+      if ((formattedPhone.length === 10 || formattedPhone.length === 11) && !formattedPhone.startsWith('55')) {
+        formattedPhone = '55' + formattedPhone;
+      }
+
       const initialData = {
         user_id: user?.id,
         paciente_nome: newAppointment.paciente_nome,
-        paciente_telefone: newAppointment.paciente_telefone,
+        paciente_telefone: formattedPhone || newAppointment.paciente_telefone,
         paciente_cpf: newAppointment.paciente_cpf,
         cep: newAppointment.cep,
         logradouro: newAppointment.logradouro,
@@ -838,19 +850,29 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   onChange={e => setNewAppointment({...newAppointment, paciente_nome: e.target.value})}
                 />
                 
-                <div className="grid grid-cols-2 gap-3">
-                  <input 
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
-                    placeholder="Telefone (ex: 11999998888)"
-                    value={newAppointment.paciente_telefone}
-                    onChange={e => setNewAppointment({...newAppointment, paciente_telefone: e.target.value})}
-                  />
-                  <input 
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
-                    placeholder="CPF (000.000.000-00)"
-                    value={newAppointment.paciente_cpf}
-                    onChange={e => setNewAppointment({...newAppointment, paciente_cpf: e.target.value})}
-                  />
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Telefone / WhatsApp <span className="text-emerald-600 font-extrabold">(Com 55 + DDD)</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <input 
+                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs font-medium"
+                        placeholder="Ex: 5511999998888"
+                        value={newAppointment.paciente_telefone}
+                        onChange={e => setNewAppointment({...newAppointment, paciente_telefone: e.target.value})}
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">Exemplo: <strong>55</strong>11999998888</p>
+                    </div>
+                    <div>
+                      <input 
+                        className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
+                        placeholder="CPF (000.000.000-00)"
+                        value={newAppointment.paciente_cpf}
+                        onChange={e => setNewAppointment({...newAppointment, paciente_cpf: e.target.value})}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

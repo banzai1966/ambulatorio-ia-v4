@@ -93,6 +93,17 @@ const supabaseProxy = createProxyMiddleware({
 });
 app.use('/supabase-api', supabaseProxy);
 
+// --- HELPER DE FORMATAÇÃO DE TELEFONE BRASIL (DDD + 55) ---
+function formatPhoneBR(phone: string): string {
+  if (!phone) return '';
+  let digits = phone.split('@')[0].replace(/\D/g, '');
+  // Se possui 10 ou 11 dígitos (ex: 11976143323), adiciona o código de país 55 do Brasil
+  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) {
+    digits = '55' + digits;
+  }
+  return digits;
+}
+
 // --- LÓGICA GEMINI NO BACKEND (MAIS ESTÁVEL) ---
 const getGeminiKey = () => {
   return process.env.MINHA_CHAVE_PAGA || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
@@ -472,22 +483,25 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
     if (!phone) {
       return res.status(400).json({ error: "Telefone é obrigatório" });
     }
-    const cleanPhone = phone.split('@')[0].replace(/\D/g, '');
-    const origin = req.headers.origin || `http://localhost:${PORT}`;
+    const cleanPhone = formatPhoneBR(phone);
+    const host = req.get('host') || `localhost:${PORT}`;
+    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+    const origin = req.headers.origin || `${protocol}://${host}`;
     const anamneseLink = `${origin}/#anamnese?phone=${cleanPhone}&id=${appointmentId || '1'}`;
 
     const msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde e envie sua foto pelo link:\n${anamneseLink}`;
 
-    // Tenta enviar via Evolution API se configurada
+    // Tenta enviar via Evolution API
     try {
-      await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
+      const evoRes = await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
         number: cleanPhone,
         text: msgText,
         linkPreview: true
       }, { headers: { 'apikey': EVOLUTION_API_KEY } });
       addLog(`✅ Confirmação enviada via Evolution para ${cleanPhone}`);
     } catch (e: any) {
-      addLog(`⚠️ Evolution indisponível para confirmação, registrando no banco: ${e.message}`);
+      const errorMsg = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+      addLog(`❌ Erro Evolution confirmação (${cleanPhone}): ${errorMsg}`);
     }
 
     // Registra na tabela de mensagens do Supabase
@@ -511,7 +525,7 @@ app.post("/api/whatsapp/send-survey", async (req, res) => {
     const { phone, patientName, doctorName } = req.body;
     if (!phone) return res.status(400).json({ error: "Telefone é obrigatório" });
     
-    const cleanPhone = phone.split('@')[0].replace(/\D/g, '');
+    const cleanPhone = formatPhoneBR(phone);
     const msgText = `Olá *${patientName || 'Paciente'}*! 😊\n\nAgradecemos por sua consulta com *${doctorName || 'nosso especialista'}*.\n\nComo foi sua experiência no atendimento hoje?\n\n1️⃣ *Excelente* ⭐⭐⭐⭐⭐\n2️⃣ *Bom* ⭐⭐⭐⭐\n3️⃣ *Regular* ⭐⭐⭐\n4️⃣ *Ruim* ⭐⭐\n5️⃣ *Péssimo* ⭐\n\nResponda com o número de 1 a 5 ou clique nas opções!`;
 
     try {
@@ -541,7 +555,7 @@ app.post("/api/whatsapp/send-survey", async (req, res) => {
 app.post("/api/whatsapp/process-survey-response", async (req, res) => {
   try {
     const { phone, rating, feedbackText } = req.body;
-    const cleanPhone = (phone || '').replace(/\D/g, '');
+    const cleanPhone = formatPhoneBR(phone);
     const googleBusinessReviewUrl = process.env.GOOGLE_BUSINESS_REVIEW_URL || "https://search.google.com/local/writereview?placeid=ChIJN1t_t_UzxAAR1111111111";
 
     let responseMsg = "";
@@ -652,28 +666,100 @@ app.post("/api/whatsapp/logout", async (req, res) => {
   }
 });
 
+// In-memory cache for submitted anamneses
+const anamneseStore = new Map<string, any>();
+
+// --- DELETAR AGENDAMENTO (PERMISSÃO TOTAL SERVER-SIDE) ---
+app.delete("/api/agendamentos/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`[SERVER] Excluindo agendamento ID: ${id}`);
+
+    const { error: err1 } = await supabase.from('agendamentos').delete().eq('id', id);
+    const { error: err2 } = await supabase.from('appointments').delete().eq('id', id);
+
+    if (err1 && err2) {
+      console.warn("[SERVER] Erro ao deletar em ambas as tabelas:", err1.message, err2.message);
+    }
+
+    return res.json({ success: true, message: "Agendamento excluído com sucesso" });
+  } catch (err: any) {
+    console.error("[SERVER] Erro na rota DELETE /api/agendamentos/:id:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // --- ROTA PÚBLICA: BUSCAR AGENDAMENTO PARA PRÉ-CADASTRO ---
 app.get("/api/public/appointment", async (req, res) => {
   try {
     const { phone, id } = req.query;
-    let query = supabase.from('agendamentos').select('*');
-    if (id && id !== '1' && id !== 'undefined') {
-      query = query.eq('id', id);
-    } else if (phone) {
+    
+    // Tenta primeiro por ID se for um ID válido
+    if (id && id !== '1' && id !== 'undefined' && id !== 'null' && id !== 'test-123') {
+      const { data: idData } = await supabase.from('agendamentos').select('*').eq('id', id);
+      if (idData && idData.length > 0) {
+        return res.json({ success: true, appointment: idData[0] });
+      }
+    }
+
+    if (phone) {
       const clean = String(phone).replace(/\D/g, '');
-      query = query.ilike('paciente_telefone', `%${clean}%`);
-    } else {
-      return res.status(400).json({ error: "Telefone ou ID do agendamento é obrigatório" });
+      const cleanWithout55 = clean.startsWith('55') && clean.length > 10 ? clean.slice(2) : clean;
+      
+      const { data, error } = await supabase
+        .from('agendamentos')
+        .select('*')
+        .or(`paciente_telefone.ilike.%${clean}%,paciente_telefone.ilike.%${cleanWithout55}%`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        return res.json({ success: true, appointment: data[0] });
+      }
     }
 
-    const { data, error } = await query.order('data_hora_inicio', { ascending: false }).limit(1);
-    if (error) throw error;
+    return res.json({ success: true, appointment: null });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    if (data && data.length > 0) {
-      return res.json({ success: true, appointment: data[0] });
-    } else {
-      return res.json({ success: true, appointment: null });
+// --- ROTA PÚBLICA: OBTER DADOS DA ANAMNESE SUBMETIDA ---
+app.get("/api/public/anamnese-data", async (req, res) => {
+  try {
+    const { phone, id } = req.query;
+    const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
+    const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+
+    // 1. Verificar no Cache em Memória
+    if (id && anamneseStore.has(String(id))) {
+      return res.json({ success: true, data: anamneseStore.get(String(id)) });
     }
+    if (cleanPhone && anamneseStore.has(cleanPhone)) {
+      return res.json({ success: true, data: anamneseStore.get(cleanPhone) });
+    }
+    if (cleanWithout55 && anamneseStore.has(cleanWithout55)) {
+      return res.json({ success: true, data: anamneseStore.get(cleanWithout55) });
+    }
+
+    // 2. Tentar buscar em Supabase anamnese_pre_consulta
+    try {
+      let query = supabase.from('anamnese_pre_consulta').select('*');
+      if (id && id !== '1' && id !== 'undefined' && id !== 'null') {
+        query = query.eq('agendamento_id', id);
+      } else if (cleanPhone) {
+        query = query.or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
+      }
+      const { data } = await query.order('created_at', { ascending: false }).limit(1);
+      if (data && data.length > 0) {
+        return res.json({ success: true, data: data[0] });
+      }
+    } catch (e) {
+      // Ignora erro se tabela não existir
+    }
+
+    return res.json({ success: true, data: null });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -695,23 +781,10 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
       foto_url
     } = req.body;
 
-    // 1. Se houver ID de agendamento, atualiza status para 'confirmado' e salva dados
-    if (appointmentId && appointmentId !== '1') {
-      await supabase.from('agendamentos').update({
-        status: 'confirmado',
-        paciente_cpf: paciente_cpf || undefined,
-        cep: endereco?.cep || undefined,
-        logradouro: endereco?.logradouro || undefined,
-        bairro: endereco?.bairro || undefined,
-        cidade: endereco?.cidade || undefined,
-        estado: endereco?.estado || undefined,
-        numero: endereco?.numero || undefined,
-        complemento: endereco?.complemento || undefined
-      }).eq('id', appointmentId);
-    }
+    const cleanPhone = paciente_telefone ? String(paciente_telefone).replace(/\D/g, '') : '';
+    const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
 
-    // 2. Salva registro de anamnese pré-consulta no banco
-    const { data, error } = await supabase.from('anamnese_pre_consulta').insert([{
+    const anamneseRecord = {
       agendamento_id: appointmentId || null,
       paciente_nome,
       paciente_telefone,
@@ -723,10 +796,64 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
       observacoes_clinicas: observacoesClinicas,
       foto_url,
       created_at: new Date().toISOString()
-    }]).select();
+    };
 
-    if (error) {
-      console.warn("Aviso ao salvar em anamnese_pre_consulta (tabela pode não existir, ignorando silenciosamente):", error.message);
+    // Armazena em memória para garantia imediata
+    if (appointmentId) anamneseStore.set(String(appointmentId), anamneseRecord);
+    if (cleanPhone) anamneseStore.set(cleanPhone, anamneseRecord);
+    if (cleanWithout55) anamneseStore.set(cleanWithout55, anamneseRecord);
+
+    // 1. Se houver ID de agendamento, atualiza status para 'confirmado' e salva dados no agendamento
+    if (appointmentId && appointmentId !== '1') {
+      try {
+        await supabase.from('agendamentos').update({
+          status: 'confirmado',
+          paciente_cpf: paciente_cpf || undefined,
+          cep: endereco?.cep || undefined,
+          logradouro: endereco?.logradouro || undefined,
+          bairro: endereco?.bairro || undefined,
+          cidade: endereco?.cidade || undefined,
+          estado: endereco?.estado || undefined,
+          numero: endereco?.numero || undefined,
+          complemento: endereco?.complemento || undefined
+        }).eq('id', appointmentId);
+      } catch (err) {
+        console.warn("Erro ao atualizar agendamento em Supabase:", err);
+      }
+    }
+
+    // 2. Salva registro de anamnese pré-consulta no banco
+    try {
+      await supabase.from('anamnese_pre_consulta').insert([anamneseRecord]);
+    } catch (error: any) {
+      console.warn("Aviso ao salvar em anamnese_pre_consulta:", error.message);
+    }
+
+    // 3. Notificar o n8n sobre a conclusão do formulário de anamnese
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || "https://n8n.makprojetosmake.com.br/webhook-test/16464b5a-567f-44d8-b17a-2f4e48184278";
+    if (n8nWebhookUrl) {
+      axios.post(n8nWebhookUrl, {
+        event: "anamnese.submitted",
+        event_type: "form_completed",
+        appointmentId: appointmentId || null,
+        status: "confirmado",
+        paciente: {
+          nome: paciente_nome,
+          telefone: paciente_telefone,
+          cpf: paciente_cpf,
+          data_nascimento: data_nascimento,
+          endereco: endereco,
+          alertas_clinicos: alertas_clinicos,
+          medicamentos: medicamentosAtuais,
+          observacoes: observacoesClinicas,
+          foto_url: foto_url
+        },
+        timestamp: new Date().toISOString()
+      }).then(() => {
+        addLog(`📲 Notificação enviada com sucesso para o n8n!`);
+      }).catch((e) => {
+        console.warn("Aviso ao enviar evento de anamnese para o n8n:", e.message);
+      });
     }
 
     addLog(`✅ Anamnese pré-consulta pública submetida com sucesso por ${paciente_nome} (${paciente_telefone})`);
@@ -734,7 +861,7 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
     res.json({
       success: true,
       message: "Pré-cadastro e confirmação de presença concluídos com sucesso!",
-      record: data ? data[0] : null
+      record: anamneseRecord
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -1058,8 +1185,8 @@ async function updateEvolutionWebhook() {
   try {
     addLog(`🔄 Tentando atualizar webhook da Evolution...`);
     
-    // Voltamos para o n8n como gateway público, pois o App é protegido
-    const webhookUrl = process.env.N8N_WEBHOOK_URL || "https://n8n.makprojetosmake.com.br/webhook/16464b5a-567f-44d8-b17a-2f4e48184278";
+    // Usa a URL do webhook do n8n configurada no .env ou a URL de teste informada pelo usuário
+    const webhookUrl = process.env.N8N_WEBHOOK_URL || "https://n8n.makprojetosmake.com.br/webhook-test/16464b5a-567f-44d8-b17a-2f4e48184278";
     addLog(`🌐 Reconfigurando webhook para n8n: ${webhookUrl}`);
     
     addLog(`📍 URL Alvo: ${webhookUrl}`);
@@ -1360,7 +1487,7 @@ app.post("/api/send-message", async (req, res) => {
       return res.status(400).json({ error: "Telefone é obrigatório" });
     }
 
-    const cleanPhone = phone.split('@')[0];
+    const cleanPhone = formatPhoneBR(phone);
     addLog(`📤 Enviando mensagem manual para ${cleanPhone}...`);
     
     const payload: any = {

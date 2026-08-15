@@ -19,6 +19,7 @@ import {
   Check
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+import { calculateAge, formatDateMask } from '../lib/utils';
 
 interface PublicAnamneseViewProps {
   initialPhone?: string;
@@ -62,8 +63,10 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [aceitouTermoVeracidade, setAceitouTermoVeracidade] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Buscar agendamento ao carregar
+  // Buscar agendamento e anamnese prévia ao carregar
   useEffect(() => {
     const fetchAppointment = async () => {
       setIsLoading(true);
@@ -91,6 +94,23 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
             if (data.appointment.numero) setNumero(data.appointment.numero);
             if (data.appointment.complemento) setComplemento(data.appointment.complemento);
           }
+
+          // Tenta carregar anamnese pré-existente
+          try {
+            const resAnamnese = await fetch(`/api/public/anamnese-data?phone=${encodeURIComponent(phoneParam)}&id=${encodeURIComponent(idParam)}`);
+            const anamneseJson = await resAnamnese.json();
+            if (anamneseJson.data) {
+              const rec = anamneseJson.data;
+              if (rec.paciente_nome) setNome(rec.paciente_nome);
+              if (rec.paciente_cpf) setCpf(rec.paciente_cpf);
+              if (rec.data_nascimento) setDataNascimento(rec.data_nascimento);
+              if (rec.foto_url) setPhotoPreview(rec.foto_url);
+              if (rec.medicamentos_atuais || rec.medicamentosAtuais) setMedicamentosAtuais(rec.medicamentos_atuais || rec.medicamentosAtuais);
+              if (rec.observacoes_clinicas || rec.observacoesClinicas) setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas);
+            }
+          } catch (e) {
+            // Ignora erro
+          }
         }
       } catch (err) {
         console.error("Erro ao buscar agendamento público:", err);
@@ -102,22 +122,26 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
     fetchAppointment();
   }, [initialPhone, initialAppointmentId]);
 
-  // Câmera
+  // Câmera ao vivo ou fallback input
   const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
-        audio: false
-      });
-      setIsWebcamActive(true);
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-      }, 150);
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
+          audio: false
+        });
+        setIsWebcamActive(true);
+        setTimeout(() => {
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch(() => {});
+          }
+        }, 150);
+      } else {
+        cameraInputRef.current?.click();
+      }
     } catch (err) {
-      toast.error("Não foi possível acessar a câmera. Permita o acesso ou envie um arquivo de foto.");
+      cameraInputRef.current?.click();
     }
   };
 
@@ -149,8 +173,34 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX_SIZE = 800;
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height = Math.round((height * MAX_SIZE) / width);
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width = Math.round((width * MAX_SIZE) / height);
+              height = MAX_SIZE;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            setPhotoPreview(canvas.toDataURL('image/jpeg', 0.82));
+            toast.success("Foto anexada com sucesso!");
+          }
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -367,10 +417,30 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
                       >
                         <Video className="w-3 h-3" /> Câmera
                       </button>
-                      <label className="flex-1 py-1.5 bg-white border text-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer">
-                        <Upload className="w-3 h-3" /> Galeria
-                        <input type="file" accept="image/*" capture="user" onChange={handlePhotoUpload} className="hidden" />
-                      </label>
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        className="flex-1 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-slate-50"
+                      >
+                        <Upload className="w-3 h-3 text-blue-600" /> Galeria
+                      </button>
+                      
+                      {/* Inputs ocultos de câmera e galeria */}
+                      <input 
+                        ref={cameraInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        capture="user" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
+                      <input 
+                        ref={galleryInputRef} 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
                     </div>
                   </div>
                 )}
@@ -414,12 +484,22 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Data de Nascimento</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-600">Data de Nascimento (DD/MM/AAAA)</label>
+                    {calculateAge(dataNascimento) !== null && (
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
+                        {calculateAge(dataNascimento)} anos
+                      </span>
+                    )}
+                  </div>
                   <input
-                    type="date"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="Ex: 08/05/1966"
                     value={dataNascimento}
-                    onChange={(e) => setDataNascimento(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-600 focus:bg-white"
+                    onChange={(e) => setDataNascimento(formatDateMask(e.target.value))}
+                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
               </div>
