@@ -42,16 +42,16 @@ export const SPECIALTIES: SpecialtyTemplate[] = [
   },
   {
     id: 'biological_dentistry',
-    name: '🦷 Odonto Biológica & Harmonização',
+    name: '🦷 Odonto Biológica & Implantes Zircônia',
     icon: 'Sparkles',
-    description: 'Odontologia biológica, remoção segura de amálgama, focos de interferência, ATM e harmonização orofacial.',
-    promptContext: 'Foque em Odontologia Biológica e Saúde Integrativa (módulo Dra. Lucy). Mapeie focos dentários de inflamação crônica, amálgama/metais pesados, biocompatibilidade, ATM, terapia neural orofacial e harmonização facial.',
+    description: 'Odontologia biológica, implantes metal-free em zircônia, remoção segura de amálgama (SMART), cavitações e terapia neural.',
+    promptContext: 'Foque em Odontologia Biológica, Implantes Metal-Free em Zircônia e Saúde Integrativa (módulo Dra. Lucy). Mapeie implantes cerâmicos, remoção segura de amálgama (SMART), focos dentários de inflamação crônica, cavitações NICO, biocompatibilidade de materiais, ATM, terapia neural e suplementação de osteointegração.',
     fields: [
-      { id: 'presenca_amalgama', label: 'Presença de Amálgama/Metais?', type: 'boolean' },
-      { id: 'focos_interferencia', label: 'Focos de Interferência Dentária', type: 'text', placeholder: 'Ex: Dentes tratados canal, cavitações, sisos' },
-      { id: 'dor_atm_bruxismo', label: 'Disfunção de ATM / Bruxismo', type: 'boolean' },
-      { id: 'terapia_neural_odontologica', label: 'Aplicação Terapia Neural / Procaína', type: 'boolean' },
-      { id: 'pontos_harmonizacao', label: 'Pontos Harmonização Orofacial', type: 'text', placeholder: 'Ex: Masseter, terço inferior, ácido hialurônico, toxina' }
+      { id: 'implante_zirconia_ativo', label: 'Implante Zircônia (Metal-Free)', type: 'boolean' },
+      { id: 'implante_elementos', label: 'Elementos Dentários do Implante', type: 'text', placeholder: 'Ex: Elementos 11, 21, 36' },
+      { id: 'presenca_amalgama', label: 'Presença de Amálgama / Metais?', type: 'boolean' },
+      { id: 'focos_interferencia', label: 'Focos / Cavitações (NICO/FDOK)', type: 'text', placeholder: 'Ex: Dentes tratados canal, cavitações, sisos' },
+      { id: 'terapia_neural_odontologica', label: 'Aplicação Terapia Neural / Procaína', type: 'boolean' }
     ]
   },
   {

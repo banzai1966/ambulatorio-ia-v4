@@ -2700,6 +2700,7 @@ export default function App() {
               setShowAgenda(false);
               setShowHistory(false);
               setShowMessageHistory(false);
+              setShowFinancial(false);
               setShowDashboard(true);
               setSelectedPatient(null);
             }}
@@ -2722,6 +2723,7 @@ export default function App() {
                 setShowAgenda(false);
                 setShowHistory(false);
                 setShowMessageHistory(false);
+                setShowFinancial(false);
                 setSelectedPatient(null);
               }}
               className={cn(
@@ -2742,12 +2744,13 @@ export default function App() {
                 setShowAgenda(false);
                 setShowHistory(false);
                 setShowMessageHistory(false);
+                setShowFinancial(false);
                 setSelectedPatient(null);
                 setCurrentRecord(null);
               }}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
-                (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !selectedPatient)
+                (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial && !selectedPatient)
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
                   : "text-slate-300 hover:bg-slate-800 hover:text-white"
               )}
@@ -2763,6 +2766,7 @@ export default function App() {
                 setShowMessageHistory(false);
                 setShowDashboard(false);
                 setShowManageTeam(false);
+                setShowFinancial(false);
                 setSelectedPatient(null);
               }}
               className={cn(
@@ -2783,6 +2787,7 @@ export default function App() {
                 setShowAgenda(false);
                 setShowDashboard(false);
                 setShowManageTeam(false);
+                setShowFinancial(false);
                 setSelectedPatient(null);
               }}
               className={cn(
@@ -2846,6 +2851,7 @@ export default function App() {
                   setShowHistory(false);
                   setShowMessageHistory(false);
                   setShowDashboard(false);
+                  setShowFinancial(false);
                   setSelectedPatient(null);
                 }}
                 className={cn(
@@ -3083,10 +3089,11 @@ export default function App() {
                       sugestao_conduta: ''
                     });
                     setShowDashboard(false);
+                    setShowFinancial(false);
                   }}
-                  onOpenAgenda={() => { setShowAgenda(true); setShowDashboard(false); }}
-                  onOpenMessages={() => { setShowMessageHistory(true); setShowDashboard(false); }}
-                  onOpenHistory={() => { setShowHistory(true); setShowDashboard(false); }}
+                  onOpenAgenda={() => { setShowAgenda(true); setShowDashboard(false); setShowFinancial(false); }}
+                  onOpenMessages={() => { setShowMessageHistory(true); setShowDashboard(false); setShowFinancial(false); }}
+                  onOpenHistory={() => { setShowHistory(true); setShowDashboard(false); setShowFinancial(false); }}
                 />
               </motion.div>
             ) : showAgenda ? (
@@ -3098,11 +3105,13 @@ export default function App() {
               setShowMessageHistory(true);
               setShowAgenda(false);
               setShowDashboard(false);
+              setShowFinancial(false);
             }}
             onStartConsultation={(paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade) => {
               console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "convenio:", convenio, "especialidade:", especialidade);
               setShowAgenda(false);
               setShowDashboard(false);
+              setShowFinancial(false);
               setSelectedPatient(paciente);
               setSelectedPatientPhone(telefone || '');
               setSelectedAppointmentReason(motivo || '');

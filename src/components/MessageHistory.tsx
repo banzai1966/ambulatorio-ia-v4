@@ -6,7 +6,7 @@ import {
   MessageSquare, 
   ArrowLeft, 
   Paperclip, 
-  Image, 
+  Image as ImageIcon, 
   Loader2, 
   Play, 
   Pause, 
@@ -20,7 +20,16 @@ import {
   ChevronRight,
   ChevronLeft,
   FileText,
-  QrCode
+  QrCode,
+  UserPlus,
+  Search,
+  Check,
+  CheckCheck,
+  User,
+  Phone,
+  Calendar,
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import WhatsAppQRModal from './WhatsAppQRModal';
@@ -41,6 +50,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const [loading, setLoading] = useState(true);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(initialPhone || null);
   const [patientHistory, setPatientHistory] = useState<any[]>([]);
+  const [patientNamesMap, setPatientNamesMap] = useState<Record<string, string>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [replyText, setReplyText] = useState('');
   const [activeTab, setActiveTab] = useState<'chat' | 'history'>('chat');
@@ -49,7 +59,17 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const [recordingTime, setRecordingTime] = useState(0);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  const [newChatPhone, setNewChatPhone] = useState('');
+  const [newChatName, setNewChatName] = useState('');
   const [pendingMedia, setPendingMedia] = useState<{ base64: string, type: string, name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'message' | 'conversation';
+    id?: number;
+    phone?: string;
+    name?: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -86,11 +106,43 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const formatMessageTimestamp = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    } catch {
+      return '';
+    }
+  };
+
   useEffect(() => {
     if (initialPhone) {
       setSelectedPhone(initialPhone);
     }
   }, [initialPhone]);
+
+  // Carrega mapeamento de nomes de pacientes
+  const fetchPatientNames = async () => {
+    try {
+      const { data } = await supabase
+        .from('prontuarios')
+        .select('paciente_telefone, paciente_nome_completo');
+      
+      if (data && data.length > 0) {
+        const map: Record<string, string> = {};
+        data.forEach(p => {
+          if (p.paciente_telefone && p.paciente_nome_completo) {
+            const norm = normalizePhone(p.paciente_telefone);
+            if (norm) map[norm] = p.paciente_nome_completo;
+          }
+        });
+        setPatientNamesMap(map);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar mapa de nomes:", err);
+    }
+  };
 
   useEffect(() => {
     console.log("[IA] Supabase Config:", {
@@ -99,18 +151,17 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     });
     
     fetchMessages();
+    fetchPatientNames();
     
     // Ouvinte em tempo real para novas mensagens
     const channel = supabase
       .channel('public:mensagens')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, (payload) => {
         console.log('Nova mensagem em tempo real:', payload);
-        // Adiciona a nova mensagem ao estado se ela ainda não estiver lá
         setMessages(prev => {
           if (!payload.new || !payload.new.id) return prev;
           if (prev.some(m => m.id === payload.new.id)) return prev;
           const newMsg = payload.new as Message;
-          // Mantemos a ordem (antigas em cima, novas embaixo)
           return [...prev, newMsg];
         });
       })
@@ -142,11 +193,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
       const tryFetch = async (cols: string, useFilter: boolean = true, attempt: number = 1): Promise<any> => {
         if (attempt > 10) throw new Error("Muitas tentativas de busca falharam devido a erros de schema.");
         
-        console.log(`fetchPatientHistory (Tentativa ${attempt}): Colunas: ${cols.substring(0, 30)}... (Filtro: ${useFilter})`);
-        
         try {
-          // Tenta join com profiles apenas se cols incluir medico_id e for a tentativa inicial
-          // Removido join problemático profiles:medico_id(full_name) que causa PGRST200
           let query = supabase.from('prontuarios').select(cols);
           
           if (useFilter && cols.includes('paciente_telefone')) {
@@ -162,9 +209,6 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
           const { data, error } = await query;
           
           if (error) {
-            console.warn(`fetchPatientHistory (Erro ${attempt}):`, error.message);
-            
-            // Se erro de coluna inexistente ou cache de schema
             const isColumnError = error.message.toLowerCase().includes('column') || 
                                  error.message.toLowerCase().includes('find the') ||
                                  error.message.toLowerCase().includes('not found') ||
@@ -177,20 +221,13 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                 error.message.match(/column '([^']+)'/)?.[1];
               
               if (missing) {
-                console.log(`fetchPatientHistory: Removendo coluna problemática '${missing}'...`);
-                
                 if (missing === 'paciente_telefone') {
                   return tryFetch(cols, false, attempt + 1);
                 }
-                
                 const newCols = cols.split(',').map(c => c.trim()).filter(c => c !== missing).join(', ');
                 if (newCols && newCols !== cols) return tryFetch(newCols, useFilter, attempt + 1);
               }
-              
-              // Se não identificou a coluna mas deu erro de coluna, tenta sem filtro primeiro
               if (useFilter) return tryFetch(cols, false, attempt + 1);
-              
-              // Fallback para busca mínima se não identificou a coluna ou se newCols falhou
               if (cols !== 'id, paciente_nome_completo, resumo_formatado') {
                 return tryFetch('id, paciente_nome_completo, resumo_formatado', false, attempt + 1);
               }
@@ -222,58 +259,41 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     }
   };
 
-  // Função para normalizar a URL da mídia (remove espaços e garante o prefixo correto)
   const formatMediaUrl = (url: string | null, type: string) => {
     if (!url) return '';
-    // Remove TODOS os espaços, quebras de linha e caracteres invisíveis do base64
     const cleanUrl = url.trim().replace(/\s/g, '');
-    
     if (cleanUrl.startsWith('data:')) return cleanUrl;
     if (cleanUrl.startsWith('http')) return cleanUrl;
     
-    // Se for um Base64 puro (comprido e sem pontos, que indicariam uma URL/arquivo), adiciona o prefixo
     if (cleanUrl.length > 50 && !cleanUrl.includes('.')) {
       if (type.toLowerCase().includes('imagem') || type.toLowerCase().includes('image')) {
-        // Detecta se é PNG ou JPEG pelo início do base64
-        if (cleanUrl.startsWith('iVBORw0KGgo')) {
-          return `data:image/png;base64,${cleanUrl}`;
-        }
-        if (cleanUrl.startsWith('/9j/')) {
-          return `data:image/jpeg;base64,${cleanUrl}`;
-        }
+        if (cleanUrl.startsWith('iVBORw0KGgo')) return `data:image/png;base64,${cleanUrl}`;
+        if (cleanUrl.startsWith('/9j/')) return `data:image/jpeg;base64,${cleanUrl}`;
         return `data:image/jpeg;base64,${cleanUrl}`;
       }
       if (type.toLowerCase().includes('audio')) {
-        // WhatsApp áudio costuma ser ogg/opus
         return `data:audio/ogg;base64,${cleanUrl}`;
       }
       if (type.toLowerCase().includes('document') || type.toLowerCase().includes('pdf')) {
         return `data:application/pdf;base64,${cleanUrl}`;
       }
     }
-    
     return cleanUrl;
   };
 
   const cleanMessageText = (text: string | null) => {
     if (!text) return '';
-    
     let processedText = text.trim();
-    // Remove lixo de JSON que às vezes vem da API (ex: {"conversation": "Olá"})
     if (processedText.startsWith('{') && (processedText.includes('":') || processedText.includes('":'))) {
       try {
-        // Tenta limpar aspas extras ou caracteres de escape
         const cleanJson = processedText.replace(/\\"/g, '"');
         const obj = JSON.parse(cleanJson);
         processedText = obj.conversation || obj.text || obj.message || processedText;
       } catch (e) {
-        // Fallback com Regex se o JSON estiver malformado
         const match = processedText.match(/"conversation"\s*:\s*"([^"]+)"/);
         if (match) processedText = match[1];
       }
     }
-
-    // Se o texto ainda parecer um objeto JSON, tenta extrair o valor
     if (processedText.includes('{"') || processedText.includes('"}')) {
        processedText = processedText.replace(/\{.*"conversation":"([^"]+)".*\}/, '$1');
     }
@@ -293,8 +313,6 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     console.time(`[PERF] fetchMessages-${page}`);
     try {
       if (showLoading) setLoading(true);
-      console.log(`[IA] Iniciando busca de mensagens (página ${page}, tamanho ${pageSize})...`);
-
       const from = page * pageSize;
       const to = from + pageSize - 1;
 
@@ -304,27 +322,16 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         .order('created_at', { ascending: false })
         .range(from, to);
         
-      if (error) {
-        console.error("[IA] Erro do Supabase ao buscar mensagens:", error);
-        throw error;
-      }
+      if (error) throw error;
       
       if (data && data.length > 0) {
-        console.log(`[IA] ${data.length} mensagens carregadas.`);
-        
-        // data vem ordenado por created_at DESC (mais novos primeiro)
-        // Precisamos reverter para que fiquem em ordem cronológica (mais antigos primeiro)
         const reversedData = [...data].reverse();
-        
         if (page === 0) {
           setMessages(reversedData);
         } else {
-          // Se estivermos carregando páginas anteriores (mensagens mais antigas),
-          // elas devem vir ANTES das mensagens que já temos.
           setMessages(prev => [...reversedData, ...prev]);
         }
       } else {
-        console.log("[IA] Nenhum dado retornado ou lista vazia.");
         if (page === 0) setMessages([]);
       }
     } catch (err: any) {
@@ -339,22 +346,16 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const contacts = useMemo(() => {
     if (messages.length === 0) return [];
 
-    // Agrupa por telefone normalizado para evitar duplicatas
-    const normalizedMap = new Map<string, string>(); // norm -> original
-    
-    // Deduplicação de mensagens por ID e conteúdo/tempo para a lista de contatos
+    const normalizedMap = new Map<string, string>();
     const uniqueMessages = Array.from(new Map(messages.filter(m => m && m.id).map(m => [m.id, m])).values());
     
     uniqueMessages.forEach(m => {
       const norm = normalizePhone(m.telefone_cliente);
       const key = norm || m.telefone_cliente || 'desconhecido';
-      
       if (!normalizedMap.has(key)) {
         normalizedMap.set(key, m.telefone_cliente || 'Sem Número');
       }
     });
-
-    console.log(`[IA] Gerando lista de contatos para ${normalizedMap.size} números únicos.`);
 
     return Array.from(normalizedMap.keys()).map(normPhone => {
       const originalPhone = normalizedMap.get(normPhone)!;
@@ -381,9 +382,12 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
       if (!isAudio && mUrl && (msgText.includes('áudio') || msgText.includes('audio'))) isAudio = true;
       
+      const patientName = patientNamesMap[normPhone];
+
       return {
         phone: originalPhone,
         normPhone,
+        patientName,
         lastMessage: lastMsg,
         displayType: isImage ? '📷 Imagem' : isAudio ? '🎵 Áudio' : 'Mensagem'
       };
@@ -394,12 +398,11 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
       const dateB = b?.lastMessage?.created_at ? new Date(b.lastMessage.created_at).getTime() : 0;
       return dateB - dateA;
     });
-  }, [messages]);
+  }, [messages, patientNamesMap]);
 
   const handleReply = async (phone: string) => {
     if (isSendingMessage || (!replyText.trim() && !pendingMedia)) return;
     
-    console.log(`[CHAT] 📤 Enviando resposta para ${phone}...`);
     setIsSendingMessage(true);
     try {
       await sendWhatsAppMessage(
@@ -412,8 +415,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
       
       setReplyText('');
       setPendingMedia(null);
-      // fetchMessages(); // Removido: O Supabase Realtime já adiciona a mensagem na tela automaticamente. Chamar isso causa duplicação visual.
-      toast.success("Mensagem enviada!");
+      toast.success("Mensagem enviada com sucesso!");
     } catch (err: any) {
       console.error("Erro ao enviar mensagem:", err);
       const errorMessage = err.response?.data?.error || err.message || "Erro desconhecido";
@@ -427,7 +429,6 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
   const handleSendMedia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    console.log("[CHAT] Arquivo selecionado:", file?.name, "Tipo:", file?.type);
     if (!file || !selectedPhone) return;
 
     const reader = new FileReader();
@@ -442,14 +443,14 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
           type: isImage ? 'image' : 'document',
           name: file.name
         });
-        toast.success(`${isImage ? 'Imagem' : (isPdf ? 'PDF' : 'Documento')} "${file.name}" pronto para enviar.`);
+        toast.success(`${isImage ? 'Imagem' : (isPdf ? 'PDF' : 'Documento')} pronto para envio.`);
       } catch (err) {
         console.error("Erro ao ler arquivo:", err);
         toast.error("Erro ao ler arquivo.");
       }
     };
     reader.readAsDataURL(file);
-    e.target.value = ''; // Limpa o input para permitir selecionar o mesmo arquivo novamente
+    e.target.value = '';
   };
 
   const startRecordingAudio = async () => {
@@ -459,8 +460,6 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Detectar formato suportado
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
         ? 'audio/webm' 
         : MediaRecorder.isTypeSupported('audio/ogg') 
@@ -475,16 +474,12 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          console.log("Audio chunk received:", event.data.size);
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = async () => {
-        console.log("Recording stopped, total chunks:", audioChunksRef.current.length);
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/ogg' });
-        console.log("Audio blob created:", audioBlob.size);
-        
         const reader = new FileReader();
         reader.onload = async () => {
           try {
@@ -493,7 +488,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
             await sendMediaToBackend(base64, 'audio', 'audio.ogg');
           } catch (err) {
             console.error("Erro ao processar áudio:", err);
-            alert("Erro ao processar áudio.");
+            toast.error("Erro ao processar áudio.");
           } finally {
             setIsSendingMedia(false);
           }
@@ -502,26 +497,11 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorder.start(1000); // Coleta dados a cada 1 segundo
+      mediaRecorder.start(1000);
       setIsRecordingAudio(true);
-      console.log("Recording started with mimeType:", mimeType || 'default');
     } catch (err: any) {
       console.error("Erro ao acessar microfone:", err);
-      const errorName = err.name || '';
-      const errorMessage = err.message || '';
-      
-      if (errorMessage === "WEBVIEW_ERROR") {
-        toast.error("Microfone Bloqueado! Você está no navegador interno (WhatsApp/Instagram). Copie o link e cole diretamente no Chrome ou Safari para gravar áudios.");
-      } else if (
-        errorName === 'NotAllowedError' || 
-        errorName === 'PermissionDeniedError' || 
-        errorMessage.toLowerCase().includes('permission denied') ||
-        errorMessage.toLowerCase().includes('permissão negada')
-      ) {
-        toast.error("Permissão de microfone negada. Clique no cadeado (🔒) na barra de endereços e ative o Microfone.");
-      } else {
-        toast.error(`Erro ao acessar microfone: ${errorMessage || 'Erro desconhecido'}`);
-      }
+      toast.error("Permissão de microfone não concedida.");
     }
   };
 
@@ -534,251 +514,352 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
   const sendMediaToBackend = async (base64: string, mediaType: string, fileName: string) => {
     if (!selectedPhone) return;
-    
     try {
       await sendWhatsAppMessage(selectedPhone, '', base64, mediaType, fileName);
       fetchMessages();
-      toast.success("Mídia enviada!");
+      toast.success("Áudio enviado!");
     } catch (err: any) {
       console.error("Erro ao enviar mídia:", err);
       toast.error(`Erro ao enviar mídia: ${err.message}`);
     }
   };
 
-  const syncContacts = async () => {
-    try {
-      const { data: allMessages } = await supabase.from('mensagens').select('telefone_cliente');
-      const uniquePhones = Array.from(new Set(allMessages?.map(m => normalizePhone(m.telefone_cliente)) || []));
-      
-      for (const phone of uniquePhones) {
-        const { data: existingPatient } = await supabase
-          .from('prontuarios')
-          .select('id')
-          .eq('paciente_telefone', phone)
-          .maybeSingle();
-
-        if (!existingPatient) {
-          await supabase.from('prontuarios').insert([{
-            paciente_nome_completo: `Paciente (${phone})`,
-            paciente_telefone: phone,
-            paciente_status: 'Novo Contato'
-          }]);
-        }
-      }
-      alert("Sincronização concluída!");
-      fetchMessages();
-    } catch (err) {
-      console.error("Erro ao sincronizar:", err);
-      alert("Erro ao sincronizar contatos.");
-    }
+  const handleDeleteMessage = (msgId: number) => {
+    setDeleteTarget({
+      type: 'message',
+      id: msgId
+    });
   };
 
-  const cleanupDuplicates = async () => {
-    try {
-      const { data: prontuarios } = await supabase.from('prontuarios').select('id, paciente_telefone');
-      if (!prontuarios) return;
-
-      const phoneMap = new Map<string, any[]>();
-      prontuarios.forEach(p => {
-        if (!p.paciente_telefone) return;
-        const phone = normalizePhone(p.paciente_telefone);
-        if (!phoneMap.has(phone)) phoneMap.set(phone, []);
-        phoneMap.get(phone)?.push(p);
-      });
-
-      let deletedCount = 0;
-      for (const [phone, patients] of phoneMap) {
-        if (patients.length > 1) {
-          // Mantém o primeiro, deleta o resto
-          const toDelete = patients.slice(1);
-          for (const p of toDelete) {
-            await supabase.from('prontuarios').delete().eq('id', p.id);
-            deletedCount++;
-          }
-        }
-      }
-      alert(`Limpeza concluída! ${deletedCount} duplicados removidos.`);
-      fetchMessages();
-    } catch (err) {
-      console.error("Erro ao limpar duplicados:", err);
-      alert("Erro ao limpar duplicados.");
-    }
+  const handleDeleteConversation = (phone: string, name?: string) => {
+    setDeleteTarget({
+      type: 'conversation',
+      phone,
+      name: name || patientNamesMap[normalizePhone(phone)] || phone
+    });
   };
 
-  /*
-  const handleGenerateSummary = async () => {
-    if (!selectedPhone || messages.length === 0) return;
-    
-    setIsGeneratingSummary(true);
-    setShowSummary(true);
-    try {
-      const filteredMessages = messages.filter(m => normalizePhone(m.telefone_cliente) === normalizePhone(selectedPhone));
-      
-      // Busca as mídias (áudios) para enviar para a IA se necessário
-      const messagesWithMedia = await Promise.all(filteredMessages.map(async (m) => {
-        const url = m.midia_url;
-        const isAudio = (m.tipo_midia || m.tipo || '').toLowerCase().includes('audio') || 
-                        (url && (url.includes('audio') || url.includes('ogg') || (url.length > 100 && !url.includes('.'))));
-        
-        if (isAudio && url) {
-          // Se for base64, já temos o dado. Se for URL, precisaríamos baixar (mas vamos assumir base64 por enquanto)
-          if (url.startsWith('data:audio')) {
-            return { ...m, audioData: url.split(',')[1], mimeType: url.split(';')[0].split(':')[1] };
-          } else if (url.length > 100 && !url.includes('.')) {
-            return { ...m, audioData: url, mimeType: 'audio/ogg' };
-          }
-        }
-        return m;
-      }));
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
 
-      const summary = await generateClinicalSummary(messagesWithMedia);
-      setClinicalSummary(summary);
-      toast.success("Resumo clínico gerado com sucesso!");
+    try {
+      if (deleteTarget.type === 'message' && deleteTarget.id) {
+        const msgId = deleteTarget.id;
+        const { error } = await supabase.from('mensagens').delete().eq('id', msgId);
+        if (error) throw error;
+
+        setMessages(prev => prev.filter(m => m.id !== msgId));
+        toast.success("Mensagem apagada com sucesso!");
+      } else if (deleteTarget.type === 'conversation' && deleteTarget.phone) {
+        const phone = deleteTarget.phone;
+        const norm = normalizePhone(phone);
+
+        const targetIds = messages
+          .filter(m => {
+            const mNorm = normalizePhone(m.telefone_cliente);
+            return (mNorm && mNorm === norm) || m.telefone_cliente === phone;
+          })
+          .map(m => m.id);
+
+        if (targetIds.length > 0) {
+          const { error } = await supabase.from('mensagens').delete().in('id', targetIds);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from('mensagens').delete().eq('telefone_cliente', phone);
+          if (error) throw error;
+        }
+
+        setMessages(prev => prev.filter(m => {
+          const mNorm = normalizePhone(m.telefone_cliente);
+          return mNorm !== norm && m.telefone_cliente !== phone;
+        }));
+
+        if (selectedPhone === phone || (selectedPhone && normalizePhone(selectedPhone) === norm)) {
+          setSelectedPhone(null);
+        }
+
+        toast.success("Conversa excluída com sucesso!");
+      }
     } catch (err: any) {
-      console.error("Erro ao gerar resumo:", err);
-      toast.error("Falha ao gerar resumo clínico.");
+      console.error("Erro ao excluir:", err);
+      toast.error(`Erro ao excluir: ${err.message || 'Falha ao processar a exclusão'}`);
     } finally {
-      setIsGeneratingSummary(false);
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   };
-  */
 
-  if (loading) return <div className="p-6">Carregando...</div>;
+  // Função para abrir nova conversa com qualquer número de telefone
+  const handleStartNewChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let clean = newChatPhone.replace(/\D/g, '');
+    if (!clean) {
+      toast.error("Digite um número de telefone válido.");
+      return;
+    }
+    // Adiciona o DDI do Brasil (55) se o número tiver 10 ou 11 dígitos
+    if ((clean.length === 10 || clean.length === 11) && !clean.startsWith('55')) {
+      clean = '55' + clean;
+    }
 
-  const win = window as any;
-  const apiKey = (win.process?.env?.API_KEY) || (win.API_KEY);
+    if (newChatName.trim()) {
+      setPatientNamesMap(prev => ({ ...prev, [clean]: newChatName.trim() }));
+      try {
+        await supabase.from('prontuarios').insert([{
+          paciente_nome_completo: newChatName.trim(),
+          paciente_telefone: clean,
+          paciente_status: 'Novo Contato'
+        }]);
+      } catch (err) {
+        console.warn("Aviso ao salvar nome temporário:", err);
+      }
+    }
+
+    setSelectedPhone(clean);
+    setIsNewChatModalOpen(false);
+    setNewChatPhone('');
+    setNewChatName('');
+    toast.success(`Conversa aberta com ${clean}`);
+  };
+
+  if (loading && messages.length === 0) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs h-[650px] flex items-center justify-center p-8">
+        <div className="flex flex-col items-center gap-3 text-slate-500">
+          <Loader2 size={32} className="animate-spin text-emerald-600" />
+          <p className="text-sm font-semibold">Carregando painel do WhatsApp Web...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentPatientName = patientHistory[0]?.paciente_nome_completo || (selectedPhone ? patientNamesMap[normalizePhone(selectedPhone)] : null) || selectedPhone;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm flex h-[600px] relative overflow-hidden">
-      {/* Lista de Contatos */}
-      <div className={`w-1/3 border-r border-slate-100 overflow-y-auto ${selectedPhone ? 'hidden md:block' : 'w-full'}`}>
-        <div className="p-4 border-b border-slate-100 font-bold text-slate-800 flex flex-col gap-2">
-          <div className="flex justify-between items-center">
-            <span>Conversas</span>
-            <div className="flex items-center gap-1.5">
-              <button 
-                onClick={() => setIsQrModalOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all border border-emerald-200"
-                title="Conectar WhatsApp via QR Code"
-              >
-                <QrCode size={14} />
-                <span>Conectar QR</span>
-              </button>
-              <button 
-                onClick={() => {
-                  setLoading(true);
-                  fetchMessages();
-                }} 
-                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                title="Atualizar conversas"
-              >
-                <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-              </button>
-            </div>
-          </div>
-          <input 
-            type="text"
-            placeholder="Buscar paciente..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="p-2 border rounded-lg text-sm font-normal"
-          />
-        </div>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex h-[680px] relative overflow-hidden font-sans">
+      
+      {/* PAINEL ESQUERDO: LISTA DE CONVERSAS (WhatsApp Web) */}
+      <div className={`w-full md:w-80 lg:w-96 border-r border-slate-200 flex flex-col bg-slate-50 ${selectedPhone ? 'hidden md:flex' : 'flex'}`}>
         
-        {contacts.length === 0 && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 rounded-3xl border border-dashed border-slate-200 m-4">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-slate-300 mb-4 shadow-sm">
-              <MessageSquare size={32} />
+        {/* Topo do Painel de Contatos */}
+        <div className="p-3.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+              WA
             </div>
-            <h3 className="text-lg font-bold text-slate-600 mb-2">Nenhuma conversa encontrada</h3>
-            <p className="text-slate-500 text-sm max-w-xs mb-6">
-              Não encontramos mensagens no banco de dados. Verifique se o seu número está conectado ou tente atualizar.
-            </p>
+            <div>
+              <h2 className="font-extrabold text-xs text-slate-800">WhatsApp Clínica</h2>
+              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Conectado
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setIsNewChatModalOpen(true)}
+              className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+              title="Iniciar nova conversa com um telefone"
+            >
+              <UserPlus size={15} />
+              <span className="hidden sm:inline">Nova</span>
+            </button>
             
-            <div className="flex flex-col gap-3 w-full max-w-xs">
-              <button 
-                onClick={() => setIsQrModalOpen(true)}
-                className="flex items-center justify-center gap-2 w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
-              >
-                <QrCode size={18} />
-                Conectar WhatsApp (QR Code)
-              </button>
+            <button 
+              onClick={() => setIsQrModalOpen(true)}
+              className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-slate-200 rounded-xl transition-all"
+              title="QR Code / Status da Conexão"
+            >
+              <QrCode size={18} />
+            </button>
 
-              <button 
-                onClick={() => fetchMessages()}
-                className="flex items-center justify-center gap-2 w-full py-2.5 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-all"
-              >
-                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-                Atualizar Mensagens
-              </button>
-              
-              <div className="p-4 bg-white rounded-xl border border-slate-200 text-left">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Diagnóstico</h4>
-                <ul className="text-[10px] space-y-1 text-slate-500 font-mono">
-                  <li>• Mensagens carregadas: {messages.length}</li>
-                  <li>• Filtro atual: {searchTerm || 'Nenhum'}</li>
-                  <li>• Sessão: {supabase.auth.getSession() ? 'Verificando...' : 'Inativa'}</li>
-                </ul>
-              </div>
-            </div>
+            <button 
+              onClick={() => {
+                fetchMessages();
+                fetchPatientNames();
+              }} 
+              className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-slate-200 rounded-xl transition-all"
+              title="Atualizar conversas"
+            >
+              <RefreshCw size={18} className={loading ? 'animate-spin text-emerald-600' : ''} />
+            </button>
           </div>
-        )}
+        </div>
 
-        {contacts.filter(c => (c.phone || '').includes(searchTerm) || (c.normPhone || '').includes(searchTerm)).map(contact => (
-          <div 
-            key={contact.phone}
-            onClick={() => setSelectedPhone(contact.phone)}
-            className={`p-4 border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${normalizePhone(selectedPhone) === normalizePhone(contact.phone) ? 'bg-blue-50' : ''}`}
-          >
-            <div className="font-semibold text-sm">{contact.phone}</div>
-            <div className="text-xs text-slate-500 truncate">
-              {cleanMessageText(contact.lastMessage.mensagem) || contact.displayType}
-            </div>
+        {/* Barra de Busca de Pacientes */}
+        <div className="p-2.5 bg-white border-b border-slate-100">
+          <div className="relative flex items-center">
+            <Search size={15} className="absolute left-3 text-slate-400" />
+            <input 
+              type="text"
+              placeholder="Buscar por nome ou telefone..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 bg-slate-100 rounded-xl text-xs font-medium text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className="absolute right-2.5 text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            )}
           </div>
-        ))}
-      </div>
+        </div>
 
-      {/* Chat Individual */}
-      <div className={`flex-1 flex flex-col ${selectedPhone ? 'w-full' : 'hidden md:flex items-center justify-center text-slate-400'}`}>
-        {selectedPhone ? (
-          <>
-            <div className="p-4 border-b border-slate-100 flex items-center gap-2">
-              <button onClick={() => setSelectedPhone(null)} className="md:hidden"><ArrowLeft size={20}/></button>
-              <div className="flex-1">
-                <div className="flex gap-4 mb-2 justify-between items-center">
-                  <div className="flex gap-4 items-center">
-                    <button onClick={() => setActiveTab('chat')} className={`font-bold text-sm ${activeTab === 'chat' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500'}`}>Chat</button>
-                    <button onClick={() => setActiveTab('history')} className={`font-bold text-sm ${activeTab === 'history' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500'}`}>Histórico</button>
-                    <button 
-                      onClick={() => {
-                        setLoading(true);
-                        fetchMessages();
-                      }} 
-                      className="p-1 text-slate-400 hover:text-blue-600 transition-colors"
-                      title="Atualizar mensagens"
-                    >
-                      <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                    </button>
+        {/* Lista Scrollável de Contatos */}
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-white">
+          {contacts.length === 0 && !loading && (
+            <div className="p-6 text-center text-slate-400 flex flex-col items-center justify-center h-full">
+              <MessageSquare size={36} className="text-slate-300 mb-2" />
+              <p className="text-xs font-semibold">Nenhuma conversa recente</p>
+              <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">Clique em "Nova" para digitar um número de WhatsApp.</p>
+              <button 
+                onClick={() => setIsNewChatModalOpen(true)}
+                className="mt-3 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all"
+              >
+                + Iniciar Conversa
+              </button>
+            </div>
+          )}
+
+          {contacts
+            .filter(c => 
+              (c.phone || '').includes(searchTerm) || 
+              (c.normPhone || '').includes(searchTerm) ||
+              (c.patientName || '').toLowerCase().includes(searchTerm.toLowerCase())
+            )
+            .map(contact => {
+              const isSelected = normalizePhone(selectedPhone) === normalizePhone(contact.phone);
+              const displayName = contact.patientName || contact.phone;
+              const hasName = !!contact.patientName;
+              const msgText = cleanMessageText(contact.lastMessage.mensagem) || contact.displayType;
+
+              return (
+                <div 
+                  key={contact.phone}
+                  onClick={() => setSelectedPhone(contact.phone)}
+                  className={`p-3.5 cursor-pointer transition-all flex items-center gap-3 border-l-4 group ${
+                    isSelected 
+                      ? 'bg-emerald-50/80 border-emerald-600 font-semibold' 
+                      : 'hover:bg-slate-50 border-transparent'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                    isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {hasName ? displayName.charAt(0).toUpperCase() : <Phone size={16} />}
                   </div>
-                  <button 
-                    onClick={() => onSchedule(patientHistory[0]?.paciente_nome_completo || selectedPhone || '', selectedPhone || '')}
-                    className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <h3 className="text-xs font-bold text-slate-800 truncate">{displayName}</h3>
+                      <span className="text-[10px] text-slate-400 shrink-0 ml-2">
+                        {formatMessageTimestamp(contact.lastMessage.created_at)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                      {contact.lastMessage.direcao === 'enviada' && (
+                        <CheckCheck size={14} className="text-emerald-600 shrink-0" />
+                      )}
+                      <p className="truncate text-slate-500 font-normal">{msgText}</p>
+                    </div>
+
+                    {hasName && (
+                      <span className="text-[9px] text-slate-400 font-mono">{contact.phone}</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteConversation(contact.phone);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-slate-400 hover:text-red-600 hover:bg-slate-200/60 rounded-lg shrink-0"
+                    title="Excluir conversa"
                   >
-                    Agendar
+                    <Trash2 size={14} />
                   </button>
                 </div>
-                {activeTab === 'chat' && (
-                  <>
-                    <h2 className="font-bold text-slate-800">{patientHistory[0]?.paciente_nome_completo || selectedPhone}</h2>
-                    {patientHistory.length > 0 && (
-                      <p className="text-xs text-slate-500">CPF: {patientHistory[0].paciente_cpf || 'Não informado'}</p>
-                    )}
-                  </>
-                )}
+              );
+            })}
+        </div>
+      </div>
+
+      {/* PAINEL DIREITO: TELA DE CHAT & MENSAGENS (WhatsApp Web Style) */}
+      <div className={`flex-1 flex flex-col bg-[#efeae2] relative ${selectedPhone ? 'flex' : 'hidden md:flex items-center justify-center'}`}>
+        
+        {selectedPhone ? (
+          <>
+            {/* Cabeçalho da Conversa */}
+            <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between z-10 shadow-2xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <button 
+                  onClick={() => setSelectedPhone(null)} 
+                  className="md:hidden p-1 text-slate-600 hover:bg-slate-200 rounded-lg transition-all"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+
+                <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
+                  {currentPatientName ? currentPatientName.charAt(0).toUpperCase() : <User size={16} />}
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-xs text-slate-900 truncate">
+                    {currentPatientName}
+                  </h2>
+                  <p className="text-[10px] text-slate-500 font-mono truncate">
+                    {selectedPhone} {patientHistory[0]?.paciente_cpf ? `• CPF: ${patientHistory[0].paciente_cpf}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              {/* Botões do Topo do Chat */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex bg-slate-200/80 p-0.5 rounded-xl text-xs font-bold">
+                  <button 
+                    onClick={() => setActiveTab('chat')} 
+                    className={`px-3 py-1 rounded-lg transition-all ${activeTab === 'chat' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Conversa
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('history')} 
+                    className={`px-3 py-1 rounded-lg transition-all ${activeTab === 'history' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    Prontuário ({patientHistory.length})
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => onSchedule(currentPatientName || '', selectedPhone || '')}
+                  className="bg-clinical-blue hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                  title="Criar agendamento para este paciente"
+                >
+                  <Calendar size={13} />
+                  <span className="hidden sm:inline">Agendar</span>
+                </button>
+
+                <button 
+                  onClick={() => handleDeleteConversation(selectedPhone)}
+                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                  title="Excluir todas as mensagens desta conversa"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
+
+            {/* ÁREA DE MENSAGENS (BALÕES ESTILO WHATSAPP) */}
             {activeTab === 'chat' ? (
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 flex flex-col">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2.5 flex flex-col bg-[#efeae2] bg-opacity-90">
+                
+                <div className="mx-auto my-2 px-3 py-1 bg-white/80 rounded-full border border-slate-200/60 text-[10px] font-bold text-slate-500 shadow-2xs">
+                  Criptografia de ponta a ponta via Evolution WhatsApp API
+                </div>
+
                 {Array.from(new Map(messages.filter(m => m && m.id).map(m => [m.id, m])).values())
                   .filter(m => normalizePhone(m.telefone_cliente) === normalizePhone(selectedPhone))
                   .sort((a, b) => {
@@ -789,161 +870,194 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                     const mUrl = msg.midia_url;
                     const mTipo = (msg.tipo || msg.tipo_midia || '').toLowerCase();
                     const msgText = (msg.mensagem || '').toLowerCase();
-                  
-                  let isImage = mTipo.includes('image') || mTipo.includes('imagem');
-                  let isAudio = mTipo.includes('audio') || mTipo.includes('ptt');
-                  let isDocument = mTipo.includes('document') || mTipo.includes('pdf') || mTipo.includes('application');
-                  let isCall = mTipo.includes('call') || mTipo.includes('missed') || msgText.includes('chamada') || msgText.includes('ligação');
+                    const isSent = msg.direcao === 'enviada';
 
-                  // Fallback para detecção de mídia (especialmente base64 sem prefixo)
-                  if (!isImage && !isAudio && !isDocument && mUrl) {
-                    const urlLower = mUrl.toLowerCase();
-                    const isBase64 = mUrl.length > 100 && !mUrl.includes('.');
-                    
-                    if (urlLower.includes('image') || urlLower.includes('data:image') || urlLower.match(/\.(jpg|jpeg|png|webp|gif)/)) {
-                      isImage = true;
-                    } else if (urlLower.includes('audio') || urlLower.includes('data:audio') || urlLower.includes('audio/ogg') || urlLower.match(/\.(ogg|mp3|wav|m4a)/)) {
-                      isAudio = true;
-                    } else if (urlLower.includes('pdf') || urlLower.includes('document') || urlLower.match(/\.(pdf|doc|docx)/)) {
-                      isDocument = true;
-                    } else if (isBase64) {
-                      // Se for base64 e não identificou, tenta pelo cabeçalho
-                      if (mUrl.startsWith('iVBORw0KGgo') || mUrl.startsWith('/9j/')) isImage = true;
-                      else if (mUrl.startsWith('JVBERi0')) isDocument = true; // PDF base64 magic number
-                      else if (mUrl.length > 500) isAudio = true; // Heurística: áudios costumam ser maiores que ícones mas menores que fotos HD
+                    let isImage = mTipo.includes('image') || mTipo.includes('imagem');
+                    let isAudio = mTipo.includes('audio') || mTipo.includes('ptt');
+                    let isDocument = mTipo.includes('document') || mTipo.includes('pdf') || mTipo.includes('application');
+                    let isCall = mTipo.includes('call') || mTipo.includes('missed') || msgText.includes('chamada') || msgText.includes('ligação');
+
+                    if (!isImage && !isAudio && !isDocument && mUrl) {
+                      const urlLower = mUrl.toLowerCase();
+                      const isBase64 = mUrl.length > 100 && !mUrl.includes('.');
+                      
+                      if (urlLower.includes('image') || urlLower.includes('data:image') || urlLower.match(/\.(jpg|jpeg|png|webp|gif)/)) {
+                        isImage = true;
+                      } else if (urlLower.includes('audio') || urlLower.includes('data:audio') || urlLower.includes('audio/ogg') || urlLower.match(/\.(ogg|mp3|wav|m4a)/)) {
+                        isAudio = true;
+                      } else if (urlLower.includes('pdf') || urlLower.includes('document') || urlLower.match(/\.(pdf|doc|docx)/)) {
+                        isDocument = true;
+                      } else if (isBase64) {
+                        if (mUrl.startsWith('iVBORw0KGgo') || mUrl.startsWith('/9j/')) isImage = true;
+                        else if (mUrl.startsWith('JVBERi0')) isDocument = true;
+                        else if (mUrl.length > 500) isAudio = true;
+                      }
                     }
-                  }
 
-                  // Fallback por texto
-                  if (!isAudio && mUrl && (msgText.includes('áudio') || msgText.includes('audio') || mTipo.includes('audio'))) isAudio = true;
+                    if (!isAudio && mUrl && (msgText.includes('áudio') || msgText.includes('audio') || mTipo.includes('audio'))) isAudio = true;
 
-                  return (
-                    <div key={msg.id} className={`p-3 rounded-lg text-sm max-w-[80%] ${msg.direcao === 'recebida' ? 'bg-blue-100 self-start' : 'bg-slate-100 self-end ml-auto'}`}>
-                      {isCall ? (
-                        <div className="flex items-center gap-2 text-red-600 font-bold py-1">
-                          <Activity size={16} />
-                          <span>Chamada {msgText.includes('missed') || mTipo.includes('missed') ? 'Perdida' : 'Recebida'}</span>
-                          {msg.mensagem && <span className="text-[10px] font-normal text-slate-500">({msg.mensagem})</span>}
-                        </div>
-                      ) : mUrl && isImage ? (
-                        <div className="flex flex-col gap-2">
-                          <img 
-                            src={formatMediaUrl(mUrl, 'image')} 
-                            alt="" 
-                            className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity min-h-[100px] bg-slate-200 flex items-center justify-center"
-                            onClick={() => window.open(formatMediaUrl(mUrl, 'image'), '_blank')}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Imagem+Indispon%C3%ADvel';
-                            }}
-                          />
-                          {cleanMessageText(msg.mensagem) && (
-                            <p>{cleanMessageText(msg.mensagem)}</p>
-                          )}
-                        </div>
-                      ) : mUrl && isDocument ? (
-                        <div className="flex flex-col gap-2">
-                          <a 
-                            href={formatMediaUrl(mUrl, 'document')} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 bg-white/50 p-2 rounded hover:bg-white/80 transition-colors border border-slate-200"
-                          >
-                            <FileText size={20} className="text-blue-600 shrink-0" />
-                            <span className="truncate max-w-[200px] font-medium">{msg.mensagem && msg.mensagem !== '[Documento]' ? msg.mensagem : 'Documento / PDF'}</span>
-                          </a>
-                        </div>
-                      ) : isAudio && mUrl && (mUrl.startsWith('http') || mUrl.length > 100) ? (
-                        <div className="flex flex-col gap-2 min-w-[220px]">
-                          <audio 
-                            src={formatMediaUrl(mUrl, 'audio')} 
-                            controls 
-                            className="w-full h-10"
-                            preload="metadata"
-                          >
-                            Seu navegador não suporta o player de áudio.
-                          </audio>
-                          <div className="flex justify-between items-center">
+                    return (
+                      <div 
+                        key={msg.id} 
+                        className={`p-3 rounded-2xl text-xs max-w-[82%] sm:max-w-[70%] shadow-2xs relative group transition-all ${
+                          isSent 
+                            ? 'bg-[#dcf8c6] text-slate-900 self-end rounded-tr-none border border-emerald-100/80 ml-auto' 
+                            : 'bg-white text-slate-900 self-start rounded-tl-none border border-slate-200/80'
+                        }`}
+                      >
+                        {isCall ? (
+                          <div className="flex items-center gap-2 text-red-600 font-bold py-1">
+                            <Activity size={16} />
+                            <span>Chamada {msgText.includes('missed') || mTipo.includes('missed') ? 'Perdida' : 'Recebida'}</span>
+                            {msg.mensagem && <span className="text-[10px] font-normal text-slate-500">({msg.mensagem})</span>}
+                          </div>
+                        ) : mUrl && isImage ? (
+                          <div className="flex flex-col gap-2">
+                            <img 
+                              src={formatMediaUrl(mUrl, 'image')} 
+                              alt="" 
+                              className="rounded-xl max-w-full h-auto cursor-pointer hover:opacity-95 transition-opacity min-h-[100px] bg-slate-100 object-cover"
+                              onClick={() => window.open(formatMediaUrl(mUrl, 'image'), '_blank')}
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://placehold.co/400x300?text=Imagem+Indispon%C3%ADvel';
+                              }}
+                            />
+                            {cleanMessageText(msg.mensagem) && (
+                              <p className="text-slate-800 leading-relaxed font-normal">{cleanMessageText(msg.mensagem)}</p>
+                            )}
+                          </div>
+                        ) : mUrl && isDocument ? (
+                          <div className="flex flex-col gap-2">
+                            <a 
+                              href={formatMediaUrl(mUrl, 'document')} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2.5 bg-white/80 p-2.5 rounded-xl hover:bg-white transition-colors border border-slate-200/80"
+                            >
+                              <FileText size={22} className="text-emerald-700 shrink-0" />
+                              <span className="truncate max-w-[200px] font-semibold text-slate-800">{msg.mensagem && msg.mensagem !== '[Documento]' ? msg.mensagem : 'Documento / PDF'}</span>
+                            </a>
+                          </div>
+                        ) : isAudio && mUrl && (mUrl.startsWith('http') || mUrl.length > 100) ? (
+                          <div className="flex flex-col gap-1 min-w-[220px]">
+                            <audio 
+                              src={formatMediaUrl(mUrl, 'audio')} 
+                              controls 
+                              className="w-full h-9 rounded-lg"
+                              preload="metadata"
+                            >
+                              Seu navegador não suporta o áudio.
+                            </audio>
                             {cleanMessageText(msg.mensagem) && <p className="text-[10px] opacity-70 italic">{cleanMessageText(msg.mensagem)}</p>}
                           </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap leading-relaxed font-normal text-slate-900">{cleanMessageText(msg.mensagem)}</p>
+                        )}
+
+                        <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-slate-400">
+                          <span>{formatMessageTimestamp(msg.created_at)}</span>
+                          {isSent && <CheckCheck size={13} className="text-emerald-600" />}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMessage(msg.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 p-0.5 text-slate-400 hover:text-red-600 rounded hover:bg-black/5"
+                            title="Apagar esta mensagem"
+                          >
+                            <Trash2 size={12} />
+                          </button>
                         </div>
-                      ) : (
-                        cleanMessageText(msg.mensagem)
-                      )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
                 <div ref={messagesEndRef} />
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              /* ABA DE PRONTUÁRIO & HISTÓRICO CLINICO DO PACIENTE */
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
                 {patientHistory.length > 0 ? (
                   patientHistory.map(record => (
-                    <div key={record.id} className="p-4 bg-slate-50 rounded-lg border border-slate-100 hover:border-clinical-blue/20 transition-colors">
-                      <div className="font-bold text-sm text-slate-800">
-                        {record.data_consulta ? new Date(record.data_consulta).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Sem data'} - {record.especialidade}
+                    <div key={record.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-emerald-200 transition-all">
+                      <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
+                        <div className="font-extrabold text-xs text-slate-800">
+                          {record.data_consulta ? new Date(record.data_consulta).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Consulta'} - {record.especialidade || 'Atendimento'}
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-clinical-blue rounded-full">
+                          {record.paciente_status || 'Realizado'}
+                        </span>
                       </div>
-                      <div className="text-[10px] text-slate-500 mb-2 flex items-center gap-1">
-                        <Stethoscope size={12} />
-                        Médico: {record.profiles?.full_name || record.profissional_responsavel || 'Não informado'}
+
+                      <div className="text-[11px] text-slate-500 mb-2 flex items-center gap-1.5 font-medium">
+                        <Stethoscope size={13} className="text-emerald-600" />
+                        Médico: {record.profissional_responsavel || 'Não informado'}
                       </div>
+
                       <div className="text-xs text-slate-600 space-y-2">
                         {record.resumo_formatado && (
-                          <p className="font-medium bg-white/60 p-2 rounded border border-slate-100 whitespace-pre-wrap">{record.resumo_formatado}</p>
-                        )}
-                        {record.hipotese_diagnostica && (
-                          <p className="text-indigo-700 bg-indigo-50/50 p-2 rounded border border-indigo-100/30"><b>Hipótese:</b> {record.hipotese_diagnostica}</p>
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-normal whitespace-pre-wrap">
+                            <span className="font-bold text-slate-700 block mb-1">Resumo da Anamnese:</span>
+                            {record.resumo_formatado}
+                          </div>
                         )}
                         {record.sugestao_conduta && (
-                          <p className="text-emerald-700 bg-emerald-50/50 p-2 rounded border border-emerald-100/30"><b>Conduta:</b> {record.sugestao_conduta}</p>
+                          <div className="text-emerald-900 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100">
+                            <b className="font-bold">Conduta / Plano:</b> {record.sugestao_conduta}
+                          </div>
                         )}
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">Nenhum histórico encontrado.</p>
+                  <div className="p-8 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
+                    <Stethoscope size={32} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-xs font-bold">Nenhum prontuário registrado para este número</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Ao realizar atendimentos com este paciente, os prontuários aparecerão aqui automaticamente.</p>
+                  </div>
                 )}
               </div>
             )}
-            <div className="p-4 border-t border-slate-100 flex flex-col gap-2">
+
+            {/* BARRA DE ENVIO DE MENSAGENS (FOOTER DO CHAT) */}
+            <div className="p-3 bg-slate-100 border-t border-slate-200 flex flex-col gap-2">
               {pendingMedia && (
-                <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg">
+                <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-2xs">
                   {pendingMedia.type === 'image' ? (
-                    <img src={`data:image/jpeg;base64,${pendingMedia.base64}`} alt="Preview" className="w-10 h-10 rounded object-cover" />
+                    <img src={`data:image/jpeg;base64,${pendingMedia.base64}`} alt="Preview" className="w-9 h-9 rounded-lg object-cover" />
                   ) : (
-                    <div className="w-10 h-10 rounded bg-blue-100 flex items-center justify-center text-blue-600">
-                      <FileText size={20} />
+                    <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
+                      <FileText size={18} />
                     </div>
                   )}
-                  <span className="text-xs text-slate-600 flex-1 truncate">{pendingMedia.name}</span>
-                  <button onClick={() => setPendingMedia(null)} className="text-slate-500 hover:text-red-500">
+                  <span className="text-xs text-slate-700 font-semibold flex-1 truncate">{pendingMedia.name}</span>
+                  <button onClick={() => setPendingMedia(null)} className="p-1 text-slate-400 hover:text-red-500 rounded-lg">
                     <X size={16} />
                   </button>
                 </div>
               )}
+
               <div className="flex gap-2 items-center">
-                <div className="flex items-center">
-                  <button 
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isSendingMedia}
-                    className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500 disabled:opacity-50"
-                    title="Anexar arquivo ou imagem"
-                  >
-                    {isSendingMedia ? <Loader2 size={20} className="animate-spin" /> : <Paperclip size={20} />}
-                  </button>
-                  <input 
-                    ref={fileInputRef}
-                    type="file" 
-                    className="hidden" 
-                    onChange={handleSendMedia}
-                  />
-                </div>
-                
+                <button 
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSendingMedia}
+                  className="p-2.5 hover:bg-slate-200 text-slate-600 rounded-xl transition-all disabled:opacity-50 shrink-0"
+                  title="Anexar foto ou arquivo"
+                >
+                  {isSendingMedia ? <Loader2 size={18} className="animate-spin text-emerald-600" /> : <Paperclip size={18} />}
+                </button>
+                <input 
+                  ref={fileInputRef}
+                  type="file" 
+                  className="hidden" 
+                  onChange={handleSendMedia}
+                />
+
                 {isRecordingAudio ? (
-                  <div className="flex-1 flex items-center gap-3 bg-red-50 p-2 rounded-lg border border-red-100">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    <span className="text-xs text-red-600 font-bold flex-1">Gravando: {formatTime(recordingTime)}</span>
-                    <button onClick={stopRecordingAudio} className="p-1 bg-red-500 text-white rounded-full hover:bg-red-600">
+                  <div className="flex-1 flex items-center gap-3 bg-red-50 p-2.5 rounded-xl border border-red-200">
+                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                    <span className="text-xs text-red-700 font-bold flex-1">Gravando áudio: {formatTime(recordingTime)}</span>
+                    <button onClick={stopRecordingAudio} className="p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-xs">
                       <Square size={14} fill="currentColor" />
                     </button>
                   </div>
@@ -953,37 +1067,167 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleReply(selectedPhone)}
-                      className="flex-1 p-2 border rounded-lg text-sm"
-                      placeholder="Responder..."
+                      className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      placeholder="Escreva uma mensagem..."
                     />
                     <button 
                       onClick={startRecordingAudio}
-                      className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
-                      title="Gravar áudio"
+                      className="p-2.5 text-slate-600 hover:bg-slate-200 rounded-xl transition-all shrink-0"
+                      title="Gravar mensagem de áudio"
                     >
-                      <Mic size={20} />
+                      <Mic size={18} />
                     </button>
                   </>
                 )}
-                
+
                 <button 
                   onClick={() => handleReply(selectedPhone)} 
                   disabled={isSendingMessage || isSendingMedia || isRecordingAudio || (!replyText.trim() && !pendingMedia)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-xs transition-all shrink-0"
                 >
-                  {(isSendingMessage || isSendingMedia) ? <Loader2 size={16} className="animate-spin" /> : 'Enviar'}
+                  {(isSendingMessage || isSendingMedia) ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                  <span className="hidden sm:inline">Enviar</span>
                 </button>
               </div>
             </div>
           </>
         ) : (
-          <div className="text-center">
-            <MessageSquare size={48} className="mx-auto text-slate-300 mb-2" />
-            <p>Selecione uma conversa</p>
+          /* Tela Vazia quando nenhuma conversa é selecionada */
+          <div className="text-center p-8 flex flex-col items-center justify-center h-full">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mb-3 shadow-xs">
+              <MessageSquare size={32} />
+            </div>
+            <h3 className="text-base font-extrabold text-slate-800">WhatsApp Ambulatório IA</h3>
+            <p className="text-xs text-slate-500 max-w-xs mt-1">
+              Selecione uma conversa ao lado ou clique no botão **"Nova"** para falar diretamente com qualquer número.
+            </p>
+            <button 
+              onClick={() => setIsNewChatModalOpen(true)}
+              className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-xs"
+            >
+              <UserPlus size={15} />
+              Iniciar Nova Conversa
+            </button>
           </div>
         )}
       </div>
 
+      {/* MODAL DE INICIAR NOVA CONVERSA (POR NÚMERO DE TELEFONE) */}
+      {isNewChatModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+                  <UserPlus size={18} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-slate-900">Nova Conversa WhatsApp</h3>
+                  <p className="text-[11px] text-slate-500">Digite o número com DDD para abrir o chat</p>
+                </div>
+              </div>
+              <button onClick={() => setIsNewChatModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleStartNewChat} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Telefone com DDD *
+                </label>
+                <input 
+                  type="text"
+                  placeholder="Ex: 11999998888 ou 5511999998888"
+                  value={newChatPhone}
+                  onChange={(e) => setNewChatPhone(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  autoFocus
+                  required
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Dica: O código 55 (Brasil) será adicionado automaticamente se você não digitar.</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Nome do Paciente (Opcional)
+                </label>
+                <input 
+                  type="text"
+                  placeholder="Ex: Maria das Dores"
+                  value={newChatName}
+                  onChange={(e) => setNewChatName(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button 
+                  type="button" 
+                  onClick={() => setIsNewChatModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1.5"
+                >
+                  <Send size={14} />
+                  Abrir Conversa
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 text-red-600 rounded-xl shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-900">
+                  {deleteTarget.type === 'message' ? 'Apagar Mensagem' : 'Apagar Conversa'}
+                </h3>
+                <p className="text-[11px] text-slate-500">Esta ação não poderá ser desfeita.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-700 font-medium leading-relaxed">
+              {deleteTarget.type === 'message' 
+                ? 'Tem certeza de que deseja excluir esta mensagem do histórico?' 
+                : `Tem certeza de que deseja apagar todo o histórico da conversa com ${deleteTarget.name || deleteTarget.phone}?`}
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button 
+                type="button" 
+                disabled={isDeleting}
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button"
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR Code */}
       <WhatsAppQRModal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} />
     </div>
   );

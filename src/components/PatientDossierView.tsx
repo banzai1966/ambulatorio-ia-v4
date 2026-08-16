@@ -33,6 +33,7 @@ import NeurologicalExamForm from './NeurologicalExamForm';
 import IntegrativeChecklistForm from './IntegrativeChecklistForm';
 import IntegrativeBodyMap from './IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './IntegrativeEvolution';
+import BiologicalDentistryForm from './BiologicalDentistryForm';
 import SpecialtyFields from './SpecialtyFields';
 import VitalMonitor from './VitalMonitor';
 import PrescriptionAnvisaModal from './PrescriptionAnvisaModal';
@@ -208,7 +209,7 @@ export default function PatientDossierView({
   setIntegrativeData,
 }: PatientDossierViewProps) {
   const [activeTab, setActiveTab] = useState<
-    'evolucao' | 'anamnese' | 'plano' | 'harmonizacao' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
+    'evolucao' | 'anamnese' | 'plano' | 'especialidade' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
   >('evolucao');
 
   const age = calculateAgeExact(patientDob);
@@ -225,6 +226,44 @@ export default function PatientDossierView({
   const [diasAfastamento, setDiasAfastamento] = useState(1);
   const [atestadoCid, setAtestadoCid] = useState(currentRecord?.hipotese_diagnostica || 'M501 - TRANSTORNO DO DISCO CERVICAL COM RADICULOPATIA');
   const [docType, setDocType] = useState<'receituario' | 'atestado'>('receituario');
+  const [isDictatingPrescription, setIsDictatingPrescription] = useState(false);
+
+  const handleDictatePrescription = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast.error('Reconhecimento de voz não suportado neste navegador. Use Google Chrome ou Edge.');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsDictatingPrescription(true);
+      toast.info('Ouvindo prescrição... Fale o medicamento e posologia.');
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIsDictatingPrescription(false);
+      if (transcript) {
+        setPrescricaoText(prev => prev ? `${prev}\n• ${transcript}` : `• ${transcript}`);
+        toast.success('Prescrição ditada adicionada com sucesso!');
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsDictatingPrescription(false);
+    };
+
+    recognition.onend = () => {
+      setIsDictatingPrescription(false);
+    };
+
+    recognition.start();
+  };
 
   // Jornada do Paciente - Modais & Estados
   const [isPrescriptionAnvisaOpen, setIsPrescriptionAnvisaOpen] = useState(false);
@@ -456,16 +495,6 @@ export default function PatientDossierView({
               >
                 <Activity size={15} className="animate-pulse text-cyan-400" />
                 {showVitalMonitor ? 'Ocultar Monitor' : 'Monitor Vinais IA (ECG/Soro)'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsPrescriptionAnvisaOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95"
-                title="Prescrição Digital com Bulário ANVISA e envio via WhatsApp"
-              >
-                <Zap size={15} />
-                Prescrever ANVISA
               </button>
 
               <button
@@ -853,7 +882,7 @@ export default function PatientDossierView({
                       examMode === 'biological_dentistry' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
-                    🦷 Odonto Biológica & Harmonização
+                    🦷 Odonto Biológica & Implantes Zircônia
                   </button>
                 </div>
               </div>
@@ -993,10 +1022,8 @@ export default function PatientDossierView({
 
                 {examMode === 'biological_dentistry' && (
                   <div className="border-t pt-4">
-                    <h4 className="font-bold text-xs uppercase text-blue-700 mb-2">Odontologia Biológica & Harmonização (Dra. Lucy)</h4>
-                    <SpecialtyFields
-                      specialtyId="biological_dentistry"
-                      data={currentRecord?.dados_especialidade || {}}
+                    <BiologicalDentistryForm
+                      data={currentRecord?.dados_especialidade || specialtyData || {}}
                       onChange={(data) => setSpecialtyData(data)}
                     />
                   </div>
@@ -1070,7 +1097,7 @@ export default function PatientDossierView({
         )}
 
         {/* Tab: Dynamic Specialty Module (Medicina Integrativa, Exame Neurológico, Odontologia Biológica, Geral) */}
-        {activeTab === 'harmonizacao' && (
+        {(activeTab === 'especialidade' || (activeTab as string) === 'harmonizacao') && (
           <motion.div
             key={`tab-specialty-${examMode}`}
             initial={{ opacity: 0, y: 10 }}
@@ -1127,20 +1154,19 @@ export default function PatientDossierView({
                   <div>
                     <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                       <Sparkles className="text-blue-600" size={22} />
-                      Odontologia Biológica & Harmonização Orofacial
+                      Odontologia Biológica & Implantes Metal-Free (Zircônia)
                     </h3>
-                    <p className="text-xs text-slate-500">Módulo integrativo para acompanhamento de amálgama, focos dentários, terapia neural e harmonização facial.</p>
+                    <p className="text-xs text-slate-500">Módulo Dra. Lucy para planejamento de implantes cerâmicos, remoção segura de amálgama (SMART), cavitações e terapia neural.</p>
                   </div>
                 </div>
 
-                <SpecialtyFields
-                  specialtyId="biological_dentistry"
-                  data={currentRecord?.dados_especialidade || {}}
+                <BiologicalDentistryForm
+                  data={currentRecord?.dados_especialidade || specialtyData || {}}
                   onChange={(data) => setSpecialtyData(data)}
                 />
 
                 <div className="pt-4 border-t">
-                  <h4 className="font-bold text-sm text-slate-800 mb-3">Imagens Odontológicas & Registros de Harmonização</h4>
+                  <h4 className="font-bold text-sm text-slate-800 mb-3">Imagens Odontológicas, Tomografia CBCT & Registros do Tratamento</h4>
                   <PatientMediaGallery patientName={patientName} />
                 </div>
               </div>
@@ -1225,6 +1251,46 @@ export default function PatientDossierView({
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 {/* Editor Column */}
                 <div className="lg:col-span-6 space-y-4">
+                  {/* BARRA UNIFICADA: DITADO POR VOZ + CONTROLE ANVISA */}
+                  <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200 p-4 rounded-2xl space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Mic size={18} className="text-emerald-600 animate-pulse" />
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 block">Ditado de Prescrição por Voz</span>
+                          <span className="text-[10px] text-slate-500">Fale os remédios ou suplementos para preencher</span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={handleDictatePrescription}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md active:scale-95 ${
+                          isDictatingPrescription
+                            ? 'bg-red-600 text-white animate-pulse'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                        }`}
+                      >
+                        <Mic size={16} className={isDictatingPrescription ? 'animate-bounce' : ''} />
+                        <span>{isDictatingPrescription ? 'Ouvindo Prescrição...' : 'Ditar Prescrição por Voz'}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200/60 text-xs">
+                      <span className="text-slate-600 font-medium text-[11px]">Modelos Oficiais:</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsPrescriptionAnvisaOpen(true)}
+                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          title="Receita Controlada Oficial (Amarela A, Azul B, Branca C)"
+                        >
+                          <ShieldCheck size={14} /> Notificação Controlada ANVISA
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                       Composição do Receituário / Fórmula

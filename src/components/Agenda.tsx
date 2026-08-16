@@ -222,7 +222,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     // Começa com os padrões para garantir que nunca esteja vazio na UI
     const defaults = [
       { id: 'integrativa', nome: 'Medicina Integrativa' },
-      { id: 'odontologia_biologica', nome: 'Odontologia Biológica & Harmonização' },
+      { id: 'odontologia_biologica', nome: 'Odontologia Biológica & Implantes Zircônia' },
       { id: 'neurologia', nome: 'Neurologia Especializada' },
       { id: 'clinica_geral', nome: 'Clínica Geral & Rotina' }
     ];
@@ -621,9 +621,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   };
 
   const openModal = () => {
-    // Se houver um médico selecionado no filtro, pré-seleciona ele no modal
-    if (selectedMedicoId && !newAppointment.medico_id) {
-      setNewAppointment(prev => ({ ...prev, medico_id: selectedMedicoId }));
+    let targetMedico = newAppointment.medico_id;
+    if (selectedMedicoId) {
+      targetMedico = selectedMedicoId;
+    } else if (!targetMedico && doctors.length > 0) {
+      targetMedico = doctors[0].id;
+    }
+    if (targetMedico !== newAppointment.medico_id) {
+      setNewAppointment(prev => ({ ...prev, medico_id: targetMedico }));
     }
     setShowModal(true);
   };
@@ -637,61 +642,31 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             <p className="text-slate-500 mt-1">Gerencie os atendimentos do dia.</p>
           </div>
           
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider ml-1">Envio Rápido WhatsApp</span>
-            <div className="flex flex-col gap-2 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-              <input 
-                type="text"
-                placeholder="Telefone (ex: 5511999999999)"
-                value={testPhone}
-                onChange={e => setTestPhone(e.target.value)}
-                className="p-2 border-b border-slate-100 outline-none text-sm"
-              />
-              <div className="flex items-center gap-2">
-                <input 
-                  type="text"
-                  placeholder="Mensagem..."
-                  value={testMessage}
-                  onChange={e => setTestMessage(e.target.value)}
-                  className="flex-1 p-2 outline-none text-sm"
-                />
-                <button 
-                  onClick={handleTestWhatsApp}
-                  disabled={isSaving}
-                  className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors disabled:opacity-50"
-                  title="Enviar agora"
-                >
-                  {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                </button>
-              </div>
-            </div>
-          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Filtro de Médico para Recepcionista/Admin */}
+            {(user?.role === 'admin' || user?.role === 'receptionist') && (
+              <select 
+                className="p-3.5 rounded-2xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-xs outline-none focus:border-clinical-blue transition-all"
+                value={selectedMedicoId}
+                onChange={(e) => setSelectedMedicoId(e.target.value)}
+              >
+                <option value="">Todos os Médicos</option>
+                {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
+              </select>
+            )}
 
-          {/* Filtro de Médico para Recepcionista/Admin */}
-          {(user?.role === 'admin' || user?.role === 'receptionist') && (
-            <select 
-              className="p-3 rounded-xl border border-slate-200 bg-white shadow-sm outline-none"
-              value={selectedMedicoId}
-              onChange={(e) => setSelectedMedicoId(e.target.value)}
-            >
-              <option value="">Todos os Médicos</option>
-              {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
-            </select>
-          )}
-
-          <div className="flex items-center gap-2">
             <button 
               onClick={fetchAppointments}
-              className="p-3 bg-white text-slate-400 rounded-2xl border border-slate-200 hover:text-clinical-blue transition-all shadow-sm"
+              className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs"
               title="Atualizar Agenda"
             >
-              <RefreshCw size={20} />
+              <RefreshCw size={18} />
             </button>
             <button 
               onClick={openModal}
-              className="bg-clinical-blue text-white px-6 py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 font-bold"
+              className="bg-clinical-blue text-white px-5 py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 font-bold text-xs"
             >
-              <Plus size={20} /> Novo Agendamento
+              <Plus size={18} /> Novo Agendamento
             </button>
           </div>
         </div>
@@ -988,6 +963,54 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
               </div>
 
+              {/* Seção 3: Especialidade e Médico Responsável */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <User size={14} className="text-clinical-blue" />
+                  Especialidade & Médico Responsável *
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <select 
+                    className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-semibold"
+                    value={newAppointment.especialidade_id}
+                    onChange={e => {
+                      const nextMedicoId = user?.role === 'doctor' ? user.id : '';
+                      setNewAppointment({...newAppointment, especialidade_id: e.target.value, medico_id: nextMedicoId});
+                      fetchDoctors(e.target.value);
+                    }}
+                  >
+                    <option value="">Selecione a Especialidade</option>
+                    {specialties.length > 0 ? (
+                      specialties.map(s => (
+                        <option key={s.id} value={s.id}>{s.nome}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="integrativa">Medicina Integrativa</option>
+                        <option value="odontologia_biologica">Odontologia Biológica & Implantes Zircônia</option>
+                        <option value="neurologia">Neurologia Especializada</option>
+                        <option value="clinica_geral">Clínica Geral & Rotina</option>
+                      </>
+                    )}
+                  </select>
+
+                  {user?.role === 'doctor' ? (
+                    <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-100 text-clinical-blue text-xs font-bold flex items-center">
+                      Médico: {user.full_name || user.email}
+                    </div>
+                  ) : (
+                    <select 
+                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-semibold"
+                      value={newAppointment.medico_id}
+                      onChange={e => setNewAppointment({...newAppointment, medico_id: e.target.value})}
+                    >
+                      <option value="">Selecione o Médico *</option>
+                      {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
+                    </select>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Data da Consulta</label>
                 <input 
@@ -1072,7 +1095,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   >
                     <option value="Primeira Consulta">Primeira Consulta</option>
                     <option value="Retorno">Retorno</option>
-                    <option value="Procedimento / Harmonização">Procedimento / Harmonização</option>
+                    <option value="Implante Zircônia / Cirurgia Biológica">Implante Zircônia / Cirurgia Biológica</option>
                     <option value="Avaliação Integrativa">Avaliação Integrativa</option>
                     <option value="Emergência / Encaixe">Emergência / Encaixe</option>
                   </select>
@@ -1106,47 +1129,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
               </div>
 
-              <select 
-                className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
-                value={newAppointment.especialidade_id}
-                onChange={e => {
-                  // Mantém o médico se for o próprio médico logado, senão limpa para forçar nova escolha baseada na especialidade
-                  const nextMedicoId = user?.role === 'doctor' ? user.id : '';
-                  setNewAppointment({...newAppointment, especialidade_id: e.target.value, medico_id: nextMedicoId});
-                  fetchDoctors(e.target.value);
-                }}
-              >
-                <option value="">Selecione a Especialidade</option>
-                {specialties.length > 0 ? (
-                  specialties.map(s => (
-                    <option key={s.id} value={s.id}>{s.nome}</option>
-                  ))
-                ) : (
-                  <>
-                    <option value="integrativa">Medicina Integrativa</option>
-                    <option value="odontologia_biologica">Odontologia Biológica & Harmonização</option>
-                    <option value="neurologia">Neurologia Especializada</option>
-                    <option value="clinica_geral">Clínica Geral & Rotina</option>
-                  </>
-                )}
-              </select>
-              {/* Seleção de Médico - Visível para Admin/Recep ou pré-selecionado para Médico */}
-              {user?.role === 'doctor' ? (
-                <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-clinical-blue text-sm font-bold">
-                  Médico Responsável: {user.full_name || user.email}
-                </div>
-              ) : (
-                <select 
-                  className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
-                  value={newAppointment.medico_id}
-                  onChange={e => setNewAppointment({...newAppointment, medico_id: e.target.value})}
-                >
-                  <option value="">Selecione o Médico</option>
-                  {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
-                </select>
-              )}
               <textarea 
-                className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
+                className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
                 placeholder="Motivo da consulta"
                 rows={3}
                 value={newAppointment.motivo}

@@ -40,6 +40,7 @@ export default function PrescriptionAnvisaModal({
   doctorName,
   clinicName = "Ambulatório IA & Saúde Integrativa"
 }: PrescriptionAnvisaModalProps) {
+  const [recipeType, setRecipeType] = useState<'branca' | 'azul' | 'amarela' | 'bulario'>('branca');
   const [searchTerm, setSearchTerm] = useState('');
   const [medications, setMedications] = useState<AnvisaMedication[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +50,13 @@ export default function PrescriptionAnvisaModal({
   const [quantidade, setQuantidade] = useState('1 caixa');
   const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItem[]>([]);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
+  // Campos específicos para Notificação A e B (ANVISA)
+  const [numeroNotificacao, setNumeroNotificacao] = useState('000123');
+  const [ufNotificacao, setUfNotificacao] = useState('SP');
+  const [enderecoPaciente, setEnderecoPaciente] = useState('');
+  const [compradorNome, setCompradorNome] = useState('');
+  const [compradorDocumento, setCompradorDocumento] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -233,20 +241,127 @@ export default function PrescriptionAnvisaModal({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="p-6 overflow-y-auto flex-1 space-y-5">
           
           {/* Informações do Paciente */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div>
-              <span className="font-semibold text-emerald-900">Paciente: </span>
-              <span className="text-emerald-800 font-bold">{patientName}</span>
-              {patientCpf && <span className="ml-2 text-emerald-700">({patientCpf})</span>}
+              <span className="font-semibold text-slate-700">Paciente: </span>
+              <span className="text-slate-900 font-bold">{patientName}</span>
+              {patientCpf && <span className="ml-2 text-slate-500">({patientCpf})</span>}
             </div>
             <div>
-              <span className="font-semibold text-emerald-900">WhatsApp: </span>
-              <span className="text-emerald-800">{patientPhone || "Não informado"}</span>
+              <span className="font-semibold text-slate-700">WhatsApp: </span>
+              <span className="text-slate-900">{patientPhone || "Não informado"}</span>
             </div>
           </div>
+
+          {/* Abas de Tipos de Receitas Oficiais ANVISA */}
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Selecione o Modelo de Receita ANVISA:</span>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setRecipeType('branca')}
+                className={`p-3 rounded-2xl border text-xs font-bold text-left transition-all flex flex-col justify-between ${
+                  recipeType === 'branca'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-md ring-2 ring-slate-900/20'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-sm">⚪ Receita Branca</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold">C1 / C5</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-80">Controle Especial & Antimicrobianos (Aceita WhatsApp)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRecipeType('azul')}
+                className={`p-3 rounded-2xl border text-xs font-bold text-left transition-all flex flex-col justify-between ${
+                  recipeType === 'azul'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-500/20'
+                    : 'bg-blue-50/50 text-blue-900 border-blue-200 hover:bg-blue-100/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-sm">🔵 Notificação Azul</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/20 text-white font-bold">Receita B</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-80">Psicotrópicos (Rivotril, Diazepam, Alprazolam)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRecipeType('amarela')}
+                className={`p-3 rounded-2xl border text-xs font-bold text-left transition-all flex flex-col justify-between ${
+                  recipeType === 'amarela'
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                    : 'bg-amber-50/50 text-amber-900 border-amber-200 hover:bg-amber-100/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-sm">🟡 Notificação Amarela</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/20 text-white font-bold">Receita A</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-80">Entorpecentes (Ritalina, Venvanse, Morfina)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setRecipeType('bulario')}
+                className={`p-3 rounded-2xl border text-xs font-bold text-left transition-all flex flex-col justify-between ${
+                  recipeType === 'bulario'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-500/20'
+                    : 'bg-emerald-50/50 text-emerald-900 border-emerald-200 hover:bg-emerald-100/50'
+                }`}
+              >
+                <div className="flex items-center justify-between w-full mb-1">
+                  <span className="text-sm">💊 Bulário ANVISA</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/20 text-white font-bold">Busca</span>
+                </div>
+                <span className="text-[10px] font-normal opacity-80">Consulte bulas e medicamentos cadastrados</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Banner Explicativo de Regras ANVISA */}
+          {recipeType === 'branca' && (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-700 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-slate-900">
+                <Check className="w-4 h-4 text-emerald-600" />
+                Receita Branca de Controle Especial (C1, C5 e Antimicrobianos)
+              </div>
+              <p className="text-[11px] text-slate-600">
+                <strong>Validação Digital:</strong> Esta receita pode ser enviada diretamente para o WhatsApp do paciente em formato PDF assinado digitalmente. A farmácia valida gratuitamente pelo portal do governo (validar.iti.gov.br).
+              </p>
+            </div>
+          )}
+
+          {recipeType === 'azul' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 text-xs text-blue-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-blue-900">
+                <AlertCircle className="w-4 h-4 text-blue-600" />
+                Notificação de Receita B (Azul - Psicotrópicos)
+              </div>
+              <p className="text-[11px] text-blue-800">
+                <strong>Exigência ANVISA:</strong> Medicamentos como Clonazepam (Rivotril), Alprazolam e Diazepam exigem a retenção do talão impresso de Notificação Azul com número fornecido pela Vigilância Sanitária local. Imprima a via preenchida e assine a caneta.
+              </p>
+            </div>
+          )}
+
+          {recipeType === 'amarela' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                <AlertCircle className="w-4 h-4 text-amber-600" />
+                Notificação de Receita A (Amarela - Entorpecentes / Estimulantes)
+              </div>
+              <p className="text-[11px] text-amber-800">
+                <strong>Exigência ANVISA:</strong> Medicamentos como Ritalina, Venvanse e Morfina exigem obrigatoriamente a notificação física amarela em papel timbrado numerado. Imprima a via com a folha amarela da clínica e assine manualmente.
+              </p>
+            </div>
+          )}
 
           {/* Busca de Medicamento ANVISA */}
           <div className="space-y-3">
