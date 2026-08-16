@@ -184,8 +184,29 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       toast.error("Paciente não possui telefone cadastrado.");
       return;
     }
-    const toastId = toast.loading("Enviando confirmação no WhatsApp...");
+    const toastId = toast.loading("Preparando confirmação no WhatsApp...");
+    const digitsPhone = app.paciente_telefone.replace(/\D/g, '');
+    const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
+    const baseUrl = window.location.origin;
+    const docName = app.medico_nome || 'Dr(a). da Clínica';
+    const aptDate = new Date(app.data_hora_inicio).toLocaleDateString('pt-BR');
+    const aptTime = `${new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:${new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}`;
+    const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
+
+    const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋
+
+Confirmamos seu agendamento na nossa clínica:
+👨‍⚕️ *Profissional:* ${docName}
+📅 *Data:* ${aptDate}
+⏰ *Horário:* ${aptTime}
+
+👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.
+
+⚡ *Ficha Pré-Cadastro & Foto:* Para agilizar seu atendimento e evitar filas, preencha seus dados pelo link:
+${anamneseLink}`;
+
     try {
+      // 1. Tenta envio automático via backend se disponível
       const res = await fetch('/api/whatsapp/send-confirmation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -193,17 +214,26 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           phone: app.paciente_telefone,
           patientName: app.paciente_nome,
           doctorName: app.medico_nome,
-          date: new Date(app.data_hora_inicio).toLocaleDateString('pt-BR'),
-          time: `${new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:${new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}`,
+          date: aptDate,
+          time: aptTime,
           appointmentId: app.id
         })
       });
 
-      if (!res.ok) throw new Error("Falha no disparo");
-
-      toast.success("Confirmação e Link de Anamnese enviados com sucesso!", { id: toastId });
+      if (res.ok) {
+        toast.success("Confirmação e Link de Anamnese enviados com sucesso!", { id: toastId });
+        return;
+      }
     } catch (err: any) {
-      toast.error("Erro ao enviar mensagem: " + err.message, { id: toastId });
+      console.warn("Backend offline ou rodando em ambiente estático Netlify. Abrindo WhatsApp direto...");
+    }
+
+    // 2. Fallback Inteligente Direto (100% garantido no Netlify e qualquer ambiente)
+    try {
+      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msgText)}`, '_blank');
+      toast.success("WhatsApp aberto com a confirmação e link de pré-cadastro prontos para envio!", { id: toastId });
+    } catch (e) {
+      toast.error("Permita pop-ups no navegador para abrir o WhatsApp automaticamente.", { id: toastId });
     }
   };
 

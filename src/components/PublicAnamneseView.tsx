@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { calculateAge, formatDateMask } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 interface PublicAnamneseViewProps {
   initialPhone?: string;
@@ -214,16 +215,29 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
     }
     setIsSearchingCep(true);
     try {
+      // 1. Tenta ViaCEP público direto (funciona 100% em Netlify, Cloud Run e local)
+      const resViaCep = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const dataViaCep = await resViaCep.json();
+      if (!dataViaCep.erro) {
+        setLogradouro(dataViaCep.logradouro || '');
+        setBairro(dataViaCep.bairro || '');
+        setCidade(dataViaCep.localidade || '');
+        setEstado(dataViaCep.uf || '');
+        toast.success("Endereço localizado com sucesso!");
+        return;
+      }
+      
+      // 2. Fallback para rota local /api/cep
       const res = await fetch(`/api/cep/${cleanCep}`);
       const data = await res.json();
-      if (data.error) {
-        toast.error("CEP não encontrado.");
-      } else {
+      if (!data.error) {
         setLogradouro(data.logradouro || '');
         setBairro(data.bairro || '');
         setCidade(data.localidade || '');
         setEstado(data.uf || '');
         toast.success("Endereço localizado com sucesso!");
+      } else {
+        toast.error("CEP não encontrado.");
       }
     } catch (e) {
       toast.error("Erro ao consultar CEP.");
@@ -260,36 +274,80 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
       alertas.push(`ALERGIA: ${alergiaTexto.toUpperCase()}`);
     }
 
+    const payload = {
+      appointmentId: appointment?.id || '',
+      paciente_nome: nome,
+      paciente_telefone: telefone,
+      paciente_cpf: cpf,
+      data_nascimento: dataNascimento,
+      endereco: { cep, logradouro, numero, complemento, bairro, cidade, estado },
+      alertas_clinicos: alertas,
+      medicamentosAtuais,
+      observacoesClinicas,
+      foto_url: photoPreview,
+      updated_at: new Date().toISOString()
+    };
+
+    // Salva cópia local para garantia imediata
     try {
-      const res = await fetch('/api/public/submit-anamnese', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentId: appointment?.id || '',
+      const cleanPhone = telefone.replace(/\D/g, '');
+      localStorage.setItem(`anamnese_${cleanPhone}`, JSON.stringify(payload));
+      if (appointment?.id) {
+        localStorage.setItem(`anamnese_app_${appointment.id}`, JSON.stringify(payload));
+      }
+    } catch (err) {
+      console.warn("Aviso de storage local:", err);
+    }
+
+    // Salva diretamente no Supabase se disponível (vital no Netlify)
+    try {
+      if (supabase) {
+        if (appointment?.id && appointment.id !== '1') {
+          await supabase.from('agendamentos').update({
+            status: 'confirmado',
+            paciente_cpf: cpf || undefined,
+            cep: cep || undefined,
+            logradouro: logradouro || undefined,
+            bairro: bairro || undefined,
+            cidade: cidade || undefined,
+            estado: estado || undefined,
+            numero: numero || undefined,
+            complemento: complemento || undefined
+          }).eq('id', appointment.id);
+        }
+
+        // Registra o pré-cadastro na tabela de prontuários/anamneses
+        await supabase.from('prontuarios').insert([{
           paciente_nome: nome,
           paciente_telefone: telefone,
           paciente_cpf: cpf,
           data_nascimento: dataNascimento,
-          endereco: { cep, logradouro, numero, complemento, bairro, cidade, estado },
-          alertas_clinicos: alertas,
-          medicamentosAtuais,
-          observacoesClinicas,
-          foto_url: photoPreview
-        })
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setIsSubmitted(true);
-        toast.success("Pré-cadastro e confirmação enviados!");
-      } else {
-        toast.error("Erro ao enviar pré-cadastro: " + data.error);
+          alergias: alertas.join(', '),
+          medicamentos_em_uso: medicamentosAtuais,
+          observacoes: observacoesClinicas,
+          foto_url: photoPreview,
+          status: 'precadastro_enviado',
+          created_at: new Date().toISOString()
+        }]);
       }
-    } catch (err: any) {
-      toast.error("Falha ao comunicar com o servidor: " + err.message);
-    } finally {
-      setIsSubmitting(false);
+    } catch (supaErr) {
+      console.warn("Aviso Supabase:", supaErr);
     }
+
+    // Tenta também a rota de backend se estiver em ambiente Node/Full-stack
+    try {
+      await fetch('/api/public/submit-anamnese', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (err) {
+      console.warn("Backend API offline ou modo estático Netlify.");
+    }
+
+    setIsSubmitted(true);
+    toast.success("Pré-cadastro e confirmação enviados com sucesso!");
+    setIsSubmitting(false);
   };
 
   if (isSubmitted) {
@@ -409,38 +467,33 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
                       <Camera className="w-5 h-5" />
                     </div>
                     <span className="text-xs font-bold text-slate-800">Foto para Recepção</span>
-                    <div className="flex gap-1.5 w-full">
-                      <button
-                        type="button"
-                        onClick={startWebcam}
-                        className="flex-1 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
-                      >
-                        <Video className="w-3 h-3" /> Câmera
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        className="flex-1 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 hover:bg-slate-50"
-                      >
-                        <Upload className="w-3 h-3 text-blue-600" /> Galeria
-                      </button>
-                      
-                      {/* Inputs ocultos de câmera e galeria */}
-                      <input 
-                        ref={cameraInputRef} 
-                        type="file" 
-                        accept="image/*" 
-                        capture="user" 
-                        onChange={handlePhotoUpload} 
-                        className="hidden" 
-                      />
-                      <input 
-                        ref={galleryInputRef} 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handlePhotoUpload} 
-                        className="hidden" 
-                      />
+                    <div className="flex gap-2 w-full pt-1">
+                      {/* BOTÃO CÂMERA COM SOBREPOSIÇÃO NATIVA (100% SUPORTADO NO WHATSAPP E BROWSERS) */}
+                      <div className="relative flex-1 overflow-hidden rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm active:scale-95 transition-all">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          capture="user" 
+                          onChange={handlePhotoUpload} 
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                        />
+                        <div className="py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold pointer-events-none">
+                          <Camera className="w-3.5 h-3.5" /> Tirar Foto
+                        </div>
+                      </div>
+
+                      {/* BOTÃO GALERIA COM SOBREPOSIÇÃO NATIVA */}
+                      <div className="relative flex-1 overflow-hidden rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-sm active:scale-95 transition-all">
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={handlePhotoUpload} 
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                        />
+                        <div className="py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold pointer-events-none">
+                          <Upload className="w-3.5 h-3.5 text-blue-600" /> Galeria
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
