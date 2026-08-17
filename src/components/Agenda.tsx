@@ -23,7 +23,13 @@ import {
   Copy,
   QrCode,
   ExternalLink,
-  Check
+  Check,
+  CreditCard,
+  DollarSign,
+  Wallet,
+  Receipt,
+  CheckCircle2,
+  X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -80,6 +86,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+
+  // Estados da Baixa de Pagamento Rápido na Recepção
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [payingAppointment, setPayingAppointment] = useState<Appointment | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card' | 'debit_card' | 'cash' | 'health_insurance'>('pix');
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [paymentNotes, setPaymentNotes] = useState<string>('');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   const [newAppointment, setNewAppointment] = useState({ 
     paciente_nome: prefillPatient?.name || '', 
@@ -182,6 +196,119 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       toast.success(`Status alterado para "${newStatus}"`);
     } catch (err) {
       console.error("Erro ao atualizar status:", err);
+    }
+  };
+
+  // Abrir modal de baixa financeira rápida
+  const openPaymentModal = (app: Appointment) => {
+    setPayingAppointment(app);
+    // Tenta sugerir o valor padrão da consulta
+    const defaultVal = app.valor_consulta ? app.valor_consulta.replace(/[^\d.,]/g, '').replace(',', '.') : '250.00';
+    setPaymentAmount(defaultVal || '250.00');
+    setPaymentMethod(app.convenio && app.convenio !== 'Particular / Convênio' && !app.convenio.toLowerCase().includes('particular') ? 'health_insurance' : 'pix');
+    setPaymentNotes(`Recebimento ref. consulta - ${app.paciente_nome}`);
+    setPaymentModalOpen(true);
+  };
+
+  // Confirmar recebimento do pagamento
+  const handleConfirmPayment = async (sendReceiptWhatsApp: boolean = true) => {
+    if (!payingAppointment) return;
+    setIsProcessingPayment(true);
+    const toastId = toast.loading("Registrando pagamento no caixa...");
+
+    try {
+      const numAmount = parseFloat(paymentAmount.replace(',', '.')) || 0;
+      const methodLabels: Record<string, string> = {
+        pix: 'PIX',
+        credit_card: 'Cartão de Crédito',
+        debit_card: 'Cartão de Débito',
+        cash: 'Dinheiro',
+        health_insurance: 'Convênio'
+      };
+      const labelMethod = methodLabels[paymentMethod] || 'PIX';
+
+      // 1. Atualiza o status do agendamento para Pago com o método e valor
+      const newStatusPagamento = `Pago (${labelMethod})`;
+      const updatedValor = numAmount.toFixed(2);
+
+      setAppointments(prev => prev.map(a => 
+        String(a.id) === String(payingAppointment.id) 
+          ? { ...a, status_pagamento: newStatusPagamento, valor_consulta: updatedValor } 
+          : a
+      ));
+
+      // Atualiza no Supabase
+      try {
+        const numId = Number(payingAppointment.id);
+        const updatePayload = {
+          status_pagamento: newStatusPagamento,
+          valor_consulta: updatedValor
+        };
+        if (!isNaN(numId)) {
+          await supabase.from('agendamentos').update(updatePayload).eq('id', numId);
+        }
+        await supabase.from('agendamentos').update(updatePayload).eq('id', String(payingAppointment.id));
+      } catch (errDb) {
+        console.warn("Erro ao atualizar pagamento no banco:", errDb);
+      }
+
+      // 2. Registra a transação no Módulo Financeiro (Fluxo de Caixa)
+      try {
+        const newTransaction = {
+          id: String(Date.now()),
+          type: 'income',
+          description: `Consulta - ${payingAppointment.paciente_nome}`,
+          patientName: payingAppointment.paciente_nome,
+          patientCpf: payingAppointment.paciente_cpf || '',
+          amount: numAmount,
+          category: payingAppointment.medico_especialidade || 'Consulta Médica',
+          paymentMethod: paymentMethod,
+          status: 'paid',
+          date: new Date().toISOString().split('T')[0],
+          doctorName: payingAppointment.medico_nome || 'Dr(a). da Clínica',
+          notes: paymentNotes || `Recebido na recepção via ${labelMethod}`
+        };
+
+        const existingStr = localStorage.getItem('ambulatorio_financial_transactions');
+        const existingList = existingStr ? JSON.parse(existingStr) : [];
+        const updatedList = [newTransaction, ...existingList];
+        localStorage.setItem('ambulatorio_financial_transactions', JSON.stringify(updatedList));
+      } catch (errFin) {
+        console.warn("Erro ao salvar no módulo financeiro:", errFin);
+      }
+
+      // 3. Envia Comprovante / Recibo no WhatsApp se solicitado
+      if (sendReceiptWhatsApp && payingAppointment.paciente_telefone) {
+        const digitsPhone = payingAppointment.paciente_telefone.replace(/\D/g, '');
+        const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
+        const todayStr = new Date().toLocaleDateString('pt-BR');
+        const formattedMoney = numAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const receiptMsg = `🧾 *COMPROVANTE DE PAGAMENTO - AMBULATÓRIO IA*\n\nOlá *${payingAppointment.paciente_nome}*,\nConfirmamos o recebimento da sua consulta!\n\n📋 *Detalhes do Recibo:*\n👨‍⚕️ *Profissional:* ${payingAppointment.medico_nome || 'Dr(a). da Clínica'}\n💵 *Valor Pago:* ${formattedMoney}\n💳 *Forma:* ${labelMethod}\n📅 *Data:* ${todayStr}\n\n✅ *Status:* Pagamento Confirmado & Check-in Liberado!\n\nObrigado pela preferência e tenha uma excelente consulta! 🏥`;
+
+        try {
+          const evoUrl = "https://api.makprojetosmake.com.br";
+          const instance = "ambulatorio";
+          const apiKey = "E6247913DB92-48B4-8B54-5C7449EA639B";
+
+          await axios.post(`${evoUrl}/message/sendText/${instance}`, {
+            number: cleanPhone,
+            text: receiptMsg
+          }, {
+            headers: { apikey: apiKey }
+          });
+        } catch (evoErr) {
+          console.warn("Evolution API indisponível para envio de recibo:", evoErr);
+        }
+      }
+
+      toast.success("✅ Pagamento registrado com sucesso e lançado no financeiro!", { id: toastId });
+      setPaymentModalOpen(false);
+      setPayingAppointment(null);
+    } catch (e: any) {
+      toast.error("Erro ao registrar pagamento: " + (e?.message || ''), { id: toastId });
+    } finally {
+      setIsProcessingPayment(false);
     }
   };
 
@@ -810,7 +937,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                         </span>
                       )}
                       {(app.valor_consulta || (app.status_pagamento && app.status_pagamento !== 'Cortesia / Isento')) && (
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${app.status_pagamento === 'Pago' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${(app.status_pagamento || '').startsWith('Pago') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {app.status_pagamento ? `${app.status_pagamento}` : ''}{app.valor_consulta ? ` • R$ ${app.valor_consulta}` : ''}
                         </span>
                       )}
@@ -847,6 +974,19 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => openPaymentModal(app)}
+                    className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                      (app.status_pagamento || '').startsWith('Pago')
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                        : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20 animate-pulse'
+                    }`}
+                    title="Realizar Cobrança / Baixa no Caixa da Recepção"
+                  >
+                    <CreditCard size={14} />
+                    {(app.status_pagamento || '').startsWith('Pago') ? 'Pago' : 'Receber'}
+                  </button>
+
                   <button
                     onClick={() => {
                       setSelectedAppointmentForAnamnese(app);
@@ -1275,6 +1415,155 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           toast.success("Ficha Pré-Consulta vinculada com sucesso!");
         }}
       />
+
+      {/* MODAL DE BAIXA E RECEBIMENTO RÁPIDO NA RECEPÇÃO */}
+      {paymentModalOpen && payingAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-6">
+            
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Recebimento no Caixa</h3>
+                  <p className="text-xs text-slate-500 font-medium">Check-in e baixa financeira rápida</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setPaymentModalOpen(false);
+                  setPayingAppointment(null);
+                }}
+                className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Dados do Paciente e Consulta */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 text-xs">
+              <div className="flex justify-between items-center font-bold text-slate-800">
+                <span>Paciente:</span>
+                <span className="text-sm text-clinical-blue">{payingAppointment.paciente_nome}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Profissional:</span>
+                <span className="font-semibold text-slate-800">{payingAppointment.medico_nome || 'Dr(a). da Clínica'}</span>
+              </div>
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Especialidade / Convênio:</span>
+                <span className="font-semibold text-slate-800">
+                  {payingAppointment.medico_especialidade || 'Clínico'} • {payingAppointment.convenio || 'Particular'}
+                </span>
+              </div>
+              {payingAppointment.paciente_telefone && (
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>WhatsApp:</span>
+                  <span className="font-mono text-slate-700">{payingAppointment.paciente_telefone}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Seleção da Forma de Pagamento */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                Forma de Pagamento Utilizada:
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'pix', label: 'PIX', icon: '📱', desc: 'Chave / QR' },
+                  { id: 'credit_card', label: 'Crédito', icon: '💳', desc: 'Maquininha' },
+                  { id: 'debit_card', label: 'Débito', icon: '💳', desc: 'Maquininha' },
+                  { id: 'cash', label: 'Dinheiro', icon: '💵', desc: 'Espécie' },
+                  { id: 'health_insurance', label: 'Convênio', icon: '🏥', desc: 'Guia' }
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setPaymentMethod(m.id as any)}
+                    className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                      paymentMethod === m.id
+                        ? 'border-emerald-500 bg-emerald-50/80 text-emerald-900 font-extrabold shadow-xs scale-102 ring-2 ring-emerald-500/20'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium'
+                    }`}
+                  >
+                    <span className="text-lg">{m.icon}</span>
+                    <span className="text-xs">{m.label}</span>
+                    <span className="text-[9px] text-slate-400 font-normal">{m.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Valor do Recebimento */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5">
+                  Valor Pago (R$):
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-3.5 text-xs font-bold text-slate-400">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="w-full pl-10 pr-3 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-emerald-500 focus:bg-white text-slate-900 font-extrabold text-sm outline-none transition-all"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder="0,00"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block mb-1.5">
+                  Observação / Caixa:
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3.5 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-emerald-500 focus:bg-white text-slate-900 text-xs outline-none transition-all font-medium"
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  placeholder="Ex: Pago na recepção balcão"
+                />
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="pt-2 flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentModalOpen(false);
+                  setPayingAppointment(null);
+                }}
+                disabled={isProcessingPayment}
+                className="w-1/3 py-3.5 px-4 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition-all"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmPayment(true)}
+                disabled={isProcessingPayment}
+                className="w-2/3 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              >
+                {isProcessingPayment ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Registrando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} /> Confirmar & Enviar Recibo WhatsApp
+                  </>
+                )}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

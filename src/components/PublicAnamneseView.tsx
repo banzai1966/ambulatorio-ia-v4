@@ -16,7 +16,9 @@ import {
   Calendar, 
   Clock, 
   Sparkles,
-  Check
+  Check,
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { calculateAge, formatDateMask } from '../lib/utils';
@@ -100,9 +102,21 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [aceitouTermoVeracidade, setAceitouTermoVeracidade] = useState(true);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  // Detecta se o paciente está abrindo de dentro do WebView do WhatsApp / Instagram / Facebook
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.navigator) {
+      const ua = window.navigator.userAgent || '';
+      const isWA = /WhatsApp|FBAN|FBAV|Instagram|Line/i.test(ua) || (ua.includes('wv') && !ua.includes('Chrome/1'));
+      if (isWA) {
+        setIsInAppBrowser(true);
+      }
+    }
+  }, []);
 
   // Buscar agendamento e anamnese prévia ao carregar
   useEffect(() => {
@@ -486,6 +500,36 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           
+          {/* Banner de Ajuda se estiver dentro do navegador interno do WhatsApp */}
+          {isInAppBrowser && (
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3 text-amber-900 text-xs shadow-sm">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1.5 flex-1">
+                <p className="font-bold text-amber-950">Dica para liberar a Câmera e Galeria sem bloqueios:</p>
+                <p className="text-amber-800 leading-relaxed">
+                  Você está no visualizador interno do WhatsApp. Para liberar a câmera do celular com facilidade, toque nos <strong>3 pontinhos (⋮)</strong> no topo da tela e escolha <strong>"Abrir no Chrome / Navegador"</strong>.
+                </p>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentUrl = window.location.href;
+                      if (/android/i.test(navigator.userAgent)) {
+                        const cleanUrl = currentUrl.replace(/^https?:\/\//, '');
+                        window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
+                      } else {
+                        window.open(currentUrl, '_blank');
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm active:scale-95"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Abrir no Google Chrome
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Seção 1: Dados Pessoais & Foto */}
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -539,33 +583,42 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
                       <Camera className="w-5 h-5" />
                     </div>
                     <span className="text-xs font-bold text-slate-800">Foto para Recepção</span>
-                    <div className="flex gap-2 w-full pt-1">
-                      {/* BOTÃO CÂMERA COM SOBREPOSIÇÃO NATIVA (100% SUPORTADO NO WHATSAPP E BROWSERS) */}
-                      <div className="relative flex-1 overflow-hidden rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm active:scale-95 transition-all">
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          capture="user" 
-                          onChange={handlePhotoUpload} 
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-                        />
-                        <div className="py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold pointer-events-none">
-                          <Camera className="w-3.5 h-3.5" /> Tirar Foto
-                        </div>
-                      </div>
+                    
+                    {/* Inputs HTML5 Nativos Reais (Compatíveis com todos os celulares e navegadores) */}
+                    <input 
+                      id="anamnese-camera-input"
+                      ref={cameraInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      capture="user" 
+                      onChange={handlePhotoUpload} 
+                      className="hidden" 
+                    />
+                    <input 
+                      id="anamnese-gallery-input"
+                      ref={galleryInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handlePhotoUpload} 
+                      className="hidden" 
+                    />
 
-                      {/* BOTÃO GALERIA COM SOBREPOSIÇÃO NATIVA */}
-                      <div className="relative flex-1 overflow-hidden rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-sm active:scale-95 transition-all">
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={handlePhotoUpload} 
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
-                        />
-                        <div className="py-2 px-2 flex items-center justify-center gap-1.5 text-xs font-bold pointer-events-none">
-                          <Upload className="w-3.5 h-3.5 text-blue-600" /> Galeria
-                        </div>
-                      </div>
+                    <div className="flex gap-2 w-full pt-1">
+                      {/* Botão Tirar Foto via Label Nativo */}
+                      <label 
+                        htmlFor="anamnese-camera-input"
+                        className="flex-1 py-2 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm active:scale-95 transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer select-none"
+                      >
+                        <Camera className="w-3.5 h-3.5" /> Tirar Foto
+                      </label>
+
+                      {/* Botão Galeria via Label Nativo */}
+                      <label 
+                        htmlFor="anamnese-gallery-input"
+                        className="flex-1 py-2 px-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 active:bg-slate-100 text-slate-700 shadow-sm active:scale-95 transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer select-none"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-blue-600" /> Galeria
+                      </label>
                     </div>
                   </div>
                 )}
