@@ -74,7 +74,6 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const [showModal, setShowModal] = useState(false);
   const [isAnamneseModalOpen, setIsAnamneseModalOpen] = useState(false);
   const [selectedAppointmentForAnamnese, setSelectedAppointmentForAnamnese] = useState<Appointment | null>(null);
-  const [selectedAppointmentForConfirmation, setSelectedAppointmentForConfirmation] = useState<Appointment | null>(null);
   const [isSendingAutoWhatsApp, setIsSendingAutoWhatsApp] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -185,12 +184,12 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     }
   };
 
-  const handleSendConfirmation = (app: Appointment) => {
+  const handleSendConfirmation = async (app: Appointment) => {
     if (!app.paciente_telefone) {
       toast.error("Paciente não possui telefone cadastrado.");
       return;
     }
-    setSelectedAppointmentForConfirmation(app);
+    await executeAutoWhatsAppSend(app);
   };
 
   const executeAutoWhatsAppSend = async (app: Appointment) => {
@@ -204,17 +203,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     const aptTime = `${new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:${new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}`;
     const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
 
-    const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋
-
-Confirmamos seu agendamento na nossa clínica:
-👨‍⚕️ *Profissional:* ${docName}
-📅 *Data:* ${aptDate}
-⏰ *Horário:* ${aptTime}
-
-👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.
-
-⚡ *Ficha Pré-Cadastro & Foto:* Para agilizar seu atendimento e evitar filas, preencha seus dados pelo link:
-${anamneseLink}`;
+    const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha Pré-Cadastro & Foto:* Para agilizar seu atendimento e evitar filas, preencha seus dados pelo link:\n${anamneseLink}`;
 
     try {
       const res = await fetch('/api/whatsapp/send-confirmation', {
@@ -233,15 +222,17 @@ ${anamneseLink}`;
       if (res.ok) {
         toast.success("✅ Mensagem enviada automaticamente para o WhatsApp do paciente!", { id: toastId });
         setIsSendingAutoWhatsApp(false);
-        setSelectedAppointmentForConfirmation(null);
         return;
       }
     } catch (err: any) {
-      console.warn("Servidor de WhatsApp indisponível no momento.");
+      console.warn("Servidor de WhatsApp/n8n indisponível no momento.");
     }
 
     setIsSendingAutoWhatsApp(false);
-    toast("ℹ️ Para enviar diretamente, use o botão de Copiar Mensagem ou Abrir WhatsApp Web.", { id: toastId, icon: '📲' });
+    // Fallback inteligente: se o robô estiver indisponível, copia o link e abre no WhatsApp
+    navigator.clipboard.writeText(msgText);
+    toast.success("Link copiado! Abrindo WhatsApp...", { id: toastId });
+    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msgText)}`, '_blank');
   };
 
   useEffect(() => {
@@ -608,6 +599,20 @@ ${anamneseLink}`;
       setShowModal(false);
       fetchAppointments();
       toast.success("Agendamento realizado com sucesso!");
+      
+      // Disparo automático imediato para o paciente via WhatsApp / n8n
+      if (newAppointment.paciente_telefone) {
+        executeAutoWhatsAppSend({
+          id: String(Date.now()),
+          paciente_nome: newAppointment.paciente_nome,
+          paciente_telefone: newAppointment.paciente_telefone,
+          medico_nome: selectedDoctor?.full_name || user?.full_name || 'Dr(a). da Clínica',
+          data_hora_inicio: isoDateTime,
+          data_consulta: date,
+          hora_consulta: formattedTime,
+          status: 'Agendado'
+        } as any);
+      }
       
       setNewAppointment({ 
         paciente_nome: '', 
@@ -1215,139 +1220,6 @@ ${anamneseLink}`;
           toast.success("Ficha Pré-Consulta vinculada com sucesso!");
         }}
       />
-
-      {/* Modal de Disparo de Confirmação & Ficha de Pré-Cadastro */}
-      {selectedAppointmentForConfirmation && (() => {
-        const app = selectedAppointmentForConfirmation;
-        const digitsPhone = app.paciente_telefone.replace(/\D/g, '');
-        const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
-        const baseUrl = window.location.origin;
-        const docName = app.medico_nome || 'Dr(a). da Clínica';
-        const aptDate = new Date(app.data_hora_inicio).toLocaleDateString('pt-BR');
-        const aptTime = `${new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:${new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}`;
-        const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
-        const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha Pré-Cadastro & Foto:* Para agilizar seu atendimento e evitar filas, preencha seus dados pelo link:\n${anamneseLink}`;
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-slate-100 animate-fadeIn">
-              
-              {/* Header */}
-              <div className="bg-emerald-600 text-white p-5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-white/20 rounded-2xl">
-                    <Send className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-base">Confirmar Consulta & Pré-Cadastro</h3>
-                    <p className="text-xs text-emerald-100">Disparo pelo WhatsApp ou cópia de link</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedAppointmentForConfirmation(null)}
-                  className="p-2 hover:bg-white/20 rounded-xl transition-all text-white/80 hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="p-6 space-y-4">
-                {/* Detalhes do Agendamento */}
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs space-y-1.5">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-semibold">Paciente:</span>
-                    <span className="font-bold text-slate-900">{app.paciente_nome}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-semibold">WhatsApp:</span>
-                    <span className="font-bold text-emerald-700">{app.paciente_telefone}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-semibold">Data / Horário:</span>
-                    <span className="font-bold text-slate-800">{aptDate} às {aptTime}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 font-semibold">Profissional:</span>
-                    <span className="font-bold text-slate-800">{docName}</span>
-                  </div>
-                </div>
-
-                {/* Prévia da Mensagem */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-700 block">Mensagem com Link Pré-Formatada:</label>
-                  <div className="p-3 bg-slate-100 border border-slate-200 rounded-xl text-[11px] text-slate-800 font-mono whitespace-pre-line max-h-36 overflow-y-auto">
-                    {msgText}
-                  </div>
-                </div>
-
-                {/* QR Code + Link direto */}
-                <div className="flex items-center gap-3 p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(anamneseLink)}`}
-                    alt="QR Code Pré-Cadastro"
-                    className="w-16 h-16 rounded-lg bg-white p-1 border border-emerald-300 shrink-0"
-                  />
-                  <div className="text-xs space-y-1 flex-1">
-                    <span className="font-bold text-emerald-900 block">QR Code para o Celular:</span>
-                    <p className="text-[11px] text-emerald-800">
-                      Aponte a câmera do celular ou mostre na recepção para abrir a ficha no aparelho do paciente.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Ações de Envio */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => executeAutoWhatsAppSend(app)}
-                    disabled={isSendingAutoWhatsApp}
-                    className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 active:scale-95"
-                  >
-                    <Send className="w-4 h-4" />
-                    {isSendingAutoWhatsApp ? 'Disparando...' : '🤖 Enviar pelo Robô'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(msgText);
-                      toast.success("Mensagem completa copiada!");
-                    }}
-                    className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-md flex items-center justify-center gap-2 transition-all active:scale-95"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Copiar Mensagem
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(anamneseLink);
-                      toast.success("Link da ficha de pré-cadastro copiado!");
-                    }}
-                    className="py-3 px-4 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
-                  >
-                    <Copy className="w-4 h-4 text-blue-600" />
-                    Copiar Somente o Link
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msgText)}`, '_blank');
-                    }}
-                    className="py-3 px-4 bg-green-50 border border-green-300 hover:bg-green-100 text-green-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95"
-                  >
-                    <ExternalLink className="w-4 h-4 text-green-600" />
-                    Abrir no WhatsApp Web
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }

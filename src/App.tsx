@@ -2417,6 +2417,18 @@ export default function App() {
     }
   };
 
+  // 1. Rota Pública de Anamnese / Pré-Cadastro do Paciente (não exige login nem bloqueio)
+  if (typeof window !== 'undefined' && (
+    currentHash.includes('anamnese') ||
+    window.location.hash.includes('anamnese') ||
+    window.location.search.includes('anamnese') ||
+    window.location.pathname.includes('anamnese') ||
+    window.location.search.includes('publicAnamnese') ||
+    window.location.href.includes('anamnese')
+  )) {
+    return <PublicAnamneseView />;
+  }
+
   if (!isConfigured) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -2443,15 +2455,6 @@ export default function App() {
         </motion.div>
       </div>
     );
-  }
-
-  if (typeof window !== 'undefined' && (
-    currentHash.includes('anamnese') ||
-    window.location.hash.includes('anamnese') ||
-    window.location.search.includes('anamnese') ||
-    window.location.search.includes('publicAnamnese')
-  )) {
-    return <PublicAnamneseView />;
   }
 
   if (!user) {
