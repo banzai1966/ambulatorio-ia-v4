@@ -679,56 +679,46 @@ export default function App() {
         if (signUpError) throw signUpError;
 
         if (signUpData.user) {
-          // Garante que o perfil seja criado como 'doctor' e 'approved'
-          // O trigger do banco pode criar como 'receptionist'/'pending', então forçamos aqui
+          // Garante que o perfil seja criado como 'admin' e 'approved' para acesso irrestrito
           const { error: profileError } = await supabase
             .from('profiles')
             .update({ 
-              role: 'doctor', 
+              role: 'admin', 
               status: 'approved',
-              full_name: 'Médico de Demonstração'
+              full_name: 'Dr. Marco Duarte (Admin)'
             })
             .eq('id', signUpData.user.id);
             
           if (profileError) {
-            // Se o update falhar (talvez o trigger ainda não inseriu), tentamos um upsert
             await supabase.from('profiles').upsert({
               id: signUpData.user.id,
               email: demoEmail,
-              role: 'doctor',
+              role: 'admin',
               status: 'approved',
-              full_name: 'Médico de Demonstração'
+              full_name: 'Dr. Marco Duarte (Admin)'
             });
           }
           
-          toast.success("Conta de demonstração criada e logada!");
-          return; // O onAuthStateChange cuidará do resto se houver sessão
+          toast.success("Acesso de Administrador liberado!");
+          return;
         }
       } else if (signInError) {
         throw signInError;
       }
 
-      // Se o login der certo, garantimos que o perfil exista, seja médico e esteja aprovado
+      // Se o login der certo, garantimos que o perfil seja admin e esteja aprovado
       if (signInData.user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, status')
-          .eq('id', signInData.user.id)
-          .single();
-
-        if (!profile || profile.role !== 'doctor' || profile.status !== 'approved') {
-          await supabase.from('profiles').upsert({
-            id: signInData.user.id,
-            email: demoEmail,
-            role: 'doctor',
-            status: 'approved',
-            full_name: 'Médico de Demonstração'
-          });
-        }
+        await supabase.from('profiles').upsert({
+          id: signInData.user.id,
+          email: demoEmail,
+          role: 'admin',
+          status: 'approved',
+          full_name: 'Dr. Marco Duarte (Admin)'
+        });
       }
 
       await checkUser();
-      toast.success("Login de demonstração realizado!");
+      toast.success("Login de Administrador realizado com sucesso!");
     } catch (err: any) {
       console.error("Erro no login demo:", err);
       setError(err.message || "Falha no login de demonstração.");
@@ -2504,15 +2494,12 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-md bg-white rounded-[40px] shadow-2xl border border-slate-100 p-10"
           >
-          <div className="flex flex-col items-center mb-10">
-            <div className="w-16 h-16 bg-clinical-blue rounded-2xl flex items-center justify-center text-white shadow-xl shadow-clinical-blue/20 mb-6">
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 bg-clinical-blue rounded-2xl flex items-center justify-center text-white shadow-xl shadow-clinical-blue/20 mb-4">
               <Stethoscope size={32} />
             </div>
             <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Ambulatório IA</h1>
-            <p className="text-slate-400 text-sm font-medium mt-2">Acesso Restrito a Profissionais</p>
-            <div className="mt-4 px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold uppercase tracking-widest rounded-full border border-amber-200">
-              Versão de Degustação
-            </div>
+            <p className="text-slate-400 text-sm font-medium mt-1">Acesso Restrito a Profissionais</p>
           </div>
 
           <form onSubmit={handleAuth} className="space-y-6">
@@ -2525,7 +2512,7 @@ export default function App() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all"
-                  placeholder="Dr. João Silva"
+                  placeholder="Dr(a). Nome Completo"
                 />
               </div>
             )}
@@ -2537,7 +2524,7 @@ export default function App() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all"
-                placeholder="exemplo@clinica.com"
+                placeholder="medico@clinica.com"
               />
             </div>
             <div className="space-y-2">
@@ -2607,10 +2594,10 @@ export default function App() {
                   type="button"
                   onClick={handleDemoLogin}
                   disabled={authLoading}
-                  className="w-full py-4 bg-clinical-blue/10 text-clinical-blue rounded-2xl font-bold border border-clinical-blue/20 hover:bg-clinical-blue/20 transition-all flex items-center justify-center gap-3 text-sm shadow-sm"
+                  className="w-full py-4 bg-sky-50 text-sky-700 rounded-2xl font-bold border border-sky-200 hover:bg-sky-100 transition-all flex items-center justify-center gap-3 text-sm shadow-xs"
                 >
-                  <UserCheck size={18} />
-                  Acesso Rápido (Demo Admin)
+                  <Stethoscope size={18} className="text-sky-600" />
+                  Entrar como Médico Administrador
                 </button>
               </div>
             )}
@@ -2822,64 +2809,67 @@ export default function App() {
               <span>Histórico de Prontuários</span>
             </button>
 
-            <button
-              onClick={() => {
-                setShowFinancial(!showFinancial);
-                setShowHistory(false);
-                setShowAgenda(false);
-                setShowMessageHistory(false);
-                setShowDashboard(false);
-                setShowManageTeam(false);
-                setSelectedPatient(null);
-              }}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
-                showFinancial 
-                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25" 
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
-              )}
-            >
-              <DollarSign size={18} />
-              <span>Financeiro & Caixa</span>
-            </button>
-
+            {/* Módulos Exclusivos do Administrador */}
             {user?.role === 'admin' && (
-              <button
-                onClick={() => {
-                  setShowManageTeam(true);
-                  setShowAgenda(false);
-                  setShowHistory(false);
-                  setShowMessageHistory(false);
-                  setShowDashboard(false);
-                  setShowFinancial(false);
-                  setSelectedPatient(null);
-                }}
-                className={cn(
-                  "w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all",
-                  showManageTeam 
-                    ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <Users size={18} />
-                  <span>Equipe Médica</span>
-                </div>
-                {pendingCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full bg-red-500 text-[10px] font-extrabold text-white animate-pulse">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-            )}
+              <>
+                <button
+                  onClick={() => {
+                    setShowFinancial(!showFinancial);
+                    setShowHistory(false);
+                    setShowAgenda(false);
+                    setShowMessageHistory(false);
+                    setShowDashboard(false);
+                    setShowManageTeam(false);
+                    setSelectedPatient(null);
+                  }}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                    showFinancial 
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25" 
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <DollarSign size={18} />
+                  <span>Financeiro & Caixa</span>
+                </button>
 
-            <button
-              onClick={() => setShowClinicSettings(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
-            >
-              <Settings size={18} />
-              <span>Configurações da Clínica & WhatsApp</span>
-            </button>
+                <button
+                  onClick={() => {
+                    setShowManageTeam(true);
+                    setShowAgenda(false);
+                    setShowHistory(false);
+                    setShowMessageHistory(false);
+                    setShowDashboard(false);
+                    setShowFinancial(false);
+                    setSelectedPatient(null);
+                  }}
+                  className={cn(
+                    "w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                    showManageTeam 
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
+                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <Users size={18} />
+                    <span>Equipe Médica</span>
+                  </div>
+                  {pendingCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-red-500 text-[10px] font-extrabold text-white animate-pulse">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowClinicSettings(true)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+                >
+                  <Settings size={18} />
+                  <span>Configurações da Clínica & WhatsApp</span>
+                </button>
+              </>
+            )}
 
             <button
               onClick={() => setShowSystemOverview(true)}

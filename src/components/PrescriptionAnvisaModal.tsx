@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode } from 'lucide-react';
+import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode, Mic } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
@@ -50,6 +50,51 @@ export default function PrescriptionAnvisaModal({
   const [quantidade, setQuantidade] = useState('1 caixa');
   const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItem[]>([]);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+
+  // Reconhecimento de Voz para Buscar / Ditar Medicamentos ANVISA
+  const handleVoiceSearch = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast.error('Reconhecimento de voz não suportado neste navegador. Use Google Chrome ou Edge.');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsVoiceListening(true);
+      toast('🎙️ Ouvindo... Fale o nome do medicamento ou posologia.', { icon: '🎤' });
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setIsVoiceListening(false);
+      if (transcript) {
+        setSearchTerm(transcript);
+        fetchMedications(transcript);
+        toast.success(`Buscando por voz: "${transcript}"`);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsVoiceListening(false);
+      toast.error("Não foi possível capturar o áudio. Tente novamente.");
+    };
+
+    recognition.onend = () => {
+      setIsVoiceListening(false);
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      setIsVoiceListening(false);
+    }
+  };
 
   // Campos específicos para Notificação A e B (ANVISA)
   const [numeroNotificacao, setNumeroNotificacao] = useState('000123');
@@ -232,12 +277,26 @@ export default function PrescriptionAnvisaModal({
               <p className="text-xs text-slate-300">Busca oficial de medicamentos, preços médios e posologia automática</p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleVoiceSearch}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md active:scale-95 ${
+                isVoiceListening 
+                  ? 'bg-red-600 text-white animate-pulse' 
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+            >
+              <Mic className={`w-4 h-4 ${isVoiceListening ? 'animate-bounce' : ''}`} />
+              <span>{isVoiceListening ? 'Ouvindo...' : 'Ditar Remédio por Voz'}</span>
+            </button>
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-all"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -369,15 +428,28 @@ export default function PrescriptionAnvisaModal({
               <span>Buscar Medicamento / Princípio Ativo (ANVISA):</span>
               <span className="text-emerald-600 font-normal">Base com bulas oficiais e preços médios</span>
             </label>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
+            <div className="relative flex items-center">
+              <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400 pointer-events-none" />
               <input
                 type="text"
                 placeholder="Digite o nome do remédio ou princípio ativo (ex: Paracetamol, Amoxicilina, Dipirona)..."
                 value={searchTerm}
                 onChange={handleSearchChange}
-                className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                className="w-full pl-10 pr-24 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
               />
+              <button
+                type="button"
+                onClick={handleVoiceSearch}
+                className={`absolute right-2 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs ${
+                  isVoiceListening
+                    ? 'bg-red-600 text-white animate-pulse'
+                    : 'bg-slate-200 hover:bg-emerald-600 hover:text-white text-slate-700'
+                }`}
+                title="Ditar por voz"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>{isVoiceListening ? 'Ouvindo...' : 'Voz'}</span>
+              </button>
             </div>
 
             {/* Lista de Resultados ANVISA */}

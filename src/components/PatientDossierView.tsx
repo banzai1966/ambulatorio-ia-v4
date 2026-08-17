@@ -242,7 +242,7 @@ export default function PatientDossierView({
 
     recognition.onstart = () => {
       setIsDictatingPrescription(true);
-      toast.info('Ouvindo prescrição... Fale o medicamento e posologia.');
+      toast('🎙️ Ouvindo prescrição... Fale os medicamentos e posologia.', { icon: '🎤' });
     };
 
     recognition.onresult = (event: any) => {
