@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 // Forçando reprocessamento do arquivo pelo Vite
 import { 
   Calendar, 
@@ -195,16 +196,33 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const executeAutoWhatsAppSend = async (app: Appointment) => {
     setIsSendingAutoWhatsApp(true);
     const toastId = toast.loading("Enviando confirmação via WhatsApp...");
-    const digitsPhone = app.paciente_telefone.replace(/\D/g, '');
+    const digitsPhone = (app.paciente_telefone || '').replace(/\D/g, '');
     const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
     const baseUrl = window.location.origin;
     const docName = app.medico_nome || 'Dr(a). da Clínica';
-    const aptDate = new Date(app.data_hora_inicio).toLocaleDateString('pt-BR');
-    const aptTime = `${new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:${new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}`;
-    const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
+    
+    // Tratamento robusto de data e hora para evitar 'Invalid Date'
+    let aptDate = (app as any).data_consulta || '';
+    let aptTime = (app as any).hora_consulta || '';
+    if (!aptDate || !aptTime) {
+      const raw = app.data_hora_inicio || (app as any).data_hora;
+      if (raw) {
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          if (!aptDate) aptDate = d.toLocaleDateString('pt-BR');
+          if (!aptTime) aptTime = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        }
+      }
+    }
+    if (!aptDate) aptDate = 'Data da consulta';
+    if (!aptTime) aptTime = 'Horário agendado';
 
+    const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
     const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha Pré-Cadastro & Foto:* Para agilizar seu atendimento e evitar filas, preencha seus dados pelo link:\n${anamneseLink}`;
 
+    let sent = false;
+
+    // 1. Tenta envio através do servidor backend
     try {
       const res = await fetch('/api/whatsapp/send-confirmation', {
         method: 'POST',
@@ -212,7 +230,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         body: JSON.stringify({
           phone: app.paciente_telefone,
           patientName: app.paciente_nome,
-          doctorName: app.medico_nome,
+          doctorName: docName,
           date: aptDate,
           time: aptTime,
           appointmentId: app.id
@@ -220,16 +238,53 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       });
 
       if (res.ok) {
-        toast.success("✅ Mensagem enviada automaticamente para o WhatsApp do paciente!", { id: toastId });
-        setIsSendingAutoWhatsApp(false);
-        return;
+        const resJson = await res.json();
+        if (resJson.success) {
+          sent = true;
+        }
       }
     } catch (err: any) {
-      console.warn("Servidor de WhatsApp/n8n indisponível no momento.");
+      console.warn("Backend proxy indisponível ou deploy estático (Netlify). Tentando envio direto...");
+    }
+
+    // 2. Fallback direto via Evolution API (essencial quando rodando no Netlify)
+    if (!sent) {
+      try {
+        const evoUrl = "https://api.makprojetosmake.com.br";
+        const instance = "ambulatorio";
+        const apiKey = "E6247913DB92-48B4-8B54-5C7449EA639B";
+
+        await axios.post(`${evoUrl}/message/sendText/${instance}`, {
+          number: cleanPhone,
+          text: msgText,
+          linkPreview: true
+        }, {
+          headers: { apikey: apiKey }
+        });
+
+        // Grava histórico de mensagem enviada no Supabase
+        await supabase.from('mensagens').insert([{
+          telefone_cliente: cleanPhone,
+          mensagem: msgText,
+          direcao: 'enviada',
+          lida: true,
+          created_at: new Date().toISOString()
+        }]);
+
+        sent = true;
+      } catch (evoErr: any) {
+        console.error("Erro ao enviar direto pela Evolution API:", evoErr);
+      }
     }
 
     setIsSendingAutoWhatsApp(false);
-    // Fallback inteligente: se o robô estiver indisponível, copia o link e abre no WhatsApp
+
+    if (sent) {
+      toast.success("✅ Mensagem enviada automaticamente para o WhatsApp do paciente!", { id: toastId });
+      return;
+    }
+
+    // 3. Fallback manual apenas se nenhuma das APIs responder
     navigator.clipboard.writeText(msgText);
     toast.success("Link copiado! Abrindo WhatsApp...", { id: toastId });
     window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msgText)}`, '_blank');

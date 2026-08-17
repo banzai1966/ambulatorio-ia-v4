@@ -27,6 +27,43 @@ interface PublicAnamneseViewProps {
   initialAppointmentId?: string;
 }
 
+// Helper para formatar data e horário com segurança total sem 'Invalid Date'
+function formatAppointmentDate(app: any): { dateStr: string; timeStr: string } {
+  if (!app) return { dateStr: '', timeStr: '' };
+
+  let dateStr = '';
+  let timeStr = app.hora_consulta || '';
+
+  // 1. Tenta formatar data_consulta se for YYYY-MM-DD
+  if (app.data_consulta && typeof app.data_consulta === 'string') {
+    if (app.data_consulta.includes('-')) {
+      const parts = app.data_consulta.split('-');
+      if (parts.length === 3) {
+        dateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+    } else {
+      dateStr = app.data_consulta;
+    }
+  }
+
+  // 2. Se tiver data_hora_inicio ou data_hora
+  const rawDate = app.data_hora_inicio || app.data_hora;
+  if (rawDate) {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      if (!dateStr) dateStr = d.toLocaleDateString('pt-BR');
+      if (!timeStr) {
+        timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+      }
+    }
+  }
+
+  return {
+    dateStr: dateStr || 'Data Confirmada',
+    timeStr: timeStr || 'Horário Agendado'
+  };
+}
+
 export default function PublicAnamneseView({ initialPhone = '', initialAppointmentId = '' }: PublicAnamneseViewProps) {
   const [appointment, setAppointment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -80,20 +117,55 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
         if (phoneParam) setTelefone(phoneParam);
 
         if (idParam || phoneParam) {
-          const res = await fetch(`/api/public/appointment?phone=${encodeURIComponent(phoneParam)}&id=${encodeURIComponent(idParam)}`);
-          const data = await res.json();
-          if (data.appointment) {
-            setAppointment(data.appointment);
-            if (data.appointment.paciente_nome) setNome(data.appointment.paciente_nome);
-            if (data.appointment.paciente_telefone) setTelefone(data.appointment.paciente_telefone);
-            if (data.appointment.paciente_cpf) setCpf(data.appointment.paciente_cpf);
-            if (data.appointment.cep) setCep(data.appointment.cep);
-            if (data.appointment.logradouro) setLogradouro(data.appointment.logradouro);
-            if (data.appointment.bairro) setBairro(data.appointment.bairro);
-            if (data.appointment.cidade) setCidade(data.appointment.cidade);
-            if (data.appointment.estado) setEstado(data.appointment.estado);
-            if (data.appointment.numero) setNumero(data.appointment.numero);
-            if (data.appointment.complemento) setComplemento(data.appointment.complemento);
+          let foundApp = null;
+
+          try {
+            const res = await fetch(`/api/public/appointment?phone=${encodeURIComponent(phoneParam)}&id=${encodeURIComponent(idParam)}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.appointment) {
+                foundApp = data.appointment;
+              }
+            }
+          } catch (apiErr) {
+            console.warn("API proxy não respondeu. Buscando direto no banco...");
+          }
+
+          // Fallback direto no Supabase (essencial para Netlify e modo offline)
+          if (!foundApp) {
+            try {
+              if (idParam && idParam !== '1' && idParam !== 'undefined' && idParam !== 'null') {
+                const { data: byId } = await supabase.from('agendamentos').select('*').eq('id', idParam);
+                if (byId && byId.length > 0) foundApp = byId[0];
+              }
+              if (!foundApp && phoneParam) {
+                const clean = phoneParam.replace(/\D/g, '');
+                const cleanWithout55 = clean.startsWith('55') && clean.length > 10 ? clean.slice(2) : clean;
+                const { data: byPhone } = await supabase
+                  .from('agendamentos')
+                  .select('*')
+                  .or(`paciente_telefone.ilike.%${clean}%,paciente_telefone.ilike.%${cleanWithout55}%`)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+                if (byPhone && byPhone.length > 0) foundApp = byPhone[0];
+              }
+            } catch (supaFetchErr) {
+              console.warn("Erro ao buscar no Supabase:", supaFetchErr);
+            }
+          }
+
+          if (foundApp) {
+            setAppointment(foundApp);
+            if (foundApp.paciente_nome) setNome(foundApp.paciente_nome);
+            if (foundApp.paciente_telefone) setTelefone(foundApp.paciente_telefone);
+            if (foundApp.paciente_cpf) setCpf(foundApp.paciente_cpf);
+            if (foundApp.cep) setCep(foundApp.cep);
+            if (foundApp.logradouro) setLogradouro(foundApp.logradouro);
+            if (foundApp.bairro) setBairro(foundApp.bairro);
+            if (foundApp.cidade) setCidade(foundApp.cidade);
+            if (foundApp.estado) setEstado(foundApp.estado);
+            if (foundApp.numero) setNumero(foundApp.numero);
+            if (foundApp.complemento) setComplemento(foundApp.complemento);
           }
 
           // Tenta carregar anamnese pré-existente
@@ -368,11 +440,11 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-2 text-xs">
               <div className="flex items-center gap-2 text-slate-700 font-bold">
                 <Calendar className="w-4 h-4 text-blue-600" />
-                Data: {new Date(appointment.data_hora_inicio).toLocaleDateString('pt-BR')}
+                Data: {formatAppointmentDate(appointment).dateStr}
               </div>
               <div className="flex items-center gap-2 text-slate-700 font-bold">
                 <Clock className="w-4 h-4 text-blue-600" />
-                Horário: {new Date(appointment.data_hora_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                Horário: {formatAppointmentDate(appointment).timeStr}
               </div>
               <div className="flex items-center gap-2 text-slate-700 font-bold">
                 <Stethoscope className="w-4 h-4 text-blue-600" />
@@ -404,8 +476,8 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
           
           {appointment && (
             <div className="mt-4 pt-3 border-t border-white/20 flex flex-wrap justify-center gap-4 text-xs font-medium text-blue-50">
-              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {new Date(appointment.data_hora_inicio).toLocaleDateString('pt-BR')}</span>
-              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {new Date(appointment.data_hora_inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {formatAppointmentDate(appointment).dateStr}</span>
+              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {formatAppointmentDate(appointment).timeStr}</span>
               <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" /> {appointment.medico_nome || 'Médico Responsável'}</span>
             </div>
           )}
