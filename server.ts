@@ -42,13 +42,21 @@ const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXB
 const OLD_SUPABASE_URL = "https://supabase.makprojetosmake.com.br";
 const OLD_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.MkkmMW-v8x41OGDFjXuJnJf0BxR_hWyHH8d2ESgtyrg";
 
-// Configuração Evolution API (Customizável por variáveis de ambiente)
-const EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || "https://api.makprojetosmake.com.br").replace(/\/$/, "");
-const EVOLUTION_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "ambulatorio";
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 
+// Configuração Evolution API (Dinâmica com fallback para variáveis de ambiente)
+let EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || "https://api.makprojetosmake.com.br").replace(/\/$/, "");
+let EVOLUTION_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "ambulatorio";
+let EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 
                           process.env.WHATSAPP_API_KEY || 
                           process.env.EVOLUTION_API_K || 
                           "E6247913DB92-48B4-8B54-5C7449EA639B";
+
+// Helper para obter configuração dinâmica da requisição ou fallback
+function getEvolutionConfig(req?: express.Request) {
+  const url = (req?.body?.evolution_url || req?.query?.evolution_url || (req?.headers['x-evolution-url'] as string) || EVOLUTION_API_URL).replace(/\/$/, "");
+  const instance = (req?.body?.evolution_instance || req?.query?.evolution_instance || (req?.headers['x-evolution-instance'] as string) || EVOLUTION_INSTANCE_NAME).trim();
+  const apikey = (req?.body?.evolution_apikey || req?.query?.evolution_apikey || (req?.headers['x-evolution-apikey'] as string) || EVOLUTION_API_KEY).trim();
+  return { url, instance, apikey };
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
@@ -491,14 +499,16 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
 
     const msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde e envie sua foto pelo link:\n${anamneseLink}`;
 
+    const { url, instance, apikey } = getEvolutionConfig(req);
+
     // Tenta enviar via Evolution API
     try {
-      const evoRes = await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
+      const evoRes = await axios.post(`${url}/message/sendText/${instance}`, {
         number: cleanPhone,
         text: msgText,
         linkPreview: true
-      }, { headers: { 'apikey': EVOLUTION_API_KEY } });
-      addLog(`✅ Confirmação enviada via Evolution para ${cleanPhone}`);
+      }, { headers: { 'apikey': apikey } });
+      addLog(`✅ Confirmação enviada via Evolution (${instance}) para ${cleanPhone}`);
     } catch (e: any) {
       const errorMsg = e.response?.data ? JSON.stringify(e.response.data) : e.message;
       addLog(`❌ Erro Evolution confirmação (${cleanPhone}): ${errorMsg}`);
@@ -528,12 +538,14 @@ app.post("/api/whatsapp/send-survey", async (req, res) => {
     const cleanPhone = formatPhoneBR(phone);
     const msgText = `Olá *${patientName || 'Paciente'}*! 😊\n\nAgradecemos por sua consulta com *${doctorName || 'nosso especialista'}*.\n\nComo foi sua experiência no atendimento hoje?\n\n1️⃣ *Excelente* ⭐⭐⭐⭐⭐\n2️⃣ *Bom* ⭐⭐⭐⭐\n3️⃣ *Regular* ⭐⭐⭐\n4️⃣ *Ruim* ⭐⭐\n5️⃣ *Péssimo* ⭐\n\nResponda com o número de 1 a 5 ou clique nas opções!`;
 
+    const { url, instance, apikey } = getEvolutionConfig(req);
+
     try {
-      await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
+      await axios.post(`${url}/message/sendText/${instance}`, {
         number: cleanPhone,
         text: msgText,
         linkPreview: true
-      }, { headers: { 'apikey': EVOLUTION_API_KEY } });
+      }, { headers: { 'apikey': apikey } });
     } catch (e: any) {
       console.warn("Survey Evolution fail:", e.message);
     }
@@ -569,12 +581,14 @@ app.post("/api/whatsapp/process-survey-response", async (req, res) => {
       responseMsg = `Agradecemos honestamente pelo seu feedback! Sinto muito que sua experiência não tenha sido 100% perfeita. Já encaminhei sua nota e observação para a diretoria clínica para melhorarmos imediatamente. 🙏`;
     }
 
+    const { url, instance, apikey } = getEvolutionConfig(req);
+
     try {
-      await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
+      await axios.post(`${url}/message/sendText/${instance}`, {
         number: cleanPhone,
         text: responseMsg,
         linkPreview: true
-      }, { headers: { 'apikey': EVOLUTION_API_KEY } });
+      }, { headers: { 'apikey': apikey } });
     } catch (e) {
       console.warn("NPS response evolution error", e);
     }
@@ -601,8 +615,9 @@ app.post("/api/whatsapp/process-survey-response", async (req, res) => {
 // --- ROTAS DE GESTÃO DA CONEXÃO WHATSAPP (EVOLUTION API / QR CODE) ---
 app.get("/api/whatsapp/status", async (req, res) => {
   try {
-    const response = await axios.get(`${EVOLUTION_API_URL}/instance/connectionState/${EVOLUTION_INSTANCE_NAME}`, {
-      headers: { 'apikey': EVOLUTION_API_KEY },
+    const { url, instance, apikey } = getEvolutionConfig(req);
+    const response = await axios.get(`${url}/instance/connectionState/${instance}`, {
+      headers: { 'apikey': apikey },
       timeout: 5000
     });
     const instanceData = response.data?.instance || response.data || {};
@@ -613,7 +628,8 @@ app.get("/api/whatsapp/status", async (req, res) => {
       connected,
       state,
       ownerJid: instanceData.ownerJid || null,
-      profileName: instanceData.profileName || null
+      profileName: instanceData.profileName || null,
+      instance
     });
   } catch (err: any) {
     res.json({ success: true, connected: false, state: 'close', error: err.message });
@@ -622,20 +638,21 @@ app.get("/api/whatsapp/status", async (req, res) => {
 
 app.post("/api/whatsapp/connect", async (req, res) => {
   try {
+    const { url, instance, apikey } = getEvolutionConfig(req);
     let response;
     try {
-      response = await axios.get(`${EVOLUTION_API_URL}/instance/connect/${EVOLUTION_INSTANCE_NAME}`, {
-        headers: { 'apikey': EVOLUTION_API_KEY },
+      response = await axios.get(`${url}/instance/connect/${instance}`, {
+        headers: { 'apikey': apikey },
         timeout: 10000
       });
     } catch (e: any) {
       // Se a instância não existir, cria a instância na Evolution
-      response = await axios.post(`${EVOLUTION_API_URL}/instance/create`, {
-        instanceName: EVOLUTION_INSTANCE_NAME,
-        token: EVOLUTION_API_KEY,
+      response = await axios.post(`${url}/instance/create`, {
+        instanceName: instance,
+        token: apikey,
         qrcode: true
       }, {
-        headers: { 'apikey': EVOLUTION_API_KEY },
+        headers: { 'apikey': apikey },
         timeout: 10000
       });
     }
@@ -647,7 +664,8 @@ app.post("/api/whatsapp/connect", async (req, res) => {
     res.json({
       success: true,
       qrcode: base64 || null,
-      pairingCode: pairingCode || null
+      pairingCode: pairingCode || null,
+      instance
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
@@ -656,8 +674,9 @@ app.post("/api/whatsapp/connect", async (req, res) => {
 
 app.post("/api/whatsapp/logout", async (req, res) => {
   try {
-    const response = await axios.delete(`${EVOLUTION_API_URL}/instance/logout/${EVOLUTION_INSTANCE_NAME}`, {
-      headers: { 'apikey': EVOLUTION_API_KEY },
+    const { url, instance, apikey } = getEvolutionConfig(req);
+    const response = await axios.delete(`${url}/instance/logout/${instance}`, {
+      headers: { 'apikey': apikey },
       timeout: 7000
     });
     res.json({ success: true, message: "Instância desconectada com sucesso", data: response.data });
@@ -1543,9 +1562,11 @@ app.post("/api/send-message", async (req, res) => {
 
     addLog(`🚀 Chamando Evolution: ${endpoint} para ${cleanPhone}`);
 
+    const { url, instance, apikey } = getEvolutionConfig(req);
+
     try {
-      const evoResponse = await axios.post(`${EVOLUTION_API_URL}/message/${endpoint}/${EVOLUTION_INSTANCE_NAME}`, payload, { 
-        headers: { 'apikey': EVOLUTION_API_KEY } 
+      const evoResponse = await axios.post(`${url}/message/${endpoint}/${instance}`, payload, { 
+        headers: { 'apikey': apikey } 
       });
 
       addLog(`✅ Evolution respondeu: ${JSON.stringify(evoResponse.data)}`);

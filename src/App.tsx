@@ -2998,28 +2998,39 @@ export default function App() {
 
       <AnimatePresence>
         {showClinicSettings && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div 
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
+            onClick={() => setShowClinicSettings(false)}
+          >
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden my-auto"
             >
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              {/* Header fixo do Modal */}
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-clinical-blue rounded-xl flex items-center justify-center text-white">
+                  <div className="w-10 h-10 bg-clinical-blue rounded-xl flex items-center justify-center text-white shadow-sm">
                     <Settings size={20} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800">Configurações da Clínica</h3>
-                    <p className="text-xs text-slate-500">Personalize o cabeçalho dos seus documentos</p>
+                    <h3 className="font-bold text-slate-800 text-base">Configurações da Clínica & WhatsApp</h3>
+                    <p className="text-xs text-slate-500">Personalize dados do consultório e conexão da API</p>
                   </div>
                 </div>
-                <button onClick={() => setShowClinicSettings(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
-                  <X size={20} className="text-slate-400" />
+                <button 
+                  onClick={() => setShowClinicSettings(false)} 
+                  className="p-2 hover:bg-slate-200 text-slate-400 hover:text-slate-700 rounded-full transition-colors"
+                  title="Fechar (Esc)"
+                >
+                  <X size={22} />
                 </button>
               </div>
-              <div className="p-8">
+
+              {/* Corpo com Scroll Suave */}
+              <div className="p-6 sm:p-8 overflow-y-auto flex-1">
                 <ClinicSettings onClose={() => setShowClinicSettings(false)} />
               </div>
             </motion.div>

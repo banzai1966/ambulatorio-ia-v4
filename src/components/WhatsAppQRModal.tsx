@@ -21,15 +21,38 @@ import toast from 'react-hot-toast';
 interface WhatsAppQRModalProps {
   isOpen: boolean;
   onClose: () => void;
+  evolutionConfig?: {
+    url?: string;
+    instance?: string;
+    apikey?: string;
+  };
 }
 
-export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProps) {
+export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: WhatsAppQRModalProps) {
   const [status, setStatus] = useState<'checking' | 'connected' | 'disconnected' | 'connecting'>('checking');
   const [qrCodeBase64, setQrCodeBase64] = useState<string | null>(null);
   const [ownerJid, setOwnerJid] = useState<string | null>(null);
   const [isLoadingQr, setIsLoadingQr] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getQueryParams = () => {
+    if (!evolutionConfig) return '';
+    const params = new URLSearchParams();
+    if (evolutionConfig.url) params.append('evolution_url', evolutionConfig.url);
+    if (evolutionConfig.instance) params.append('evolution_instance', evolutionConfig.instance);
+    if (evolutionConfig.apikey) params.append('evolution_apikey', evolutionConfig.apikey);
+    const str = params.toString();
+    return str ? `?${str}` : '';
+  };
+
+  const getRequestBody = () => {
+    return {
+      evolution_url: evolutionConfig?.url,
+      evolution_instance: evolutionConfig?.instance,
+      evolution_apikey: evolutionConfig?.apikey
+    };
+  };
 
   // Verificar status inicial ao abrir
   useEffect(() => {
@@ -39,7 +62,7 @@ export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProp
       stopPolling();
     }
     return () => stopPolling();
-  }, [isOpen]);
+  }, [isOpen, evolutionConfig?.instance]);
 
   const stopPolling = () => {
     if (pollingRef.current) {
@@ -58,7 +81,7 @@ export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProp
   const checkConnectionStatus = async (isSilent = false) => {
     if (!isSilent) setIsLoadingQr(true);
     try {
-      const res = await fetch('/api/whatsapp/status');
+      const res = await fetch(`/api/whatsapp/status${getQueryParams()}`);
       const data = await res.json();
       
       if (data.connected) {
@@ -66,7 +89,7 @@ export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProp
         setOwnerJid(data.ownerJid || null);
         setQrCodeBase64(null);
         stopPolling();
-        if (!isSilent) toast.success("WhatsApp conectado e ativo!");
+        if (!isSilent) toast.success(`WhatsApp (${data.instance || evolutionConfig?.instance || 'instância'}) conectado e ativo!`);
       } else {
         if (status === 'connected') {
           setStatus('disconnected');
@@ -88,7 +111,11 @@ export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProp
     setQrCodeBase64(null);
 
     try {
-      const res = await fetch('/api/whatsapp/connect', { method: 'POST' });
+      const res = await fetch('/api/whatsapp/connect', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(getRequestBody())
+      });
       const data = await res.json();
 
       if (data.qrcode) {
@@ -97,7 +124,7 @@ export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProp
           ? data.qrcode 
           : `data:image/png;base64,${data.qrcode}`;
         setQrCodeBase64(formattedQr);
-        toast.success("QR Code gerado! Aponte a câmera do seu celular.");
+        toast.success(`QR Code gerado para a instância "${data.instance || evolutionConfig?.instance || 'instância'}"! Aponte a câmera.`);
         startPolling();
       } else {
         toast.error("Não foi possível obter o QR Code. Verifique se a instância já está conectada.");
@@ -112,13 +139,17 @@ export default function WhatsAppQRModal({ isOpen, onClose }: WhatsAppQRModalProp
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm("Deseja realmente desconectar o WhatsApp do consultório? O envio de mensagens automáticas será pausado.")) {
+    if (!window.confirm(`Deseja realmente desconectar a instância "${evolutionConfig?.instance || 'WhatsApp'}" do consultório?`)) {
       return;
     }
 
     setIsDisconnecting(true);
     try {
-      const res = await fetch('/api/whatsapp/logout', { method: 'POST' });
+      const res = await fetch('/api/whatsapp/logout', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(getRequestBody())
+      });
       const data = await res.json();
       if (data.success) {
         toast.success("WhatsApp desconectado com sucesso!");
