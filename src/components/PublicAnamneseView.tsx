@@ -500,32 +500,55 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           
-          {/* Banner de Ajuda se estiver dentro do navegador interno do WhatsApp */}
+          {/* Banner Didático de Ajuda para Navegador / WhatsApp WebView */}
           {isInAppBrowser && (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex items-start gap-3 text-amber-900 text-xs shadow-sm">
-              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="space-y-1.5 flex-1">
-                <p className="font-bold text-amber-950">Dica para liberar a Câmera e Galeria sem bloqueios:</p>
-                <p className="text-amber-800 leading-relaxed">
-                  Você está no visualizador interno do WhatsApp. Para liberar a câmera do celular com facilidade, toque nos <strong>3 pontinhos (⋮)</strong> no topo da tela e escolha <strong>"Abrir no Chrome / Navegador"</strong>.
-                </p>
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const currentUrl = window.location.href;
-                      if (/android/i.test(navigator.userAgent)) {
-                        const cleanUrl = currentUrl.replace(/^https?:\/\//, '');
-                        window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
-                      } else {
-                        window.open(currentUrl, '_blank');
-                      }
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition-all shadow-sm active:scale-95"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" /> Abrir no Google Chrome
-                  </button>
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300/80 p-4 sm:p-5 rounded-2xl space-y-3 text-amber-950 text-xs shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs shrink-0">
+                  <AlertCircle className="w-5 h-5" />
                 </div>
+                <div className="flex-1 space-y-1">
+                  <h3 className="font-extrabold text-sm text-amber-950 flex items-center gap-1.5">
+                    📱 Como liberar a Câmera e Fotos no seu celular:
+                  </h3>
+                  <p className="text-amber-900 leading-relaxed font-medium">
+                    O WhatsApp costuma bloquear o acesso à câmera por segurança. Para abrir normalmente sem erro, siga o passo a passo abaixo:
+                  </p>
+                </div>
+              </div>
+
+              {/* Guia Visual Passo a Passo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-semibold text-[11px] text-amber-950">
+                <div className="flex items-center gap-2 p-2 bg-white/80 rounded-xl border border-amber-200">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[10px]">1</span>
+                  <span>Toque nos <strong>3 pontinhos (⋮)</strong> no canto superior</span>
+                </div>
+                <div className="flex items-center gap-2 p-2 bg-white/80 rounded-xl border border-amber-200">
+                  <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[10px]">2</span>
+                  <span>Escolha <strong>"Abrir no Chrome / Navegador"</strong></span>
+                </div>
+              </div>
+
+              {/* Botão de Atalho Direto para o Chrome */}
+              <div className="pt-1 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentUrl = window.location.href;
+                    if (/android/i.test(navigator.userAgent)) {
+                      const cleanUrl = currentUrl.replace(/^https?:\/\//, '');
+                      window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
+                    } else {
+                      window.open(currentUrl, '_blank');
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-amber-600/20 active:scale-95 cursor-pointer"
+                >
+                  <ExternalLink className="w-4 h-4" /> Toque aqui para Abrir no Google Chrome
+                </button>
+                <span className="text-[10px] text-amber-800 font-medium">
+                  (Recomendado para anexar sua selfie sem travar)
+                </span>
               </div>
             </div>
           )}
