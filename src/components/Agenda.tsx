@@ -286,9 +286,15 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         const receiptMsg = `🧾 *COMPROVANTE DE PAGAMENTO - AMBULATÓRIO IA*\n\nOlá *${payingAppointment.paciente_nome}*,\nConfirmamos o recebimento da sua consulta!\n\n📋 *Detalhes do Recibo:*\n👨‍⚕️ *Profissional:* ${payingAppointment.medico_nome || 'Dr(a). da Clínica'}\n💵 *Valor Pago:* ${formattedMoney}\n💳 *Forma:* ${labelMethod}\n📅 *Data:* ${todayStr}\n\n✅ *Status:* Pagamento Confirmado & Check-in Liberado!\n\nObrigado pela preferência e tenha uma excelente consulta! 🏥`;
 
         try {
-          const evoUrl = "https://api.makprojetosmake.com.br";
-          const instance = "ambulatorio";
-          const apiKey = "E6247913DB92-48B4-8B54-5C7449EA639B";
+          let clinicConfig: any = {};
+          try {
+            const saved = localStorage.getItem('clinic_info');
+            if (saved) clinicConfig = JSON.parse(saved);
+          } catch (e) {}
+
+          const evoUrl = clinicConfig.evolution_url || "https://api.makprojetosmake.com.br";
+          const instance = clinicConfig.evolution_instance || "ambulatorio";
+          const apiKey = clinicConfig.evolution_apikey || "E6247913DB92-48B4-8B54-5C7449EA639B";
 
           await axios.post(`${evoUrl}/message/sendText/${instance}`, {
             number: cleanPhone,
@@ -348,7 +354,13 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
     let sent = false;
 
-    // 1. Tenta envio através do servidor backend
+    // 1. Tenta envio através do servidor backend com as credenciais salvas no localStorage
+    let clinicConfig: any = {};
+    try {
+      const saved = localStorage.getItem('clinic_info');
+      if (saved) clinicConfig = JSON.parse(saved);
+    } catch (e) {}
+
     try {
       const res = await fetch('/api/whatsapp/send-confirmation', {
         method: 'POST',
@@ -359,7 +371,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           doctorName: docName,
           date: aptDate,
           time: aptTime,
-          appointmentId: app.id
+          appointmentId: app.id,
+          evolution_url: clinicConfig.evolution_url,
+          evolution_instance: clinicConfig.evolution_instance,
+          evolution_apikey: clinicConfig.evolution_apikey
         })
       });
 
@@ -376,9 +391,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     // 2. Fallback direto via Evolution API (essencial quando rodando no Netlify)
     if (!sent) {
       try {
-        const evoUrl = "https://api.makprojetosmake.com.br";
-        const instance = "ambulatorio";
-        const apiKey = "E6247913DB92-48B4-8B54-5C7449EA639B";
+        const evoUrl = clinicConfig.evolution_url || "https://api.makprojetosmake.com.br";
+        const instance = clinicConfig.evolution_instance || "ambulatorio";
+        const apiKey = clinicConfig.evolution_apikey || "E6247913DB92-48B4-8B54-5C7449EA639B";
 
         await axios.post(`${evoUrl}/message/sendText/${instance}`, {
           number: cleanPhone,

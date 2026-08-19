@@ -194,6 +194,22 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
               if (rec.foto_url) setPhotoPreview(rec.foto_url);
               if (rec.medicamentos_atuais || rec.medicamentosAtuais) setMedicamentosAtuais(rec.medicamentos_atuais || rec.medicamentosAtuais);
               if (rec.observacoes_clinicas || rec.observacoesClinicas) setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas);
+
+              if (rec.alertas_clinicos && Array.isArray(rec.alertas_clinicos)) {
+                setIsHipertenso(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "HIPERTENSO" || String(a).toUpperCase().includes("HIPERTENSO")));
+                setIsDiabetico(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "DIABÉTICO" || String(a).toUpperCase().includes("DIABÉTICO") || String(a).toUpperCase().includes("DIABETES")));
+                setTemCardiopatia(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "CARDIOPATIA" || String(a).toUpperCase().includes("CARDIOPATIA") || String(a).toUpperCase().includes("MARCAPASSO") || String(a).toUpperCase().includes("CARDÍACO")));
+                setUsaAnticoagulante(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "ANTICOAGULANTE" || String(a).toUpperCase().includes("ANTICOAGULANTE")));
+
+                const alergiasEncontradas = rec.alertas_clinicos
+                  .filter((a: string) => String(a).toUpperCase().startsWith("ALERGIA:"))
+                  .map((a: string) => String(a).replace(/ALERGIA:\s*/i, '').trim());
+                
+                if (alergiasEncontradas.length > 0) {
+                  setAlergias(alergiasEncontradas);
+                  setAlergiaTexto(alergiasEncontradas.join(', '));
+                }
+              }
             }
           } catch (e) {
             // Ignora erro
