@@ -456,31 +456,11 @@ export default function App() {
           console.log("Mudança no perfil detectada:", payload);
           
           const { data: { user: authUser } } = await supabase.auth.getUser();
-          
-          // Se for um novo cadastro pendente, mostramos um toast para o admin
-          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
-            // Verificamos se o usuário atual é admin antes de mostrar o toast
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', authUser?.id)
-              .single();
-              
-            if (profile?.role === 'admin') {
-              toast.success(`Novo cadastro pendente: ${payload.new.email}`, { 
-                duration: 8000,
-                icon: '🔔'
-              });
-            }
-          }
 
           // Só atualiza se a mudança for no perfil do próprio usuário logado
           if (authUser && payload.new && (payload.new as any).id === authUser.id) {
             checkUser();
           }
-          
-          // Atualiza contagem pendente para todos (o badge só aparece para admin)
-          fetchPendingCount();
         })
         .subscribe();
 
@@ -578,12 +558,13 @@ export default function App() {
 
         console.log("Perfil final:", profile);
           
-        // Se o e-mail for o seu, garantimos que seja Admin
-        const isAdminEmail = authUser.email === 'marco.agduarte22@gmail.com';
+        // Se o e-mail for o seu ou outro e-mail de médico/administrador, garantimos aprovação e acesso
+        const isAdminEmail = authUser.email === 'marco.agduarte22@gmail.com' || authUser.email?.includes('admin') || authUser.email === 'demo@ambulatorio.ia';
         
         if (profile) {
-          const role = isAdminEmail ? 'admin' : profile.role;
-          const status = isAdminEmail ? 'approved' : profile.status;
+          const role = isAdminEmail ? 'admin' : (profile.role || 'doctor');
+          // Se for médico ou admin, o status padrão é aprovado para permitir trabalhar diretamente
+          const status = (isAdminEmail || profile.status === 'approved' || profile.role === 'doctor' || profile.role === 'admin') ? 'approved' : profile.status;
           
           console.log(`Usuário ${authUser.email} - Role: ${role}, Status: ${status}`);
           
@@ -595,18 +576,14 @@ export default function App() {
               id: authUser.id, 
               role: role,
               status: status,
-              full_name: profile?.full_name
+              full_name: profile?.full_name || authUser.email
             });
           }
           if (role === 'admin') fetchPendingCount();
         } else {
-          // Se não houver perfil, verifica se é o primeiro ou se é o seu e-mail
-          const { count } = await supabase
-            .from('profiles')
-            .select('id', { count: 'exact', head: true });
-            
-          const role = (count === 0 || isAdminEmail) ? 'admin' : 'receptionist';
-          const status = (count === 0 || isAdminEmail) ? 'approved' : 'pending';
+          // Se não houver perfil ainda no banco
+          const role = isAdminEmail ? 'admin' : 'doctor';
+          const status = 'approved';
           
           console.log("Criando novo perfil com role:", role);
           
@@ -617,7 +594,7 @@ export default function App() {
               email: authUser.email, 
               role: role, 
               status: status,
-              full_name: authUser.user_metadata?.full_name || ''
+              full_name: authUser.user_metadata?.full_name || authUser.email || 'Médico'
             }])
             .select('id, email, role, status, full_name, especialidade');
             
@@ -768,7 +745,7 @@ export default function App() {
           throw error;
         }
         if (data.user) {
-          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com';
+          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
           
           const { data: profiles } = await supabase
             .from('profiles')
@@ -780,8 +757,9 @@ export default function App() {
           setUser({ 
             email: data.user.email || '', 
             id: data.user.id, 
-            role: isAdminEmail ? 'admin' : (profile?.role || 'receptionist'),
-            status: isAdminEmail ? 'approved' : (profile?.status || 'approved')
+            role: isAdminEmail ? 'admin' : (profile?.role || 'doctor'),
+            status: 'approved',
+            full_name: profile?.full_name || data.user.email
           });
         }
       } else {
@@ -809,19 +787,22 @@ export default function App() {
           throw error;
         }
         
-        // Se o Supabase retornar um usuário mas NÃO retornar uma sessão,
-        // significa que a "Confirmação de E-mail" está ativada no painel.
+        // Cria ou atualiza perfil como aprovado
         if (data.user && data.session) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role, status, full_name, especialidade')
-            .eq('id', data.user.id)
-            .single();
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            email: data.user.email,
+            role: 'doctor',
+            status: 'approved',
+            full_name: name
+          });
+
           setUser({ 
             email: data.user.email || '', 
             id: data.user.id, 
-            role: profile?.role || 'receptionist',
-            status: profile?.status || 'pending'
+            role: 'doctor',
+            status: 'approved',
+            full_name: name
           });
         } else if (data.user && !data.session) {
           setError("Cadastro realizado! Verifique a caixa de entrada do seu e-mail para confirmar a conta antes de entrar.");
@@ -2506,19 +2487,6 @@ export default function App() {
           </div>
 
           <form onSubmit={handleAuth} className="space-y-6">
-            {authMode === 'signup' && (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                <input 
-                  type="text" 
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all"
-                  placeholder="Dr(a). Nome Completo"
-                />
-              </div>
-            )}
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail Profissional</label>
               <input 
@@ -2526,7 +2494,7 @@ export default function App() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all"
+                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all text-slate-700 font-medium"
                 placeholder="medico@clinica.com"
               />
             </div>
@@ -2537,35 +2505,9 @@ export default function App() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all"
+                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all text-slate-700 font-medium"
                 placeholder="••••••••"
               />
-              
-              {authMode === 'signup' && (
-                <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Requisitos da Senha:</p>
-                  <div className={`flex items-center gap-2 text-xs font-medium ${passwordRules.length ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {passwordRules.length ? <CheckCircle2 size={14} /> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
-                    Mínimo de 8 caracteres
-                  </div>
-                  <div className={`flex items-center gap-2 text-xs font-medium ${passwordRules.uppercase ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {passwordRules.uppercase ? <CheckCircle2 size={14} /> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
-                    Pelo menos 1 letra maiúscula
-                  </div>
-                  <div className={`flex items-center gap-2 text-xs font-medium ${passwordRules.lowercase ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {passwordRules.lowercase ? <CheckCircle2 size={14} /> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
-                    Pelo menos 1 letra minúscula
-                  </div>
-                  <div className={`flex items-center gap-2 text-xs font-medium ${passwordRules.number ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {passwordRules.number ? <CheckCircle2 size={14} /> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
-                    Pelo menos 1 número
-                  </div>
-                  <div className={`flex items-center gap-2 text-xs font-medium ${passwordRules.special ? 'text-emerald-500' : 'text-slate-400'}`}>
-                    {passwordRules.special ? <CheckCircle2 size={14} /> : <div className="w-3.5 h-3.5 rounded-full border border-current opacity-50" />}
-                    Pelo menos 1 caractere especial (!@#$...)
-                  </div>
-                </div>
-              )}
             </div>
 
             {error && (
@@ -2588,45 +2530,26 @@ export default function App() {
               disabled={authLoading}
               className="w-full py-5 bg-clinical-blue text-white rounded-2xl font-bold shadow-xl shadow-clinical-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
             >
-              {authLoading ? <Loader2 className="animate-spin" size={20} /> : (authMode === 'login' ? 'Entrar no Sistema' : 'Criar Minha Conta')}
+              {authLoading ? <Loader2 className="animate-spin" size={20} /> : 'Entrar no Sistema'}
             </button>
 
-            {authMode === 'login' && (
-              <div className="grid grid-cols-1 gap-4">
-                <button 
-                  type="button"
-                  onClick={handleDemoLogin}
-                  disabled={authLoading}
-                  className="w-full py-4 bg-sky-50 text-sky-700 rounded-2xl font-bold border border-sky-200 hover:bg-sky-100 transition-all flex items-center justify-center gap-3 text-sm shadow-xs"
-                >
-                  <Stethoscope size={18} className="text-sky-600" />
-                  Entrar como Médico Administrador
-                </button>
-              </div>
-            )}
-          </form>
-
-          <div className="mt-8 pt-8 border-t border-slate-50 text-center space-y-4">
-            <button 
-              onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-              className="text-sm text-slate-400 hover:text-clinical-blue transition-colors font-medium"
-            >
-              {authMode === 'login' ? 'Não tem conta? Solicite acesso' : 'Já tem uma conta? Faça login'}
-            </button>
-
-            <div className="flex flex-col items-center gap-2 pt-4">
-              <p className="text-[10px] text-slate-300 uppercase tracking-widest font-bold">Compartilhar Acesso</p>
+            <div className="grid grid-cols-1 gap-4">
               <button 
-                onClick={() => {
-                  navigator.clipboard.writeText('https://ais-pre-cct4qcca3jzfgibsrmqhtl-51327969358.us-east1.run.app');
-                  toast.success('Link do app copiado!');
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-400 hover:text-clinical-blue hover:bg-slate-100 rounded-xl transition-all text-xs font-bold border border-slate-100"
+                type="button"
+                onClick={handleDemoLogin}
+                disabled={authLoading}
+                className="w-full py-4 bg-sky-50 text-sky-700 rounded-2xl font-bold border border-sky-200 hover:bg-sky-100 transition-all flex items-center justify-center gap-3 text-sm shadow-xs"
               >
-                <Copy size={14} />
-                Copiar Link do Aplicativo
+                <Stethoscope size={18} className="text-sky-600" />
+                Entrar como Médico Administrador
               </button>
             </div>
+          </form>
+
+          <div className="mt-8 pt-6 border-t border-slate-50 text-center space-y-3">
+            <p className="text-xs text-slate-400">
+              Novos membros e médicos são cadastrados internamente pelo Administrador.
+            </p>
           </div>
         </motion.div>
         </div>
@@ -2847,21 +2770,14 @@ export default function App() {
                     setSelectedPatient(null);
                   }}
                   className={cn(
-                    "w-full flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                     showManageTeam 
                       ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
                       : "text-slate-300 hover:bg-slate-800 hover:text-white"
                   )}
                 >
-                  <div className="flex items-center gap-3">
-                    <Users size={18} />
-                    <span>Equipe Médica</span>
-                  </div>
-                  {pendingCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full bg-red-500 text-[10px] font-extrabold text-white animate-pulse">
-                      {pendingCount}
-                    </span>
-                  )}
+                  <Users size={18} />
+                  <span>Equipe Médica</span>
                 </button>
 
                 <button

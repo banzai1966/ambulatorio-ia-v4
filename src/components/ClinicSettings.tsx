@@ -100,10 +100,19 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
   const handleSave = () => {
     setLoading(true);
     try {
-      localStorage.setItem('clinic_info', JSON.stringify(info));
-      toast.success("Configurações da clínica e WhatsApp salvas com sucesso!");
+      const cleanInfo = {
+        ...info,
+        evolution_url: (info.evolution_url || defaultClinicInfo.evolution_url).trim(),
+        evolution_instance: (info.evolution_instance || defaultClinicInfo.evolution_instance).trim(),
+        evolution_apikey: (info.evolution_apikey || defaultClinicInfo.evolution_apikey).trim(),
+      };
+      
+      localStorage.setItem('clinic_info', JSON.stringify(cleanInfo));
+      setInfo(cleanInfo);
+      toast.success(`Configurações da clínica e WhatsApp (Instância: ${cleanInfo.evolution_instance}) salvas com sucesso!`);
       window.dispatchEvent(new Event('clinic_info_updated'));
-      setTimeout(onClose, 500);
+      checkStatus(cleanInfo);
+      setTimeout(onClose, 600);
     } catch (err) {
       toast.error("Erro ao salvar configurações.");
     } finally {

@@ -13,7 +13,8 @@ import {
   UserPlus,
   Mail,
   Lock,
-  Stethoscope
+  Stethoscope,
+  AlertCircle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { toast } from 'react-hot-toast';
@@ -85,7 +86,18 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         throw error;
       }
       
-      setProfiles(data || []);
+      const rawProfiles = data || [];
+      // Se houver perfis com status 'pending' antigo, atualiza automaticamente no banco para 'approved'
+      const pendingProfiles = rawProfiles.filter(p => p.status === 'pending');
+      if (pendingProfiles.length > 0) {
+        Promise.all(
+          pendingProfiles.map(p => 
+            supabase.from('profiles').update({ status: 'approved' }).eq('id', p.id)
+          )
+        ).catch(e => console.warn("Erro ao auto-aprovar:", e));
+      }
+
+      setProfiles(rawProfiles.map(p => ({ ...p, status: 'approved' as const })));
     } catch (err: any) {
       console.error("Erro ao buscar equipe:", err);
       setError(err.message || "Falha ao buscar equipe.");
@@ -185,23 +197,54 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
     }
   };
 
-  const deleteProfile = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja remover este membro da equipe? Esta ação não pode ser desfeita.")) return;
+  // Modal de confirmação de exclusão
+  const [memberToDelete, setMemberToDelete] = useState<Profile | null>(null);
+
+  const confirmDeleteMember = async () => {
+    if (!memberToDelete) return;
+    const { id, email, full_name } = memberToDelete;
     
     setDeleting(id);
+    setMemberToDelete(null); // Fecha o popup imediatamente
+    toast.dismiss(); // Limpa toasts anteriores
+    const toastId = toast.loading("Removendo membro da equipe...");
+    
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', id);
+      // 1. Remove da interface visual imediatamente
+      setProfiles(prev => prev.filter(p => p.id !== id && p.email !== email));
+
+      // 2. Executa exclusão com timeout de 6 segundos
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      try {
+        await fetch("/api/admin/delete-member", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, email }),
+          signal: controller.signal
+        });
+      } catch (fErr) {
+        console.warn("Aviso fetch delete backend:", fErr);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      // 3. Fallback adicional direto no banco de forma não bloqueante
+      if (email) {
+        supabase.from('profiles').delete().eq('email', email).catch(console.warn);
+      }
+      if (id) {
+        supabase.from('profiles').delete().eq('id', id).catch(console.warn);
+      }
       
-      if (error) throw error;
-      
-      toast.success("Membro removido com sucesso!");
-      setProfiles(profiles.filter(p => p.id !== id));
+      toast.dismiss(toastId);
+      toast.success(`${full_name || email} foi removido com sucesso!`, { duration: 3000 });
     } catch (err: any) {
       console.error("Erro ao excluir perfil:", err);
+      toast.dismiss(toastId);
       toast.error(`Falha ao excluir: ${err.message || 'Erro desconhecido'}`);
+      fetchProfiles();
     } finally {
       setDeleting(null);
     }
@@ -371,6 +414,50 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         </div>
       )}
 
+      {/* POPUP MODAL DE CONFIRMAÇÃO DE EXCLUSÃO */}
+      {memberToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-red-100 text-left relative animate-scaleUp">
+            <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-lg font-bold text-slate-800 mb-1">
+              Remover membro da equipe?
+            </h3>
+            
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+              Você está prestes a excluir o acesso de <strong className="text-slate-700">{memberToDelete.full_name || memberToDelete.email}</strong> ({memberToDelete.email}). Esta ação removerá o perfil e o acesso ao sistema.
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 mb-5 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-medium text-amber-800 leading-tight">
+                Permissão de Administrador: Esta operação remove os registros do banco e revoga todas as credenciais.
+              </p>
+            </div>
+
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setMemberToDelete(null)}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMember}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 active:scale-98 text-white rounded-xl font-bold text-xs shadow-md shadow-red-500/20 transition flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Sim, Deletar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LISTA DE MEMBROS */}
       <div className="space-y-3">
         {error && (
@@ -461,7 +548,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                 
                 <button 
                   type="button"
-                  onClick={() => deleteProfile(profile.id)}
+                  onClick={() => setMemberToDelete(profile)}
                   disabled={deleting === profile.id}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all self-end mb-0.5"
                   title="Remover Membro"

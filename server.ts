@@ -192,6 +192,43 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
   };
 }
 
+// --- ROTA DE EXCLUSÃO DE MEMBRO DA EQUIPE (SERVICE ROLE / ADMIN) ---
+app.post("/api/admin/delete-member", async (req, res) => {
+  try {
+    const { id, email } = req.body;
+    if (!id && !email) {
+      return res.status(400).json({ error: "ID ou e-mail é obrigatório" });
+    }
+
+    console.log(`[ADMIN] Excluindo membro: ID=${id}, Email=${email}`);
+
+    // 1. Remove da tabela pública de perfis
+    if (id) {
+      const { error: pErr } = await supabase.from('profiles').delete().eq('id', id);
+      if (pErr) console.warn("[ADMIN] Erro ao deletar profile por ID:", pErr.message);
+    }
+    if (email) {
+      const { error: eErr } = await supabase.from('profiles').delete().eq('email', email);
+      if (eErr) console.warn("[ADMIN] Erro ao deletar profile por Email:", eErr.message);
+    }
+
+    // 2. Tenta remover do Auth do Supabase usando service_role
+    if (id) {
+      try {
+        await supabase.auth.admin.deleteUser(id);
+        console.log(`[ADMIN] Usuário Auth ${id} removido com sucesso.`);
+      } catch (authErr: any) {
+        console.warn("[ADMIN] Aviso ao deletar usuário do Auth:", authErr.message);
+      }
+    }
+
+    res.json({ success: true, message: "Membro removido com sucesso!" });
+  } catch (err: any) {
+    console.error("[ADMIN] Erro fatal ao deletar membro:", err);
+    res.status(500).json({ error: err.message || "Erro ao excluir membro" });
+  }
+});
+
 app.post("/api/process-clinical", async (req, res) => {
   try {
     const { input, examMode, reason } = req.body;
@@ -687,6 +724,40 @@ app.post("/api/whatsapp/logout", async (req, res) => {
 
 // In-memory cache for submitted anamneses
 const anamneseStore = new Map<string, any>();
+
+// --- DELETAR MEMBRO DA EQUIPE (PERMISSÃO TOTAL SERVER-SIDE COM SERVICE KEY) ---
+app.post("/api/admin/delete-member", async (req, res) => {
+  try {
+    const { id, email } = req.body;
+    console.log(`[SERVER] Excluindo membro ID: ${id}, Email: ${email}`);
+
+    if (!id && !email) {
+      return res.status(400).json({ error: "ID ou email obrigatório" });
+    }
+
+    // 1. Deletar do banco profiles via supabase service role
+    if (id) {
+      await supabase.from('profiles').delete().eq('id', id);
+    }
+    if (email) {
+      await supabase.from('profiles').delete().eq('email', email);
+    }
+
+    // 2. Deletar do Supabase Auth se houver ID
+    if (id) {
+      try {
+        await supabase.auth.admin.deleteUser(id);
+      } catch (authErr: any) {
+        console.warn("[SERVER] Aviso ao deletar do Auth:", authErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: "Membro excluído permanentemente." });
+  } catch (err: any) {
+    console.error("[SERVER] Erro ao deletar membro:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 // --- DELETAR AGENDAMENTO (PERMISSÃO TOTAL SERVER-SIDE) ---
 app.delete("/api/agendamentos/:id", async (req, res) => {

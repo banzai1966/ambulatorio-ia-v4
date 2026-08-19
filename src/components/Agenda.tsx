@@ -28,8 +28,7 @@ import {
   DollarSign,
   Wallet,
   Receipt,
-  CheckCircle2,
-  X
+  CheckCircle2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';

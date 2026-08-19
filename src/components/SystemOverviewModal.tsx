@@ -23,6 +23,7 @@ import {
   HelpCircle, 
   Brain, 
   Users, 
+  UserCheck, 
   DollarSign, 
   History, 
   BookOpen,
