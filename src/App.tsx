@@ -3022,25 +3022,27 @@ export default function App() {
               <span>{isReloading ? "Atualizando..." : "Recarregar / Atualizar App"}</span>
             </button>
 
-            <div className="flex gap-1.5 pt-1">
-              <button
-                onClick={() => {
-                  const recs = getOfflineRecords();
-                  const fullHistory = history.length > 0 ? history : recs;
-                  if (fullHistory.length === 0) {
-                    toast.error("Nenhum prontuário encontrado para backup.");
-                    return;
-                  }
-                  exportLocalDataJSON(fullHistory);
-                  toast.success("Backup do banco de dados salvo em Downloads!");
-                }}
-                className="flex-1 py-1 px-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
-                title="Salvar cópia de segurança em arquivo JSON"
-              >
-                <Save size={10} />
-                Backup JSON
-              </button>
-            </div>
+            {user?.role === 'admin' && (
+              <div className="flex gap-1.5 pt-1">
+                <button
+                  onClick={() => {
+                    const recs = getOfflineRecords();
+                    const fullHistory = history.length > 0 ? history : recs;
+                    if (fullHistory.length === 0) {
+                      toast.error("Nenhum prontuário encontrado para backup.");
+                      return;
+                    }
+                    exportLocalDataJSON(fullHistory);
+                    toast.success("Backup do banco de dados salvo em Downloads!");
+                  }}
+                  className="flex-1 py-1.5 px-2 bg-slate-700/80 hover:bg-slate-600 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-600/40"
+                  title="Salvar cópia de segurança em arquivo JSON (Exclusivo Administrador)"
+                >
+                  <Save size={11} className="text-blue-400" />
+                  Backup JSON (Admin)
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
