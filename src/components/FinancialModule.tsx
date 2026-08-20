@@ -683,8 +683,12 @@ export default function FinancialModule() {
               <div className="text-xs leading-relaxed text-justify space-y-3">
                 <p>
                   Recebi(emos) de <strong>{selectedReceipt.patientName || 'PACIENTE NÃO INFORMADO'}</strong>
-                  {selectedReceipt.patientCpf ? `, inscrito(a) no CPF sob o nº <strong>${selectedReceipt.patientCpf}</strong>` : ''},
-                  a quantia de <strong>{numberToWordsBrl(selectedReceipt.amount)}</strong>, referente a <strong>{selectedReceipt.description}</strong>.
+                  {selectedReceipt.patientCpf ? (
+                    <>
+                      , inscrito(a) no CPF sob o nº <strong>{selectedReceipt.patientCpf}</strong>
+                    </>
+                  ) : ''}
+                  , a quantia de <strong>{numberToWordsBrl(selectedReceipt.amount)}</strong>, referente a <strong>{selectedReceipt.description}</strong>.
                 </p>
                 <p>
                   Forma de Pagamento: <strong>{getMethodLabel(selectedReceipt.paymentMethod)}</strong>.
