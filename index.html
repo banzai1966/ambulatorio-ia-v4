@@ -8,13 +8,30 @@
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2966/2966327.png" />
     <title>Ambulatório IA - Prontuário Médico Inteligente</title>
     <script>
-      console.log("Loading Ambulatório IA v4.5 Hybrid Offline - " + new Date().getTime());
+      console.log("Loading Ambulatório IA v4.6 Hybrid Offline - " + new Date().getTime());
       
-      // Registrar Service Worker para PWA Offline
+      // Registrar Service Worker para PWA Offline e detector de atualizações
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js').then(function(registration) {
             console.log('[SW] Registrado com sucesso:', registration.scope);
+            
+            // Verifica se já existe atualização aguardando
+            if (registration.waiting) {
+              window.dispatchEvent(new CustomEvent('swUpdated', { detail: registration }));
+            }
+
+            registration.addEventListener('updatefound', function() {
+              var newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('[SW] Nova versão detectada e pronta!');
+                    window.dispatchEvent(new CustomEvent('swUpdated', { detail: registration }));
+                  }
+                });
+              }
+            });
           }).catch(function(err) {
             console.warn('[SW] Falha ao registrar Service Worker:', err);
           });

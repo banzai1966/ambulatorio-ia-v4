@@ -42,7 +42,8 @@ import {
   Image,
   FolderOpen,
   UploadCloud,
-  DollarSign
+  DollarSign,
+  Sparkles
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -323,8 +324,41 @@ export default function App() {
   const [offlinePendingCount, setOfflinePendingCount] = useState<number>(0);
   const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [hasUpdate, setHasUpdate] = useState<boolean>(false);
+  const [swRegistration, setSwRegistration] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+  const [isReloading, setIsReloading] = useState<boolean>(false);
+
+  const handleReloadApp = (forceHard = false) => {
+    setIsReloading(true);
+    toast.loading("Atualizando e recarregando o sistema...", { id: 'reload-system-toast' });
+
+    try {
+      if (swRegistration?.waiting) {
+        swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+    } catch (e) {
+      console.warn("SW skipWaiting warning:", e);
+    }
+
+    setTimeout(() => {
+      if (forceHard && 'caches' in window) {
+        caches.keys().then((keys) => {
+          return Promise.all(keys.map(key => caches.delete(key)));
+        }).finally(() => {
+          window.location.reload();
+        });
+      } else {
+        window.location.reload();
+      }
+    }, 350);
+  };
 
   useEffect(() => {
+    // Detecta se o aplicativo está rodando em modo PWA Standalone (janela própria)
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    setIsStandalone(isPWA);
+
     // Atualiza contagem inicial de registros offline
     const updateOfflineState = () => {
       const recs = getOfflineRecords();
@@ -363,18 +397,37 @@ export default function App() {
       console.log("[PWA] Prompt de instalação capturado.");
     };
 
+    const handleSwUpdated = (e: any) => {
+      console.log("[PWA] Atualização disponível detectada:", e.detail);
+      setHasUpdate(true);
+      if (e.detail) setSwRegistration(e.detail);
+      toast("✨ Nova versão disponível do sistema!", { icon: '🚀', duration: 7000 });
+    };
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('swUpdated', handleSwUpdated);
+
+    // Checagem periódica de atualizações do Service Worker a cada 10 minutos
+    const checkUpdateInterval = setInterval(() => {
+      if (navigator.onLine && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(reg => {
+          if (reg) reg.update();
+        }).catch(e => console.warn("Check update warning:", e));
+      }
+    }, 10 * 60 * 1000);
 
     toast.success("Ambulatório IA - Conectado à Nuvem!");
-    console.log("App Version: v4.5 (PWA Cloud)");
+    console.log("App Version: v4.6 (PWA Cloud Auto-Update)");
     document.title = "Ambulatório IA - Prontuário Médico Inteligente";
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('swUpdated', handleSwUpdated);
+      clearInterval(checkUpdateInterval);
     };
   }, []);
 
@@ -2614,6 +2667,50 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row min-w-0">
+      {/* Banner de Nova Atualização Disponível (PWA Auto-Update) */}
+      <AnimatePresence>
+        {hasUpdate && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-blue-600 text-white overflow-hidden fixed top-0 left-0 right-0 z-[110] shadow-2xl border-b border-blue-400"
+          >
+            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-xl shrink-0">
+                  <Sparkles size={20} className="animate-pulse text-blue-200" />
+                </div>
+                <div className="text-xs sm:text-sm font-medium">
+                  <p className="font-bold text-white flex items-center gap-2">
+                    <span>✨ Nova Versão do Ambulatório IA Pronta!</span>
+                    <span className="text-[10px] bg-blue-500/80 px-2 py-0.5 rounded-full font-mono">v4.6</span>
+                  </p>
+                  <p className="text-blue-100 text-[11px] sm:text-xs">Clique no botão para carregar as últimas melhorias sem perder nenhum dado.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button 
+                  onClick={() => handleReloadApp(true)}
+                  disabled={isReloading}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2 bg-white text-blue-700 hover:bg-blue-50 rounded-xl font-extrabold text-xs transition-transform active:scale-95 shadow-md"
+                >
+                  <RefreshCw size={14} className={isReloading ? "animate-spin" : ""} />
+                  {isReloading ? "Atualizando..." : "Atualizar Agora (1 Clique)"}
+                </button>
+                <button 
+                  onClick={() => setHasUpdate(false)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/80"
+                  title="Fechar aviso temporariamente"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Aviso de WebView / Microfone Bloqueado */}
       <AnimatePresence>
         {isWebView && (
@@ -2913,6 +3010,17 @@ export default function App() {
                 Instalar App no Computador
               </button>
             )}
+
+            {/* Botão de Atualizar / Recarregar Sistema */}
+            <button
+              onClick={() => handleReloadApp(false)}
+              disabled={isReloading}
+              className="w-full py-2 px-2.5 bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 transition-all border border-slate-600/40 shadow-xs"
+              title="Recarregar tela e buscar novas atualizações sem perder dados"
+            >
+              <RefreshCw size={12} className={isReloading ? "animate-spin text-blue-400" : "text-blue-400"} />
+              <span>{isReloading ? "Atualizando..." : "Recarregar / Atualizar App"}</span>
+            </button>
 
             <div className="flex gap-1.5 pt-1">
               <button

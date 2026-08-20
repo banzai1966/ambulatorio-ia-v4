@@ -1,5 +1,5 @@
 // Service Worker para Ambulatório IA - Prontuário Médico Offline
-const CACHE_NAME = 'ambulatorio-ia-v4.5';
+const CACHE_NAME = 'ambulatorio-ia-v4.6';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -18,6 +18,13 @@ self.addEventListener('install', (event) => {
     })
   );
   self.skipWaiting();
+});
+
+// Listener para comando de atualização imediata da interface
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Ativação e limpeza de caches antigos
