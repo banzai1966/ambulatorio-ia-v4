@@ -14,7 +14,9 @@ import {
   Mail,
   Lock,
   Stethoscope,
-  AlertCircle
+  AlertCircle,
+  Award,
+  BadgeCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { toast } from 'react-hot-toast';
@@ -26,18 +28,22 @@ interface Profile {
   status: 'pending' | 'approved';
   full_name?: string;
   especialidade?: string;
+  crm_cro?: string;
 }
 
 const DEFAULT_SPECIALTIES = [
   'Nenhuma',
+  'Clínica Geral',
   'Ortopedia',
   'Neurologia',
   'Medicina Integrativa',
+  'Odontologia Biológica',
   'Cardiologia',
   'Pediatria',
   'Ginecologia',
   'Dermatologia',
-  'Clínica Geral'
+  'Psiquiatria',
+  'Endocrinologia'
 ];
 
 export default function ManageTeam({ currentUser, onClose }: { currentUser?: any; onClose: () => void }) {
@@ -52,6 +58,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberPassword, setNewMemberPassword] = useState('');
+  const [newMemberCrm, setNewMemberCrm] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<'admin' | 'doctor' | 'receptionist'>('doctor');
   const [newMemberSpecialty, setNewMemberSpecialty] = useState('Nenhuma');
   const [isCreating, setIsCreating] = useState(false);
@@ -71,33 +78,96 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
     };
   }, []);
 
+  const getLocalDeletedMembers = (): string[] => {
+    try {
+      const stored = localStorage.getItem('deleted_members_local');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return [];
+  };
+
+  const addLocalDeletedMember = (emailOrId: string) => {
+    if (!emailOrId) return;
+    try {
+      const list = getLocalDeletedMembers();
+      const norm = emailOrId.toLowerCase().trim();
+      if (!list.includes(norm)) {
+        list.push(norm);
+        localStorage.setItem('deleted_members_local', JSON.stringify(list));
+      }
+    } catch (e) {}
+  };
+
   const fetchProfiles = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, role, status, full_name, especialidade')
-        .order('role', { ascending: true });
+      let rawProfiles: any[] = [];
       
-      if (error) {
-        console.error("Erro ao buscar perfis:", error);
-        throw error;
-      }
-      
-      const rawProfiles = data || [];
-      // Se houver perfis com status 'pending' antigo, atualiza automaticamente no banco para 'approved'
-      const pendingProfiles = rawProfiles.filter(p => p.status === 'pending');
-      if (pendingProfiles.length > 0) {
-        Promise.all(
-          pendingProfiles.map(p => 
-            supabase.from('profiles').update({ status: 'approved' }).eq('id', p.id)
-          )
-        ).catch(e => console.warn("Erro ao auto-aprovar:", e));
+      // 1. Tenta buscar via API Administrativa Server-Side (Garante acesso irrestrito sem bloqueios de RLS)
+      try {
+        const res = await fetch("/api/admin/members");
+        if (res.ok) {
+          const resJson = await res.json();
+          if (resJson.success && Array.isArray(resJson.members)) {
+            rawProfiles = resJson.members;
+          }
+        }
+      } catch (fErr) {
+        console.warn("Aviso fetch admin members:", fErr);
       }
 
-      setProfiles(rawProfiles.map(p => ({ ...p, status: 'approved' as const })));
+      // 2. Fallback direto pelo client se a API falhar
+      if (!rawProfiles || rawProfiles.length === 0) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, email, role, status, full_name, especialidade')
+          .order('role', { ascending: true });
+        
+        if (error) {
+          console.error("Erro ao buscar perfis client:", error);
+        } else if (data) {
+          rawProfiles = data;
+        }
+      }
+      
+      const localDeleted = getLocalDeletedMembers();
+
+      // Remove duplicatas locais caso existam no banco por email e ignora deletados
+      const uniqueMap = new Map<string, any>();
+      for (const p of rawProfiles) {
+        const key = (p.email || p.id || '').toLowerCase().trim();
+        const idKey = (p.id || '').toLowerCase().trim();
+        
+        // Ignora se estiver na lista de deletados
+        if (localDeleted.includes(key) || localDeleted.includes(idKey)) {
+          continue;
+        }
+
+        if (key && !uniqueMap.has(key)) {
+          uniqueMap.set(key, p);
+        } else if (!key) {
+          uniqueMap.set(p.id, p);
+        }
+      }
+      const uniqueProfiles = Array.from(uniqueMap.values());
+
+      // Se houver perfis com status 'pending' antigo, atualiza automaticamente no banco para 'approved'
+      const pendingProfiles = uniqueProfiles.filter(p => p.status === 'pending');
+      if (pendingProfiles.length > 0) {
+        (async () => {
+          try {
+            for (const p of pendingProfiles) {
+              await supabase.from('profiles').update({ status: 'approved' }).eq('id', p.id);
+            }
+          } catch (e) {
+            console.warn("Erro ao auto-aprovar:", e);
+          }
+        })();
+      }
+
+      setProfiles(uniqueProfiles.map(p => ({ ...p, status: 'approved' as const })));
     } catch (err: any) {
       console.error("Erro ao buscar equipe:", err);
       setError(err.message || "Falha ao buscar equipe.");
@@ -144,6 +214,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         full_name: newMemberName.trim(),
         role: newMemberRole,
         especialidade: newMemberSpecialty,
+        crm_cro: newMemberCrm.trim(),
         status: 'approved'
       };
       if (createdUserId) {
@@ -164,6 +235,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
       setNewMemberName('');
       setNewMemberEmail('');
       setNewMemberPassword('');
+      setNewMemberCrm('');
       setNewMemberSpecialty('Nenhuma');
       fetchProfiles();
     } catch (err: any) {
@@ -182,7 +254,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         .from('profiles')
         .update(cleanUpdates)
         .eq('id', id)
-        .select('id, email, role, status, full_name, especialidade');
+        .select('id, email, role, status, full_name, especialidade, crm_cro');
       
       if (error) throw error;
       
@@ -210,36 +282,37 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
     const toastId = toast.loading("Removendo membro da equipe...");
     
     try {
-      // 1. Remove da interface visual imediatamente
-      setProfiles(prev => prev.filter(p => p.id !== id && p.email !== email));
+      // 1. Registra localmente e remove da interface visual imediatamente
+      if (email) addLocalDeletedMember(email);
+      if (id) addLocalDeletedMember(id);
 
-      // 2. Executa exclusão com timeout de 6 segundos
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      setProfiles(prev => prev.filter(p => p.id !== id && (email ? p.email !== email : true)));
 
+      // 2. Chama a API do backend (que tem service_role com permissão administrativa máxima)
+      const res = await fetch("/api/admin/delete-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, email })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Falha na exclusão do servidor.");
+      }
+
+      // 3. Deleta direto via Supabase client também como garantia
       try {
-        await fetch("/api/admin/delete-member", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, email }),
-          signal: controller.signal
-        });
-      } catch (fErr) {
-        console.warn("Aviso fetch delete backend:", fErr);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      // 3. Fallback adicional direto no banco de forma não bloqueante
-      if (email) {
-        supabase.from('profiles').delete().eq('email', email).catch(console.warn);
-      }
-      if (id) {
-        supabase.from('profiles').delete().eq('id', id).catch(console.warn);
+        if (id) await supabase.from('profiles').delete().eq('id', id);
+        if (email) await supabase.from('profiles').delete().eq('email', email);
+      } catch (cErr) {
+        console.warn("Client delete warning:", cErr);
       }
       
       toast.dismiss(toastId);
-      toast.success(`${full_name || email} foi removido com sucesso!`, { duration: 3000 });
+      toast.success(`${full_name || email} foi removido permanentemente!`, { duration: 3000 });
+      
+      // 4. Recarrega a lista oficial do banco após a exclusão
+      await fetchProfiles();
     } catch (err: any) {
       console.error("Erro ao excluir perfil:", err);
       toast.dismiss(toastId);
@@ -350,13 +423,27 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
               </div>
 
               <div>
+                <label className="font-bold text-slate-700 block mb-1">CRM / CRO / Registro Profissional (opcional):</label>
+                <div className="relative">
+                  <Award className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Ex: CRM/SP 123456 ou CRO/RJ 98765"
+                    value={newMemberCrm}
+                    onChange={(e) => setNewMemberCrm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-hidden font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="font-bold text-slate-700 block mb-1">Senha de Acesso Inicial (mínimo 6 dígitos):</label>
                 <div className="relative">
                   <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                   <input
                     type="password"
                     required
-                    placeholder="Senha para login do médico"
+                    placeholder="Senha para login do profissional"
                     value={newMemberPassword}
                     onChange={(e) => setNewMemberPassword(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:outline-hidden font-medium"
@@ -507,10 +594,15 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                     />
                   </div>
                   <p className="text-xs text-slate-400 px-1">{profile.email}</p>
-                  <div className="flex items-center gap-2 mt-0.5 px-1">
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5 px-1">
                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
                       <CheckCircle2 className="w-3 h-3" /> ACESSO LIBERADO
                     </span>
+                    {profile.crm_cro && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                        <Award className="w-3 h-3 text-blue-600" /> {profile.crm_cro}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -531,19 +623,36 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                 </div>
 
                 {profile.role === 'doctor' && (
-                  <div className="flex flex-col gap-0.5">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1">Especialidade</label>
-                    <select
-                      value={profile.especialidade || 'Nenhuma'}
-                      onChange={(e) => updateProfile(profile.id, { especialidade: e.target.value })}
-                      disabled={updating === profile.id}
-                      className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-hidden transition-all"
-                    >
-                      {DEFAULT_SPECIALTIES.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1">Especialidade</label>
+                      <select
+                        value={profile.especialidade || 'Nenhuma'}
+                        onChange={(e) => updateProfile(profile.id, { especialidade: e.target.value })}
+                        disabled={updating === profile.id}
+                        className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-hidden transition-all"
+                      >
+                        {DEFAULT_SPECIALTIES.map(s => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1">CRM / CRO</label>
+                      <input
+                        type="text"
+                        defaultValue={profile.crm_cro || ''}
+                        onBlur={(e) => {
+                          if (e.target.value !== profile.crm_cro) {
+                            updateProfile(profile.id, { crm_cro: e.target.value });
+                          }
+                        }}
+                        placeholder="Ex: CRM/SP 1234"
+                        className="px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 w-32 focus:ring-2 focus:ring-blue-500 outline-hidden transition-all"
+                      />
+                    </div>
+                  </>
                 )}
                 
                 <button 

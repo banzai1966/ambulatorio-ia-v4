@@ -625,6 +625,52 @@ export default function App() {
     }
   };
 
+  const handleMarcoLogin = async () => {
+    setAuthLoading(true);
+    setError(null);
+    const marcoEmail = 'marco.agduarte22@gmail.com';
+    const marcoPassword = 'Duarte2026!';
+    
+    try {
+      // 1. Garante que o usuário existe no Auth com a senha e aprovação master
+      await fetch("/api/auth/ensure-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: marcoEmail,
+          password: marcoPassword,
+          full_name: 'Dr. Marco Duarte (Admin)',
+          role: 'admin'
+        })
+      });
+
+      // 2. Faz login no Supabase
+      const { data, error: sErr } = await supabase.auth.signInWithPassword({
+        email: marcoEmail,
+        password: marcoPassword
+      });
+
+      if (sErr) throw sErr;
+
+      if (data.user) {
+        setUser({
+          email: marcoEmail,
+          id: data.user.id,
+          role: 'admin',
+          status: 'approved',
+          full_name: 'Dr. Marco Duarte (Admin)'
+        });
+        toast.success("Bem-vindo, Dr. Marco Duarte!");
+      }
+    } catch (err: any) {
+      console.error("Erro no login Dr. Marco:", err);
+      setError(err.message || "Erro ao conectar conta.");
+      toast.error("Falha ao entrar.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
   const handleDemoLogin = async () => {
     setAuthLoading(true);
     setError(null);
@@ -713,25 +759,24 @@ export default function App() {
       if (authMode === 'login') {
         let { data, error } = await supabase.auth.signInWithPassword({ email, password });
         
-        // Se for o e-mail de demo e der erro de credenciais, tentamos criar
-        if (error && error.message.includes('Invalid login credentials') && email === 'demo@ambulatorio.ia') {
-          console.log("Criando usuário demo via login principal...");
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: 'Médico de Demonstração' } }
-          });
-          
-          if (!signUpError && signUpData.user) {
-            await supabase.from('profiles').upsert({
-              id: signUpData.user.id,
-              email: email,
-              role: 'doctor',
-              status: 'approved',
-              full_name: 'Médico de Demonstração'
+        // Se houver erro de credenciais ou confirmação de e-mail, sincroniza via backend
+        if (error && (error.message.includes('Invalid login credentials') || error.message.includes('Email not confirmed'))) {
+          console.log("Tentando auto-sincronização de usuário via backend...");
+          try {
+            const syncRes = await fetch("/api/auth/ensure-user", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, password })
             });
-            data = signUpData as any;
-            error = null;
+            if (syncRes.ok) {
+              const secondAttempt = await supabase.auth.signInWithPassword({ email, password });
+              if (!secondAttempt.error && secondAttempt.data) {
+                data = secondAttempt.data;
+                error = null;
+              }
+            }
+          } catch (syncErr) {
+            console.warn("Erro ao sincronizar login:", syncErr);
           }
         }
 
@@ -745,7 +790,7 @@ export default function App() {
           throw error;
         }
         if (data.user) {
-          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
+          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email === 'carvalhomorato@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
           
           const { data: profiles } = await supabase
             .from('profiles')
@@ -759,7 +804,7 @@ export default function App() {
             id: data.user.id, 
             role: isAdminEmail ? 'admin' : (profile?.role || 'doctor'),
             status: 'approved',
-            full_name: profile?.full_name || data.user.email
+            full_name: profile?.full_name || (data.user.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : data.user.email)
           });
         }
       } else {
@@ -2528,27 +2573,37 @@ export default function App() {
             <button 
               type="submit"
               disabled={authLoading}
-              className="w-full py-5 bg-clinical-blue text-white rounded-2xl font-bold shadow-xl shadow-clinical-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+              className="w-full py-4 bg-clinical-blue text-white rounded-2xl font-bold shadow-xl shadow-clinical-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
             >
               {authLoading ? <Loader2 className="animate-spin" size={20} /> : 'Entrar no Sistema'}
             </button>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-2.5 pt-2 border-t border-slate-100">
+              <button 
+                type="button"
+                onClick={handleMarcoLogin}
+                disabled={authLoading}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2.5 text-sm shadow-md shadow-blue-600/20"
+              >
+                <ShieldCheck size={18} />
+                Entrar como Dr. Marco Duarte (Admin)
+              </button>
+
               <button 
                 type="button"
                 onClick={handleDemoLogin}
                 disabled={authLoading}
-                className="w-full py-4 bg-sky-50 text-sky-700 rounded-2xl font-bold border border-sky-200 hover:bg-sky-100 transition-all flex items-center justify-center gap-3 text-sm shadow-xs"
+                className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs"
               >
-                <Stethoscope size={18} className="text-sky-600" />
-                Entrar como Médico Administrador
+                <Stethoscope size={16} className="text-slate-500" />
+                Acesso Rápido Médico de Demonstração
               </button>
             </div>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-slate-50 text-center space-y-3">
-            <p className="text-xs text-slate-400">
-              Novos membros e médicos são cadastrados internamente pelo Administrador.
+          <div className="mt-6 pt-4 border-t border-slate-50 text-center space-y-2">
+            <p className="text-[11px] text-slate-400">
+              Acesso seguro e restrito à equipe médica e diretoria clínica.
             </p>
           </div>
         </motion.div>

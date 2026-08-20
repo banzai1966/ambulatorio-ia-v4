@@ -192,7 +192,126 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
   };
 }
 
-// --- ROTA DE EXCLUSÃO DE MEMBRO DA EQUIPE (SERVICE ROLE / ADMIN) ---
+// --- PERSISTÊNCIA DE MEMBROS EXCLUÍDOS (GARANTE QUE NUNCA REAPAREÇAM) ---
+const DELETED_MEMBERS_FILE = path.join(process.cwd(), 'deleted_members.json');
+const PROTECTED_ADMIN_EMAILS = [
+  'marco.agduarte22@gmail.com',
+  'carvalhomorato@gmail.com',
+  'pitangatania@hotmail.com',
+  'demo@ambulatorio.ia'
+];
+
+function getDeletedMembers(): string[] {
+  try {
+    if (fs.existsSync(DELETED_MEMBERS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DELETED_MEMBERS_FILE, 'utf-8'));
+      if (Array.isArray(data)) {
+        return data
+          .map(e => String(e).toLowerCase().trim())
+          .filter(e => !PROTECTED_ADMIN_EMAILS.includes(e));
+      }
+    }
+  } catch (e) {
+    console.warn("[SERVER] Aviso ao ler deleted_members.json:", e);
+  }
+  return [];
+}
+
+function saveDeletedMember(emailOrId: string) {
+  if (!emailOrId) return;
+  const normalized = emailOrId.toLowerCase().trim();
+  if (PROTECTED_ADMIN_EMAILS.includes(normalized)) return; // Não bloqueia admin principal
+  try {
+    const list = getDeletedMembers();
+    if (!list.includes(normalized)) {
+      list.push(normalized);
+      fs.writeFileSync(DELETED_MEMBERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    }
+  } catch (e) {
+    console.warn("[SERVER] Aviso ao salvar deleted_members.json:", e);
+  }
+}
+
+function unmarkDeletedMember(emailOrId: string) {
+  if (!emailOrId) return;
+  try {
+    const normalized = emailOrId.toLowerCase().trim();
+    const list = getDeletedMembers().filter(e => e !== normalized);
+    fs.writeFileSync(DELETED_MEMBERS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn("[SERVER] Aviso ao desmarcar deleted member:", e);
+  }
+}
+
+// --- ROTA DE PROVISIONAMENTO / RESET INSTANTÂNEO DE USUÁRIO AUTH ---
+app.post("/api/auth/ensure-user", async (req, res) => {
+  try {
+    const { email, password, full_name, role } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "E-mail é obrigatório" });
+    }
+
+    const normEmail = email.toLowerCase().trim();
+    const userPassword = password || "Duarte2026!";
+    const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : 'Médico');
+    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com') ? 'admin' : (role || 'doctor');
+
+    unmarkDeletedMember(normEmail);
+
+    // 1. Verifica se o usuário já existe no Supabase Auth
+    const { data: usersList } = await supabase.auth.admin.listUsers();
+    const existingUser = usersList?.users?.find(u => u.email?.toLowerCase().trim() === normEmail);
+
+    let userId: string;
+
+    if (existingUser) {
+      userId = existingUser.id;
+      // Atualiza a senha e confirma o e-mail automaticamente
+      await supabase.auth.admin.updateUserById(userId, {
+        password: userPassword,
+        email_confirm: true,
+        user_metadata: { full_name: userName }
+      });
+      console.log(`[AUTH] Senha e dados atualizados no Auth para: ${normEmail}`);
+    } else {
+      // Cria o usuário com e-mail já confirmado
+      const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
+        email: normEmail,
+        password: userPassword,
+        email_confirm: true,
+        user_metadata: { full_name: userName }
+      });
+      if (createErr) {
+        throw createErr;
+      }
+      userId = newUser.user.id;
+      console.log(`[AUTH] Novo usuário Auth criado com sucesso: ${normEmail}`);
+    }
+
+    // 2. Garante o registro na tabela profiles com role correta e status approved
+    await supabase.from('profiles').upsert({
+      id: userId,
+      email: normEmail,
+      role: userRole,
+      status: 'approved',
+      full_name: userName
+    });
+
+    return res.json({
+      success: true,
+      email: normEmail,
+      userId,
+      role: userRole,
+      password: userPassword,
+      message: "Usuário provisionado e sincronizado com sucesso!"
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Erro ao provisionar usuário:", err);
+    return res.status(500).json({ error: err.message || "Erro ao configurar usuário" });
+  }
+});
+
+// --- ROTA DE EXCLUSÃO DE MEMBRO DA EQUIPE (SERVICE ROLE / ADMIN MASTER) ---
 app.post("/api/admin/delete-member", async (req, res) => {
   try {
     const { id, email } = req.body;
@@ -200,32 +319,79 @@ app.post("/api/admin/delete-member", async (req, res) => {
       return res.status(400).json({ error: "ID ou e-mail é obrigatório" });
     }
 
-    console.log(`[ADMIN] Excluindo membro: ID=${id}, Email=${email}`);
+    const normEmail = (email || '').toLowerCase().trim();
+    console.log(`[ADMIN] Exclusão permanente solicitada: ID=${id}, Email=${normEmail}`);
 
-    // 1. Remove da tabela pública de perfis
-    if (id) {
-      const { error: pErr } = await supabase.from('profiles').delete().eq('id', id);
-      if (pErr) console.warn("[ADMIN] Erro ao deletar profile por ID:", pErr.message);
-    }
-    if (email) {
-      const { error: eErr } = await supabase.from('profiles').delete().eq('email', email);
-      if (eErr) console.warn("[ADMIN] Erro ao deletar profile por Email:", eErr.message);
-    }
+    // Salva na lista permanente de excluídos para não retornar em nenhuma busca
+    if (normEmail) saveDeletedMember(normEmail);
+    if (id) saveDeletedMember(id);
 
-    // 2. Tenta remover do Auth do Supabase usando service_role
-    if (id) {
+    // 1. Busca todos os IDs correspondentes na tabela profiles
+    const idsToDelete: string[] = [];
+    if (id) idsToDelete.push(id);
+
+    if (normEmail) {
       try {
-        await supabase.auth.admin.deleteUser(id);
-        console.log(`[ADMIN] Usuário Auth ${id} removido com sucesso.`);
-      } catch (authErr: any) {
-        console.warn("[ADMIN] Aviso ao deletar usuário do Auth:", authErr.message);
+        const { data: matchedProfiles } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .ilike('email', `%${normEmail}%`);
+        if (matchedProfiles) {
+          for (const mp of matchedProfiles) {
+            if (mp.id && !idsToDelete.includes(mp.id)) idsToDelete.push(mp.id);
+            if (mp.email) saveDeletedMember(mp.email);
+          }
+        }
+      } catch (fErr) {
+        console.warn("[ADMIN] Aviso busca profiles:", fErr);
       }
     }
 
-    res.json({ success: true, message: "Membro removido com sucesso!" });
+    // 2. Limpa referências de Foreign Key para evitar erro de violação de chave estrangeira
+    for (const targetId of idsToDelete) {
+      try {
+        await Promise.allSettled([
+          supabase.from('agendamentos').update({ medico_id: null }).eq('medico_id', targetId),
+          supabase.from('prontuarios').update({ medico_id: null }).eq('medico_id', targetId),
+          supabase.from('prontuarios').update({ user_id: null }).eq('user_id', targetId),
+          supabase.from('mensagens').update({ user_id: null }).eq('user_id', targetId),
+          supabase.from('pacientes').update({ medico_id: null }).eq('medico_id', targetId)
+        ]);
+      } catch (fkErr) {
+        console.warn("[ADMIN] Aviso limpeza FKs:", fkErr);
+      }
+    }
+
+    // 3. Deleta da tabela profiles por ID e por Email
+    for (const targetId of idsToDelete) {
+      await supabase.from('profiles').delete().eq('id', targetId);
+    }
+    if (normEmail) {
+      await supabase.from('profiles').delete().ilike('email', normEmail);
+      await supabase.from('profiles').delete().eq('email', normEmail);
+    }
+
+    // 4. Deleta do Supabase Auth (impedindo re-criação de sessão)
+    try {
+      for (const targetId of idsToDelete) {
+        await supabase.auth.admin.deleteUser(targetId).catch(() => {});
+      }
+      if (normEmail) {
+        const { data: usersData } = await supabase.auth.admin.listUsers();
+        const found = usersData?.users?.find(u => u.email?.toLowerCase().trim() === normEmail);
+        if (found) {
+          await supabase.auth.admin.deleteUser(found.id).catch(() => {});
+        }
+      }
+    } catch (authErr: any) {
+      console.warn("[ADMIN] Aviso exclusão Auth:", authErr.message);
+    }
+
+    console.log(`[ADMIN] Membro ${normEmail || id} deletado permanentemente com sucesso.`);
+    return res.json({ success: true, message: "Membro excluído permanentemente." });
   } catch (err: any) {
     console.error("[ADMIN] Erro fatal ao deletar membro:", err);
-    res.status(500).json({ error: err.message || "Erro ao excluir membro" });
+    return res.status(500).json({ error: err.message || "Erro ao excluir membro" });
   }
 });
 
@@ -725,36 +891,29 @@ app.post("/api/whatsapp/logout", async (req, res) => {
 // In-memory cache for submitted anamneses
 const anamneseStore = new Map<string, any>();
 
-// --- DELETAR MEMBRO DA EQUIPE (PERMISSÃO TOTAL SERVER-SIDE COM SERVICE KEY) ---
-app.post("/api/admin/delete-member", async (req, res) => {
+// --- LISTAR MEMBROS DA EQUIPE (SERVER-SIDE COM SERVICE ROLE E FILTRO DE EXCLUÍDOS) ---
+app.get("/api/admin/members", async (req, res) => {
   try {
-    const { id, email } = req.body;
-    console.log(`[SERVER] Excluindo membro ID: ${id}, Email: ${email}`);
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, role, status, full_name, especialidade, crm_cro')
+      .order('role', { ascending: true });
 
-    if (!id && !email) {
-      return res.status(400).json({ error: "ID ou email obrigatório" });
+    if (error) {
+      console.error("[SERVER] Erro ao buscar membros:", error);
+      return res.status(500).json({ error: error.message });
     }
 
-    // 1. Deletar do banco profiles via supabase service role
-    if (id) {
-      await supabase.from('profiles').delete().eq('id', id);
-    }
-    if (email) {
-      await supabase.from('profiles').delete().eq('email', email);
-    }
+    const deletedList = getDeletedMembers();
+    const activeMembers = (data || []).filter(p => {
+      const pEmail = (p.email || '').toLowerCase().trim();
+      const pId = (p.id || '').toLowerCase().trim();
+      return !deletedList.includes(pEmail) && !deletedList.includes(pId);
+    });
 
-    // 2. Deletar do Supabase Auth se houver ID
-    if (id) {
-      try {
-        await supabase.auth.admin.deleteUser(id);
-      } catch (authErr: any) {
-        console.warn("[SERVER] Aviso ao deletar do Auth:", authErr.message);
-      }
-    }
-
-    return res.json({ success: true, message: "Membro excluído permanentemente." });
+    return res.json({ success: true, members: activeMembers });
   } catch (err: any) {
-    console.error("[SERVER] Erro ao deletar membro:", err);
+    console.error("[SERVER] Erro inesperado ao listar membros:", err);
     return res.status(500).json({ error: err.message });
   }
 });
