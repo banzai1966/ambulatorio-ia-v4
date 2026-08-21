@@ -38,10 +38,11 @@ import SpecialtyFields from './SpecialtyFields';
 import VitalMonitor from './VitalMonitor';
 import PrescriptionAnvisaModal from './PrescriptionAnvisaModal';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
+import { supabase } from '../lib/supabase';
 import DigitalSignatureModal from './DigitalSignatureModal';
 import NPSAndGoogleReviewModal from './NPSAndGoogleReviewModal';
 import { initialIntegrativeData } from '../types/integrativeChecklist';
-import { hasMeaningfulData } from '../lib/utils';
+import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { processClinicalInput } from '../services/clinicalService';
 
@@ -308,13 +309,14 @@ export default function PatientDossierView({
         }
 
         if (localData) {
+          const lDob = localData.data_nascimento || localData.paciente_data_nascimento;
           if (localData.foto_url && !currentRecord?.foto_url && setCurrentRecord) {
             setCurrentRecord((prev: any) => ({ ...prev, foto_url: localData.foto_url }));
           }
-          if (localData.data_nascimento && !currentRecord?.paciente_data_nascimento && !patientDob && setCurrentRecord) {
-            setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: localData.data_nascimento }));
+          if (lDob && (!currentRecord?.paciente_data_nascimento || currentRecord.paciente_data_nascimento === '') && setCurrentRecord) {
+            setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: lDob, data_nascimento: lDob }));
           }
-          if (localData.paciente_cpf && !currentRecord?.paciente_cpf && !patientCpf && setCurrentRecord) {
+          if (localData.paciente_cpf && (!currentRecord?.paciente_cpf || currentRecord.paciente_cpf === '') && setCurrentRecord) {
             setCurrentRecord((prev: any) => ({ ...prev, paciente_cpf: localData.paciente_cpf }));
           }
           if (localData.alertas_clinicos && localData.alertas_clinicos.length > 0 && clinicalAlerts.length === 0) {
@@ -337,13 +339,14 @@ export default function PatientDossierView({
           const json = await res.json();
           if (json.success && json.data) {
             const d = json.data;
+            const rDob = d.data_nascimento || d.paciente_data_nascimento;
             if (d.foto_url && !currentRecord?.foto_url && setCurrentRecord) {
               setCurrentRecord((prev: any) => ({ ...prev, foto_url: d.foto_url }));
             }
-            if (d.data_nascimento && !currentRecord?.paciente_data_nascimento && !patientDob && setCurrentRecord) {
-              setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: d.data_nascimento }));
+            if (rDob && (!currentRecord?.paciente_data_nascimento || currentRecord.paciente_data_nascimento === '') && setCurrentRecord) {
+              setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: rDob, data_nascimento: rDob }));
             }
-            if (d.paciente_cpf && !currentRecord?.paciente_cpf && !patientCpf && setCurrentRecord) {
+            if (d.paciente_cpf && (!currentRecord?.paciente_cpf || currentRecord.paciente_cpf === '') && setCurrentRecord) {
               setCurrentRecord((prev: any) => ({ ...prev, paciente_cpf: d.paciente_cpf }));
             }
             if (d.alertas_clinicos && d.alertas_clinicos.length > 0) {
@@ -354,10 +357,34 @@ export default function PatientDossierView({
       } catch (apiErr) {
         console.warn("Aviso fetch remoto anamnese:", apiErr);
       }
+
+      // 3. Fallback direto no Supabase (agendamentos e prontuários)
+      try {
+        if (supabase) {
+          if (appointmentId && appointmentId !== '1') {
+            const { data: agData } = await supabase.from('agendamentos').select('*').eq('id', appointmentId).limit(1);
+            if (agData && agData.length > 0) {
+              const ag = agData[0];
+              const supaDob = ag.data_nascimento || ag.paciente_data_nascimento;
+              if (supaDob && (!currentRecord?.paciente_data_nascimento || currentRecord.paciente_data_nascimento === '') && setCurrentRecord) {
+                setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: supaDob, data_nascimento: supaDob }));
+              }
+              if (ag.paciente_cpf && (!currentRecord?.paciente_cpf || currentRecord.paciente_cpf === '') && setCurrentRecord) {
+                setCurrentRecord((prev: any) => ({ ...prev, paciente_cpf: ag.paciente_cpf }));
+              }
+              if (ag.foto_url && !currentRecord?.foto_url && setCurrentRecord) {
+                setCurrentRecord((prev: any) => ({ ...prev, foto_url: ag.foto_url }));
+              }
+            }
+          }
+        }
+      } catch (supaErr) {
+        console.warn("Aviso fallback Supabase no prontuário:", supaErr);
+      }
     };
 
     fetchPatientAnamneseAuto();
-  }, [patientPhone, effectiveName, currentRecord?.agendamento_id]);
+  }, [patientPhone, effectiveName, currentRecord?.agendamento_id, currentRecord?.paciente_data_nascimento]);
 
   // SOAP format state if doctor prefers divided boxes
   const [useDividedSoap, setUseDividedSoap] = useState(true);
@@ -418,6 +445,38 @@ export default function PatientDossierView({
   const [isPromoter, setIsPromoter] = useState(false);
   const [showVitalMonitor, setShowVitalMonitor] = useState(false);
   const [isLocalProcessing, setIsLocalProcessing] = useState(false);
+  const [isEditingDob, setIsEditingDob] = useState(false);
+  const [tempDob, setTempDob] = useState('');
+
+  const handleOpenEditDob = () => {
+    setTempDob(effectiveDob || '');
+    setIsEditingDob(true);
+  };
+
+  const handleSaveInlineDob = () => {
+    if (!tempDob.trim()) {
+      setIsEditingDob(false);
+      return;
+    }
+    if (setCurrentRecord) {
+      setCurrentRecord((prev: any) => ({
+        ...prev,
+        paciente_data_nascimento: tempDob,
+        data_nascimento: tempDob
+      }));
+    }
+    const cleanPhone = (patientPhone || currentRecord?.paciente_telefone || '').replace(/\D/g, '');
+    if (cleanPhone) {
+      try {
+        const existing = localStorage.getItem(`anamnese_${cleanPhone}`) || '{}';
+        const parsed = JSON.parse(existing);
+        parsed.data_nascimento = tempDob;
+        localStorage.setItem(`anamnese_${cleanPhone}`, JSON.stringify(parsed));
+      } catch (_) {}
+    }
+    setIsEditingDob(false);
+    toast.success("Data de nascimento e idade atualizadas com sucesso!");
+  };
 
   const handleProcessTextAI = async (textToProcess?: string) => {
     const text = textToProcess || currentRecord?.resumo_formatado;
@@ -613,13 +672,60 @@ export default function PatientDossierView({
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-500 font-medium mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span>🎂 {formatDobDisplay(effectiveDob)} • <strong>{age !== '--' ? `${age} anos` : 'Idade N/D'}</strong></span>
+                <div className="text-xs text-slate-500 font-medium mt-1 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  {isEditingDob ? (
+                    <div className="inline-flex items-center gap-1.5 bg-blue-50/90 border border-blue-300 px-2.5 py-1 rounded-xl shadow-xs">
+                      <span className="text-[11px] font-bold text-blue-900">🎂 Nascimento:</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
+                        placeholder="DD/MM/AAAA"
+                        value={tempDob}
+                        onChange={(e) => setTempDob(formatDateMask(e.target.value))}
+                        className="w-24 px-2 py-0.5 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveInlineDob();
+                          if (e.key === 'Escape') setIsEditingDob(false);
+                        }}
+                      />
+                      {calculateAgeExact(tempDob) !== '--' && (
+                        <span className="text-[11px] font-extrabold text-blue-700 bg-blue-200/80 px-1.5 py-0.5 rounded">
+                          {calculateAgeExact(tempDob)} anos
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSaveInlineDob}
+                        className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold transition-all"
+                      >
+                        Salvar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingDob(false)}
+                        className="px-1.5 py-0.5 text-slate-500 hover:text-slate-800 text-[11px] font-bold"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleOpenEditDob}
+                      className="inline-flex items-center gap-1 hover:bg-blue-50 hover:text-blue-700 px-1.5 py-0.5 rounded-lg transition-all border border-transparent hover:border-blue-200 cursor-pointer group"
+                      title="Clique para editar / informar a data de nascimento e recalcular a idade"
+                    >
+                      <span>🎂 {formatDobDisplay(effectiveDob)} • <strong>{age !== '--' ? `${age} anos` : 'Idade N/D'}</strong></span>
+                      <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold">✎ editar</span>
+                    </button>
+                  )}
                   <span>👤 Paciente Ativo</span>
                   {(patientCpf || currentRecord?.paciente_cpf) && <span>📄 CPF: {patientCpf || currentRecord?.paciente_cpf}</span>}
                   {(patientPhone || currentRecord?.paciente_telefone) && <span>📞 Tel: {patientPhone || currentRecord?.paciente_telefone}</span>}
                   {currentRecord?.endereco && <span>📍 {currentRecord.endereco}</span>}
-                </p>
+                </div>
 
                 {/* Etiquetas de Alertas Clínicos Pulsantes */}
                 {clinicalAlerts.length > 0 && (

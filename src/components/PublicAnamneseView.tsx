@@ -306,10 +306,13 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
       updated_at: new Date().toISOString()
     };
 
+    const cleanPhone = telefone.replace(/\D/g, '');
+    const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+
     // Salva cópia local para garantia imediata
     try {
-      const cleanPhone = telefone.replace(/\D/g, '');
-      localStorage.setItem(`anamnese_${cleanPhone}`, JSON.stringify(payload));
+      if (cleanPhone) localStorage.setItem(`anamnese_${cleanPhone}`, JSON.stringify(payload));
+      if (cleanWithout55) localStorage.setItem(`anamnese_${cleanWithout55}`, JSON.stringify(payload));
       if (appointment?.id) {
         localStorage.setItem(`anamnese_app_${appointment.id}`, JSON.stringify(payload));
       }
@@ -320,18 +323,30 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
     // Salva diretamente no Supabase se disponível (vital no Netlify)
     try {
       if (supabase) {
+        const updateObj: any = {
+          status: 'Confirmado',
+          paciente_cpf: cpf || undefined,
+          data_nascimento: dataNascimento || undefined,
+          paciente_data_nascimento: dataNascimento || undefined,
+          cep: cep || undefined,
+          logradouro: logradouro || undefined,
+          bairro: bairro || undefined,
+          cidade: cidade || undefined,
+          estado: estado || undefined,
+          numero: numero || undefined,
+          complemento: complemento || undefined
+        };
+
         if (appointment?.id && appointment.id !== '1') {
-          await supabase.from('agendamentos').update({
-            status: 'confirmado',
-            paciente_cpf: cpf || undefined,
-            cep: cep || undefined,
-            logradouro: logradouro || undefined,
-            bairro: bairro || undefined,
-            cidade: cidade || undefined,
-            estado: estado || undefined,
-            numero: numero || undefined,
-            complemento: complemento || undefined
-          }).eq('id', appointment.id);
+          const numId = Number(appointment.id);
+          if (!isNaN(numId)) {
+            await supabase.from('agendamentos').update(updateObj).eq('id', numId);
+          }
+          await supabase.from('agendamentos').update(updateObj).eq('id', String(appointment.id));
+        }
+
+        if (cleanPhone) {
+          await supabase.from('agendamentos').update(updateObj).or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanPhone.replace(/^55/, '')}%`);
         }
 
         // Registra o pré-cadastro na tabela de prontuários/anamneses
@@ -340,6 +355,7 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
           paciente_telefone: telefone,
           paciente_cpf: cpf,
           paciente_data_nascimento: dataNascimento,
+          data_nascimento: dataNascimento,
           resumo_formatado: `Pré-cadastro digital realizado. Alertas: ${alertas.join(', ') || 'Nenhum'}.`,
           dados_clinicos: {
             alertas_clinicos: alertas,
@@ -362,6 +378,12 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
       });
     } catch (err) {
       console.warn("Backend API offline ou modo estático Netlify.");
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.dispatchEvent(new CustomEvent('anamnese_submitted', { detail: payload }));
+      } catch (e) {}
     }
 
     setIsSubmitted(true);

@@ -3263,8 +3263,8 @@ export default function App() {
               setPreselectedChatPhone(phone);
               navigateToTab('mensagens');
             }}
-            onStartConsultation={async (paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade, statusPagamento, valorConsulta) => {
-              console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "convenio:", convenio, "statusPagamento:", statusPagamento, "valor:", valorConsulta);
+            onStartConsultation={async (paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade, statusPagamento, valorConsulta, dataNascimento, cpf) => {
+              console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "dataNascimento:", dataNascimento, "cpf:", cpf, "convenio:", convenio, "statusPagamento:", statusPagamento, "valor:", valorConsulta);
               if (typeof window !== 'undefined') {
                 localStorage.setItem('ambulatorio_active_tab', 'atendimento');
               }
@@ -3338,8 +3338,8 @@ export default function App() {
               );
 
               const initialAlerts = localAnamnese?.alertas_clinicos || prevHistoryRecord?.alertas_copiloto || prevHistoryRecord?.alertas_clinicos || [];
-              const initialDob = localAnamnese?.data_nascimento || prevHistoryRecord?.paciente_data_nascimento || '';
-              const initialCpf = localAnamnese?.paciente_cpf || prevHistoryRecord?.paciente_cpf || '';
+              const initialDob = dataNascimento || localAnamnese?.data_nascimento || prevHistoryRecord?.paciente_data_nascimento || '';
+              const initialCpf = cpf || localAnamnese?.paciente_cpf || prevHistoryRecord?.paciente_cpf || '';
               const initialPhoto = localAnamnese?.foto_url || prevHistoryRecord?.foto_url || '';
               const initialAddress = localAnamnese?.endereco ? (typeof localAnamnese.endereco === 'object' ? [localAnamnese.endereco.logradouro, localAnamnese.endereco.numero, localAnamnese.endereco.bairro, localAnamnese.endereco.cidade].filter(Boolean).join(', ') : localAnamnese.endereco) : (prevHistoryRecord?.endereco || '');
               const initialMeds = localAnamnese?.medicamentosAtuais || localAnamnese?.medicamentos_atuais || prevHistoryRecord?.medicamentos_em_uso || '';
@@ -3376,8 +3376,9 @@ export default function App() {
                   const json = await res.json();
                   if (json.data) {
                     const d = json.data;
+                    const fetchedDob = d.data_nascimento || d.paciente_data_nascimento || '';
                     if (d.paciente_cpf) setSelectedPatientCpf(d.paciente_cpf);
-                    if (d.data_nascimento) setSelectedPatientDob(d.data_nascimento);
+                    if (fetchedDob) setSelectedPatientDob(fetchedDob);
                     if (d.convenio) setSelectedPatientConvenio(d.convenio);
                     if (d.status_pagamento) setSelectedPatientStatusPagamento(d.status_pagamento);
                     if (d.valor_consulta) setSelectedPatientValorConsulta(d.valor_consulta);
@@ -3387,7 +3388,8 @@ export default function App() {
                     setCurrentRecord((prev: any) => ({
                       ...prev,
                       paciente_cpf: d.paciente_cpf || prev?.paciente_cpf,
-                      paciente_data_nascimento: d.data_nascimento || prev?.paciente_data_nascimento,
+                      paciente_data_nascimento: fetchedDob || prev?.paciente_data_nascimento,
+                      data_nascimento: fetchedDob || prev?.data_nascimento,
                       alertas_clinicos: (d.alertas_clinicos && d.alertas_clinicos.length > 0) ? d.alertas_clinicos : prev?.alertas_clinicos || [],
                       alertas_copiloto: (d.alertas_clinicos && d.alertas_clinicos.length > 0) ? d.alertas_clinicos : prev?.alertas_copiloto || [],
                       foto_url: d.foto_url || prev?.foto_url,
@@ -3398,6 +3400,30 @@ export default function App() {
                       medicamentos_em_uso: d.medicamentos_atuais || d.medicamentosAtuais || prev?.medicamentos_em_uso,
                       medicamentosAtuais: d.medicamentos_atuais || d.medicamentosAtuais || prev?.medicamentosAtuais
                     }));
+                  }
+                }
+
+                // Fallback direto no Supabase agendamentos caso a API local não tenha os dados mais recentes
+                if (appointmentId && appointmentId !== '1') {
+                  const { data: agData } = await supabase.from('agendamentos').select('*').eq('id', appointmentId).limit(1);
+                  if (agData && agData.length > 0) {
+                    const ag = agData[0];
+                    const agDob = ag.data_nascimento || ag.paciente_data_nascimento;
+                    if (agDob) {
+                      setSelectedPatientDob(agDob);
+                      setCurrentRecord((prev: any) => ({
+                        ...prev,
+                        paciente_data_nascimento: agDob,
+                        data_nascimento: agDob
+                      }));
+                    }
+                    if (ag.paciente_cpf) {
+                      setSelectedPatientCpf(ag.paciente_cpf);
+                      setCurrentRecord((prev: any) => ({
+                        ...prev,
+                        paciente_cpf: ag.paciente_cpf
+                      }));
+                    }
                   }
                 }
               } catch (asyncErr) {

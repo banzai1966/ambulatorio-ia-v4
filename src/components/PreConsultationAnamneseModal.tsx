@@ -548,20 +548,31 @@ export default function PreConsultationAnamneseModal({
       // 2. Salvar no Supabase (se disponível)
       try {
         if (supabase) {
+          const agUpdate: any = {
+            status: 'Confirmado',
+            paciente_cpf: cpf || undefined,
+            data_nascimento: dataNascimento || undefined,
+            paciente_data_nascimento: dataNascimento || undefined,
+            foto_url: photoPreview || undefined,
+            cep: cep || undefined,
+            logradouro: logradouro || undefined,
+            bairro: bairro || undefined,
+            cidade: cidade || undefined,
+            estado: estado || undefined,
+            numero: numero || undefined,
+            complemento: complemento || undefined
+          };
+
           if (appointmentId && appointmentId !== '1') {
-            await supabase.from('agendamentos').update({
-              status: 'confirmado',
-              paciente_cpf: cpf || undefined,
-              data_nascimento: dataNascimento || undefined,
-              foto_url: photoPreview || undefined,
-              cep: cep || undefined,
-              logradouro: logradouro || undefined,
-              bairro: bairro || undefined,
-              cidade: cidade || undefined,
-              estado: estado || undefined,
-              numero: numero || undefined,
-              complemento: complemento || undefined
-            }).eq('id', appointmentId);
+            const numId = Number(appointmentId);
+            if (!isNaN(numId)) {
+              await supabase.from('agendamentos').update(agUpdate).eq('id', numId);
+            }
+            await supabase.from('agendamentos').update(agUpdate).eq('id', String(appointmentId));
+          }
+
+          if (cleanPhone) {
+            await supabase.from('agendamentos').update(agUpdate).or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
           }
 
           await supabase.from('prontuarios').insert([{
@@ -593,6 +604,12 @@ export default function PreConsultationAnamneseModal({
         });
       } catch (apiErr) {
         console.warn("Aviso submit API:", apiErr);
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(new CustomEvent('anamnese_submitted', { detail: payload }));
+        } catch (e) {}
       }
 
       toast.success("Anamnese pré-consulta salva com sucesso! Alertas clínicos ativos.");

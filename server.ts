@@ -1385,9 +1385,11 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
     const anamneseRecord = {
       agendamento_id: aptId || null,
       paciente_nome,
+      paciente_nome_completo: paciente_nome,
       paciente_telefone,
       paciente_cpf,
       data_nascimento,
+      paciente_data_nascimento: data_nascimento,
       endereco,
       alertas_clinicos: alertas_clinicos || [],
       medicamentos_atuais: meds,
@@ -1426,29 +1428,36 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
       }
     }
 
-    // 1. Se houver ID de agendamento, atualiza status para 'confirmado' e salva dados no agendamento
-    if (aptId && aptId !== '1') {
-      try {
+    // 1. Atualiza status para 'Confirmado' e salva data de nascimento e demais dados no agendamento
+    try {
+      const updateData: any = {
+        status: 'Confirmado',
+        paciente_cpf: paciente_cpf || undefined,
+        data_nascimento: data_nascimento || undefined,
+        paciente_data_nascimento: data_nascimento || undefined,
+        foto_url: foto_url || undefined,
+        cep: endereco?.cep || undefined,
+        logradouro: endereco?.logradouro || undefined,
+        bairro: endereco?.bairro || undefined,
+        cidade: endereco?.cidade || undefined,
+        estado: endereco?.estado || undefined,
+        numero: endereco?.numero || undefined,
+        complemento: endereco?.complemento || undefined
+      };
+
+      if (aptId && aptId !== '1') {
         const numAptId = Number(aptId);
-        const updateData: any = {
-          status: 'confirmado',
-          paciente_cpf: paciente_cpf || undefined,
-          foto_url: foto_url || undefined,
-          cep: endereco?.cep || undefined,
-          logradouro: endereco?.logradouro || undefined,
-          bairro: endereco?.bairro || undefined,
-          cidade: endereco?.cidade || undefined,
-          estado: endereco?.estado || undefined,
-          numero: endereco?.numero || undefined,
-          complemento: endereco?.complemento || undefined
-        };
         if (!isNaN(numAptId)) {
           await supabase.from('agendamentos').update(updateData).eq('id', numAptId);
         }
         await supabase.from('agendamentos').update(updateData).eq('id', String(aptId));
-      } catch (err) {
-        console.warn("Erro ao atualizar agendamento em Supabase:", err);
       }
+
+      if (cleanPhone) {
+        await supabase.from('agendamentos').update(updateData).or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
+      }
+    } catch (err) {
+      console.warn("Erro ao atualizar agendamento em Supabase:", err);
     }
 
     // 2. Salva registro de anamnese pré-consulta no banco

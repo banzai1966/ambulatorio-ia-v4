@@ -35,6 +35,7 @@ import { supabase } from '../lib/supabase';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getAvailableSlots, getDoctorsBySpecialty } from '../services/schedulingService';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
+import { calculateAge, formatDateMask } from '../lib/utils';
 
 interface Appointment {
   id: string;
@@ -78,7 +79,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     convenio?: string, 
     especialidade?: string,
     statusPagamento?: string,
-    valorConsulta?: string
+    valorConsulta?: string,
+    dataNascimento?: string,
+    cpf?: string
   ) => void, 
   onOpenChat: (phone: string) => void,
   user: any, 
@@ -110,6 +113,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     paciente_nome: prefillPatient?.name || '', 
     paciente_telefone: prefillPatient?.phone || '', 
     paciente_cpf: '',
+    data_nascimento: '',
     cep: '',
     logradouro: '',
     numero: '',
@@ -448,13 +452,44 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
   useEffect(() => {
     fetchDoctors();
-    fetchAppointments();
+    fetchAppointments(true);
     fetchSpecialties();
     
     // Garantir que o medico_id seja preenchido se o usuário for médico
     if (user?.role === 'doctor' && !newAppointment.medico_id) {
       setNewAppointment(prev => ({ ...prev, medico_id: user.id }));
     }
+
+    // Assinante Realtime para atualizar instantaneamente quando o paciente responder o formulário
+    let channel: any = null;
+    try {
+      channel = supabase
+        .channel('agendamentos-realtime-sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'agendamentos' }, (payload) => {
+          console.log("Agenda: Atualização em tempo real detectada!", payload);
+          fetchAppointments(false);
+        })
+        .subscribe();
+    } catch (e) {
+      console.warn("Aviso canal realtime:", e);
+    }
+
+    const handleAnamneseSubmitted = () => {
+      console.log("Agenda: Evento de anamnese respondida capturado, atualizando lista...");
+      fetchAppointments(false);
+    };
+    window.addEventListener('anamnese_submitted', handleAnamneseSubmitted);
+
+    // Sincronização periódica silenciosa (a cada 15s) em segundo plano, sem piscar a tela
+    const pollTimer = setInterval(() => {
+      fetchAppointments(false);
+    }, 15000);
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+      window.removeEventListener('anamnese_submitted', handleAnamneseSubmitted);
+      clearInterval(pollTimer);
+    };
   }, [selectedMedicoId, user]);
 
   const fetchSpecialties = async () => {
@@ -578,8 +613,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
   const [testMessage, setTestMessage] = useState('Olá! Esta é uma mensagem de teste do seu Ambulatório IA.');
 
-  const fetchAppointments = async () => {
-    setIsLoading(true);
+  const fetchAppointments = async (showLoadingSpinner: boolean = false) => {
+    if (showLoadingSpinner) {
+      setIsLoading(true);
+    }
     try {
       console.log("Agenda: Iniciando busca de agendamentos...");
       
@@ -641,7 +678,29 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           const hora_consulta = app.hora_consulta || app.appointment_time;
           const medico_id = app.medico_id || app.doctor_id || app.user_id || '';
           const motivo = app.motivo || app.reason || '';
-          const status = app.status || 'Agendado';
+          const rawStatus = (app.status || 'Agendado').trim();
+          let status = 'Agendado';
+          if (rawStatus.toLowerCase() === 'confirmado') status = 'Confirmado';
+          else if (rawStatus.toLowerCase() === 'atendido') status = 'Atendido';
+          else if (rawStatus.toLowerCase() === 'em atendimento') status = 'Em Atendimento';
+          else if (rawStatus.toLowerCase() === 'cancelado') status = 'Cancelado';
+          else if (rawStatus.toLowerCase() === 'faltou') status = 'Faltou';
+          else if (rawStatus) status = rawStatus;
+
+          // Se estiver como 'Agendado', checar se já existe anamnese pré-consulta preenchida
+          const cleanPhoneDigits = (paciente_telefone || '').replace(/\D/g, '');
+          const cleanPhoneDigitsNo55 = cleanPhoneDigits.startsWith('55') && cleanPhoneDigits.length > 10 ? cleanPhoneDigits.slice(2) : cleanPhoneDigits;
+          
+          if (status === 'Agendado' && typeof window !== 'undefined') {
+            const hasLocalAnamnese = 
+              (cleanPhoneDigits && localStorage.getItem(`anamnese_${cleanPhoneDigits}`)) ||
+              (cleanPhoneDigitsNo55 && localStorage.getItem(`anamnese_${cleanPhoneDigitsNo55}`)) ||
+              (app.id && localStorage.getItem(`anamnese_app_${app.id}`));
+            
+            if (hasLocalAnamnese || app.foto_url || (app.paciente_cpf && app.cep)) {
+              status = 'Confirmado';
+            }
+          }
 
           let medicoNome = app.medico_nome || 'Médico';
           let especialidadeNome = app.especialidade_nome || 'Clínico Geral';
@@ -789,6 +848,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         paciente_nome: newAppointment.paciente_nome,
         paciente_telefone: formattedPhone || newAppointment.paciente_telefone,
         paciente_cpf: newAppointment.paciente_cpf,
+        data_nascimento: newAppointment.data_nascimento,
+        paciente_data_nascimento: newAppointment.data_nascimento,
         cep: newAppointment.cep,
         logradouro: newAppointment.logradouro,
         numero: newAppointment.numero,
@@ -842,6 +903,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         paciente_nome: '', 
         paciente_telefone: '', 
         paciente_cpf: '',
+        data_nascimento: '',
         cep: '',
         logradouro: '',
         numero: '',
@@ -910,7 +972,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           
           <div className="flex flex-wrap items-center gap-3">
             <button 
-              onClick={fetchAppointments}
+              onClick={() => fetchAppointments(true)}
               className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs"
               title="Atualizar Agenda"
             >
@@ -959,27 +1021,36 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-bold text-lg text-slate-900">{app.paciente_nome}</h3>
                       <select
-                        value={app.status || 'Agendado'}
+                        value={(app.status || 'Agendado').toLowerCase() === 'confirmado' ? 'Confirmado' : (app.status || 'Agendado')}
                         onChange={(e) => handleStatusChange(app.id, e.target.value)}
                         className={`px-2.5 py-0.5 rounded-full text-xs font-bold border outline-none cursor-pointer transition-all shadow-2xs ${getStatusBadgeClass(app.status)}`}
                         title="Clique para alterar o status do agendamento"
                       >
                         <option value="Agendado" className="bg-white text-slate-900 font-normal">Agendado</option>
-                        <option value="confirmado" className="bg-white text-slate-900 font-normal">Confirmado</option>
+                        <option value="Confirmado" className="bg-white text-slate-900 font-normal">Confirmado</option>
                         <option value="Em Atendimento" className="bg-white text-slate-900 font-normal">Em Atendimento</option>
                         <option value="Atendido" className="bg-white text-slate-900 font-normal">Atendido</option>
                         <option value="Cancelado" className="bg-white text-slate-900 font-normal">Cancelado</option>
                       </select>
-                      {app.convenio && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                          {app.convenio}
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                        {app.convenio || 'Particular'}
+                      </span>
+
+                      {/* Badge de Pagamento / Status Financeiro */}
+                      {app.status_pagamento === 'Cortesia / Isento' ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                          Cortesia / Isento
                         </span>
-                      )}
-                      {(app.valor_consulta || (app.status_pagamento && app.status_pagamento !== 'Cortesia / Isento')) && (
+                      ) : (
                         <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${(app.status_pagamento || '').startsWith('Pago') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                          {app.status_pagamento ? `${app.status_pagamento}` : ''}{app.valor_consulta ? ` • R$ ${app.valor_consulta}` : ''}
+                          {(app.status_pagamento || '').startsWith('Pago') 
+                            ? (app.status_pagamento || 'Pago') 
+                            : (app.status_pagamento || 'Pendente no Balcão')
+                          }
+                          {app.valor_consulta ? ` • R$ ${app.valor_consulta}` : ' • R$ 250,00'}
                         </span>
                       )}
+
                       {app.tipo_consulta && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
                           {app.tipo_consulta}
@@ -1000,6 +1071,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       {app.paciente_cpf && (
                         <span className="flex items-center gap-1.5 text-slate-600 font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">
                           <ShieldCheck size={13} className="text-slate-500" /> CPF: {app.paciente_cpf}
+                        </span>
+                      )}
+                      {app.data_nascimento && (
+                        <span className="flex items-center gap-1.5 text-blue-700 font-medium bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md text-xs">
+                          🎂 {app.data_nascimento} {calculateAge(app.data_nascimento) !== null ? `(${calculateAge(app.data_nascimento)} anos)` : ''}
                         </span>
                       )}
                       {(app.logradouro || app.cidade) && (
@@ -1078,7 +1154,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                         app.convenio || 'Particular', 
                         app.medico_especialidade || 'Clínico Geral',
                         app.status_pagamento,
-                        app.valor_consulta
+                        app.valor_consulta,
+                        app.data_nascimento,
+                        app.paciente_cpf
                       );
                     }}
                     className="bg-slate-900 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all font-bold group-hover:bg-clinical-blue"
@@ -1148,6 +1226,32 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Data de Nascimento com cálculo imediato de Idade */}
+                <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                      🎂 Data de Nascimento do Paciente
+                    </label>
+                    {calculateAge(newAppointment.data_nascimento) !== null && (
+                      <span className="text-[11px] font-extrabold text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-md border border-blue-200 animate-fade-in shadow-xs">
+                        {calculateAge(newAppointment.data_nascimento)} anos
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={10}
+                    className="w-full p-2.5 bg-white rounded-lg border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs font-semibold"
+                    placeholder="Ex: 08/05/1966 (DD/MM/AAAA)"
+                    value={newAppointment.data_nascimento}
+                    onChange={e => setNewAppointment({...newAppointment, data_nascimento: formatDateMask(e.target.value)})}
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    A idade precisa será calculada automaticamente para o prontuário e atendimento.
+                  </p>
                 </div>
               </div>
 
