@@ -2,13 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { User, Phone, MapPin, Camera, AlertTriangle, ShieldCheck, Check, Search, X, Heart, AlertCircle, Sparkles, Upload, Video } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { calculateAge, formatDateMask } from '../lib/utils';
+import { supabase } from '../lib/supabase';
 
 interface PreConsultationAnamneseModalProps {
   isOpen: boolean;
   onClose: () => void;
+  appointmentId?: string;
   patientNamePrefill?: string;
   patientPhonePrefill?: string;
   patientCpfPrefill?: string;
+  patientDobPrefill?: string;
+  patientPhotoPrefill?: string;
   patientCepPrefill?: string;
   patientLogradouroPrefill?: string;
   patientBairroPrefill?: string;
@@ -22,9 +26,12 @@ interface PreConsultationAnamneseModalProps {
 export default function PreConsultationAnamneseModal({
   isOpen,
   onClose,
+  appointmentId = '',
   patientNamePrefill = '',
   patientPhonePrefill = '',
   patientCpfPrefill = '',
+  patientDobPrefill = '',
+  patientPhotoPrefill = '',
   patientCepPrefill = '',
   patientLogradouroPrefill = '',
   patientBairroPrefill = '',
@@ -37,7 +44,7 @@ export default function PreConsultationAnamneseModal({
   const [nome, setNome] = useState(patientNamePrefill);
   const [telefone, setTelefone] = useState(patientPhonePrefill);
   const [cpf, setCpf] = useState(patientCpfPrefill);
-  const [dataNascimento, setDataNascimento] = useState('');
+  const [dataNascimento, setDataNascimento] = useState(patientDobPrefill);
   const [cep, setCep] = useState(patientCepPrefill);
   const [logradouro, setLogradouro] = useState(patientLogradouroPrefill);
   const [bairro, setBairro] = useState(patientBairroPrefill);
@@ -52,34 +59,211 @@ export default function PreConsultationAnamneseModal({
   const [alergias, setAlergias] = useState<string[]>([]);
   const [alergiaTexto, setAlergiaTexto] = useState('');
   const [temCardiopatia, setTemCardiopatia] = useState(false);
+  const [temMarcapasso, setTemMarcapasso] = useState(false);
   const [usaAnticoagulante, setUsaAnticoagulante] = useState(false);
   const [medicamentosAtuais, setMedicamentosAtuais] = useState('');
   const [observacoesClinicas, setObservacoesClinicas] = useState('');
 
   // Foto / Selfie / Câmera
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(patientPhotoPrefill || null);
   const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [aceitouTermoVeracidade, setAceitouTermoVeracidade] = useState(true);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [isScanningHistory, setIsScanningHistory] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  // Helper para preencher estados a partir de um registro
+  const applyRecordData = (rec: any) => {
+    if (!rec) return;
+    if (rec.paciente_nome || rec.paciente_nome_completo) {
+      setNome(rec.paciente_nome || rec.paciente_nome_completo);
+    }
+    if (rec.paciente_telefone || rec.telefone) {
+      setTelefone(rec.paciente_telefone || rec.telefone);
+    }
+    if (rec.paciente_cpf || rec.cpf) {
+      setCpf(rec.paciente_cpf || rec.cpf);
+    }
+    
+    // Normalizar data de nascimento para DD/MM/AAAA
+    const rawDob = rec.data_nascimento || rec.paciente_data_nascimento;
+    if (rawDob && typeof rawDob === 'string') {
+      let formattedDob = rawDob;
+      if (rawDob.includes('-')) {
+        const parts = rawDob.split('-');
+        if (parts.length === 3 && parts[0].length === 4) {
+          formattedDob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+      }
+      setDataNascimento(formattedDob);
+    }
+
+    if (rec.endereco) {
+      if (typeof rec.endereco === 'object') {
+        if (rec.endereco.cep) setCep(rec.endereco.cep);
+        if (rec.endereco.logradouro) setLogradouro(rec.endereco.logradouro);
+        if (rec.endereco.bairro) setBairro(rec.endereco.bairro);
+        if (rec.endereco.cidade) setCidade(rec.endereco.cidade);
+        if (rec.endereco.estado) setEstado(rec.endereco.estado);
+        if (rec.endereco.numero) setNumero(rec.endereco.numero);
+        if (rec.endereco.complemento) setComplemento(rec.endereco.complemento);
+      }
+    } else {
+      if (rec.cep) setCep(rec.cep);
+      if (rec.logradouro) setLogradouro(rec.logradouro);
+      if (rec.bairro) setBairro(rec.bairro);
+      if (rec.cidade) setCidade(rec.cidade);
+      if (rec.estado) setEstado(rec.estado);
+      if (rec.numero) setNumero(rec.numero);
+      if (rec.complemento) setComplemento(rec.complemento);
+    }
+
+    const rawAlerts = rec.alertas_clinicos || (rec.alergias ? (typeof rec.alergias === 'string' ? rec.alergias.split(',').map((s: string) => s.trim()) : rec.alergias) : []);
+    const alertsList = Array.isArray(rawAlerts) ? rawAlerts : [];
+
+    if (alertsList.length > 0) {
+      setIsHipertenso(alertsList.some((a: string) => String(a).toUpperCase().includes("HIPERTENS")));
+      setIsDiabetico(alertsList.some((a: string) => String(a).toUpperCase().includes("DIABÉT") || String(a).toUpperCase().includes("DIABET")));
+      setTemCardiopatia(alertsList.some((a: string) => (String(a).toUpperCase().includes("CARDIO") || String(a).toUpperCase().includes("CARDÍACO")) && !String(a).toUpperCase().includes("MARCAPASSO")));
+      setTemMarcapasso(alertsList.some((a: string) => String(a).toUpperCase().includes("MARCAPASSO")));
+      setUsaAnticoagulante(alertsList.some((a: string) => String(a).toUpperCase().includes("ANTICOAGULANTE")));
+
+      const defaultAlergiasList = ['Penicilina', 'Dipirona', 'Ibuprofeno', 'Anestésico Local', 'Frutos do Mar', 'Látex'];
+      const alergiasEncontradas = alertsList
+        .filter((a: string) => String(a).toUpperCase().includes("ALERGIA:"))
+        .map((a: string) => String(a).replace(/ALERGIA:\s*/i, '').trim());
+      
+      if (alergiasEncontradas.length > 0) {
+        const matchedAlergias = alergiasEncontradas.map(found => {
+          const normFound = found.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+          const match = defaultAlergiasList.find(opt => 
+            opt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normFound
+          );
+          return match || found;
+        });
+        setAlergias(matchedAlergias);
+        setAlergiaTexto(matchedAlergias.join(', '));
+      }
+    }
+
+    if (rec.medicamentos_atuais !== undefined || rec.medicamentosAtuais !== undefined) {
+      setMedicamentosAtuais(rec.medicamentos_atuais || rec.medicamentosAtuais || '');
+    }
+    if (rec.observacoes_clinicas !== undefined || rec.observacoesClinicas !== undefined) {
+      setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas || '');
+    }
+    
+    const foto = rec.foto_url || rec.foto || rec.url_midia || rec.photoPreview || rec.avatar_url || null;
+    if (foto) {
+      setPhotoPreview(foto);
+    }
+  };
+
+  // Função centralizada para executar a varredura
+  const performFullScan = async (nameToScan?: string, phoneToScan?: string, notifyOnFound = false) => {
+    setIsScanningHistory(true);
+    const targetName = (nameToScan !== undefined ? nameToScan : (nome || patientNamePrefill || '')).trim();
+    const targetPhone = (phoneToScan !== undefined ? phoneToScan : (telefone || patientPhonePrefill || '')).trim();
+    const cleanPhone = targetPhone.replace(/\D/g, '');
+    const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+    const cleanCpf = (cpf || patientCpfPrefill || '').replace(/\D/g, '');
+
+    let foundData = false;
+
+    // 1. CARREGAMENTO DO LOCALSTORAGE
+    try {
+      // Checar foto prévia salva em localStorage
+      const savedPhoto = (cleanCpf && localStorage.getItem(`anamnese_foto_${cleanCpf}`)) || 
+                         (cleanPhone && localStorage.getItem(`anamnese_foto_${cleanPhone}`)) || 
+                         (cleanWithout55 && localStorage.getItem(`anamnese_foto_${cleanWithout55}`)) ||
+                         (appointmentId && localStorage.getItem(`anamnese_foto_${appointmentId}`));
+      if (savedPhoto && !photoPreview) {
+        setPhotoPreview(savedPhoto);
+      }
+
+      const savedApp = appointmentId ? localStorage.getItem(`anamnese_app_${appointmentId}`) : null;
+      const savedPhone = cleanPhone ? localStorage.getItem(`anamnese_${cleanPhone}`) : null;
+      const savedWithout55 = cleanWithout55 ? localStorage.getItem(`anamnese_${cleanWithout55}`) : null;
+      const savedWith55 = cleanPhone ? localStorage.getItem(`anamnese_55${cleanPhone}`) : null;
+
+      let localRec: any = null;
+      if (savedApp) localRec = JSON.parse(savedApp);
+      else if (savedPhone) localRec = JSON.parse(savedPhone);
+      else if (savedWithout55) localRec = JSON.parse(savedWithout55);
+      else if (savedWith55) localRec = JSON.parse(savedWith55);
+
+      if (!localRec) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('anamnese_')) {
+            try {
+              const parsed = JSON.parse(localStorage.getItem(key) || '');
+              if (parsed && (
+                (parsed.paciente_nome && targetName && parsed.paciente_nome.toLowerCase().trim().includes(targetName.toLowerCase().trim())) ||
+                (cleanWithout55 && String(parsed.paciente_telefone || '').replace(/\D/g, '').includes(cleanWithout55)) ||
+                (cleanCpf && String(parsed.paciente_cpf || '').replace(/\D/g, '') === cleanCpf)
+              )) {
+                localRec = parsed;
+                break;
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (localRec) {
+        applyRecordData(localRec);
+        foundData = true;
+      }
+    } catch (err) {
+      console.warn("Aviso ao ler dados locais:", err);
+    }
+
+    // 2. BUSCA REMOTA NO SERVIDOR / DISCO / SUPABASE
+    try {
+      const params = new URLSearchParams();
+      if (cleanPhone) params.append('phone', cleanPhone);
+      if (appointmentId) params.append('id', appointmentId);
+      if (targetName) params.append('name', targetName);
+
+      const res = await fetch(`/api/public/anamnese-data?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          applyRecordData(data.data);
+          foundData = true;
+          if (notifyOnFound) {
+            toast.success(`Dados clínicos e cadastrais localizados para "${targetName || 'Paciente'}"!`);
+          }
+        } else if (notifyOnFound && !foundData) {
+          toast("Nenhum histórico anterior encontrado para este nome/telefone.", { icon: 'ℹ️' });
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados remotos da anamnese:", err);
+    } finally {
+      setIsScanningHistory(false);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
-      // Limpeza / Reset de estados prévios para evitar resíduos de pacientes anteriores
+      // Limpeza / Reset inicial
       setIsHipertenso(false);
       setIsDiabetico(false);
       setTemCardiopatia(false);
+      setTemMarcapasso(false);
       setUsaAnticoagulante(false);
       setAlergias([]);
       setAlergiaTexto('');
       setMedicamentosAtuais('');
       setObservacoesClinicas('');
       setPhotoPreview(null);
-      setDataNascimento('');
+      setDataNascimento(patientDobPrefill || '');
 
       if (patientNamePrefill) setNome(patientNamePrefill);
       if (patientPhonePrefill) setTelefone(patientPhonePrefill);
@@ -92,62 +276,16 @@ export default function PreConsultationAnamneseModal({
       if (patientNumeroPrefill) setNumero(patientNumeroPrefill);
       if (patientComplementoPrefill) setComplemento(patientComplementoPrefill);
 
-      // Buscar anamnese pré-existente no servidor
-      const fetchAnamneseData = async () => {
-        try {
-          if (!patientPhonePrefill) return;
-          const res = await fetch(`/api/public/anamnese-data?phone=${encodeURIComponent(patientPhonePrefill)}`);
-          const data = await res.json();
-          if (data.success && data.data) {
-            const rec = data.data;
-            if (rec.paciente_nome) setNome(rec.paciente_nome);
-            if (rec.paciente_telefone) setTelefone(rec.paciente_telefone);
-            if (rec.paciente_cpf) setCpf(rec.paciente_cpf);
-            if (rec.data_nascimento) setDataNascimento(rec.data_nascimento);
-
-            if (rec.endereco) {
-              if (rec.endereco.cep) setCep(rec.endereco.cep);
-              if (rec.endereco.logradouro) setLogradouro(rec.endereco.logradouro);
-              if (rec.endereco.bairro) setBairro(rec.endereco.bairro);
-              if (rec.endereco.cidade) setCidade(rec.endereco.cidade);
-              if (rec.endereco.estado) setEstado(rec.endereco.estado);
-              if (rec.endereco.numero) setNumero(rec.endereco.numero);
-              if (rec.endereco.complemento) setComplemento(rec.endereco.complemento);
-            }
-
-            if (rec.alertas_clinicos && Array.isArray(rec.alertas_clinicos)) {
-              setIsHipertenso(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "HIPERTENSO" || String(a).toUpperCase().includes("HIPERTENSO")));
-              setIsDiabetico(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "DIABÉTICO" || String(a).toUpperCase().includes("DIABÉTICO") || String(a).toUpperCase().includes("DIABETES")));
-              setTemCardiopatia(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "CARDIOPATIA" || String(a).toUpperCase().includes("CARDIOPATIA") || String(a).toUpperCase().includes("MARCAPASSO") || String(a).toUpperCase().includes("CARDÍACO")));
-              setUsaAnticoagulante(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "ANTICOAGULANTE" || String(a).toUpperCase().includes("ANTICOAGULANTE")));
-
-              // Extrair alergias salvas
-              const alergiasEncontradas = rec.alertas_clinicos
-                .filter((a: string) => String(a).toUpperCase().startsWith("ALERGIA:"))
-                .map((a: string) => String(a).replace(/ALERGIA:\s*/i, '').trim());
-              
-              if (alergiasEncontradas.length > 0) {
-                setAlergias(alergiasEncontradas);
-                setAlergiaTexto(alergiasEncontradas.join(', '));
-              }
-            }
-
-            if (rec.medicamentos_atuais || rec.medicamentosAtuais) setMedicamentosAtuais(rec.medicamentos_atuais || rec.medicamentosAtuais);
-            if (rec.observacoes_clinicas || rec.observacoesClinicas) setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas);
-            if (rec.foto_url) setPhotoPreview(rec.foto_url);
-          }
-        } catch (err) {
-          console.error("Erro ao carregar dados da anamnese:", err);
-        }
-      };
-
-      fetchAnamneseData();
+      // Dispara a varredura automática imediata
+      performFullScan(patientNamePrefill, patientPhonePrefill, false);
     }
   }, [
     isOpen,
+    appointmentId,
     patientNamePrefill,
     patientPhonePrefill,
     patientCpfPrefill,
+    patientDobPrefill,
     patientCepPrefill,
     patientLogradouroPrefill,
     patientBairroPrefill,
@@ -186,21 +324,56 @@ export default function PreConsultationAnamneseModal({
     setIsWebcamActive(false);
   };
 
-  // Capturar Foto do Vídeo ao Vivo
+  // Capturar Foto do Vídeo ao Vivo de forma ultra leve (evita estouro de memória)
   const capturePhotoFromWebcam = () => {
     if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      setPhotoPreview(dataUrl);
-      toast.success("Foto capturada com sucesso!");
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      
+      // Limita resolução a no máximo 480px para foto de perfil leve (25-45KB)
+      const maxDim = 480;
+      let width = video.videoWidth || 640;
+      let height = video.videoHeight || 480;
+      
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        setPhotoPreview(dataUrl);
+        
+        const cleanPhone = (telefone || patientPhonePrefill || '').replace(/\D/g, '');
+        const cleanCpf = (cpf || patientCpfPrefill || '').replace(/\D/g, '');
+        try {
+          if (cleanPhone) localStorage.setItem(`anamnese_foto_${cleanPhone}`, dataUrl);
+          if (cleanCpf) localStorage.setItem(`anamnese_foto_${cleanCpf}`, dataUrl);
+          if (appointmentId) localStorage.setItem(`anamnese_foto_${appointmentId}`, dataUrl);
+        } catch (storageErr) {
+          console.warn("Aviso de cota de armazenamento local:", storageErr);
+        }
+
+        toast.success("Foto capturada com sucesso!");
+      }
+    } catch (err: any) {
+      console.error("Erro ao capturar foto:", err);
+      toast.error("Erro ao capturar foto. Tente novamente.");
+    } finally {
+      stopWebcam();
     }
-    stopWebcam();
   };
 
   useEffect(() => {
@@ -238,22 +411,77 @@ export default function PreConsultationAnamneseModal({
     }
   };
 
-  // Upload ou captura de selfie
+  // Upload ou captura de selfie com compressão automática
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 480;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+              setPhotoPreview(dataUrl);
+
+              const cleanPhone = (telefone || patientPhonePrefill || '').replace(/\D/g, '');
+              const cleanCpf = (cpf || patientCpfPrefill || '').replace(/\D/g, '');
+              try {
+                if (cleanPhone) localStorage.setItem(`anamnese_foto_${cleanPhone}`, dataUrl);
+                if (cleanCpf) localStorage.setItem(`anamnese_foto_${cleanCpf}`, dataUrl);
+                if (appointmentId) localStorage.setItem(`anamnese_foto_${appointmentId}`, dataUrl);
+              } catch (storageErr) {
+                console.warn("Aviso de armazenamento:", storageErr);
+              }
+              toast.success("Foto otimizada e anexada com sucesso!");
+            }
+          } catch (compressErr) {
+            console.error("Erro ao comprimir imagem:", compressErr);
+            toast.error("Falha ao processar imagem.");
+          }
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const isAlergiaChecked = (item: string) => {
+    const normItem = item.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    return alergias.some(a => a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normItem);
+  };
+
   const toggleAlergia = (item: string) => {
-    setAlergias(prev => 
-      prev.includes(item) ? prev.filter(a => a !== item) : [...prev, item]
-    );
+    const normItem = item.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    setAlergias(prev => {
+      const exists = prev.some(a => a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normItem);
+      if (exists) {
+        return prev.filter(a => a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() !== normItem);
+      } else {
+        return [...prev, item];
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -273,15 +501,24 @@ export default function PreConsultationAnamneseModal({
     const alertas: string[] = [];
     if (isHipertenso) alertas.push("HIPERTENSO");
     if (isDiabetico) alertas.push("DIABÉTICO");
-    if (temCardiopatia) alertas.push("CARDIOPATIA");
-    if (usaAnticoagulante) alertas.push("ANTICOAGULANTE");
+    if (temCardiopatia) alertas.push("PROBLEMAS CARDÍACOS");
+    if (temMarcapasso) alertas.push("USO DE MARCAPASSO");
+    if (usaAnticoagulante) alertas.push("USO DE ANTICOAGULANTE");
     if (alergias.length > 0) {
-      alergias.forEach(a => alertas.push(`ALERGIA: ${a.toUpperCase()}`));
+      alergias.forEach(a => {
+        const cleanA = a.replace(/^ALERGIA:\s*/i, '').trim();
+        alertas.push(`ALERGIA: ${cleanA.toUpperCase()}`);
+      });
     } else if (alergiaTexto.trim()) {
       alertas.push(`ALERGIA: ${alergiaTexto.toUpperCase()}`);
     }
 
+    const cleanPhone = (telefone || '').replace(/\D/g, '');
+    const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+
     const payload = {
+      appointmentId: appointmentId || undefined,
+      agendamento_id: appointmentId || undefined,
       paciente_nome: nome,
       paciente_telefone: telefone,
       paciente_cpf: cpf,
@@ -291,19 +528,80 @@ export default function PreConsultationAnamneseModal({
       },
       alertas_clinicos: alertas,
       medicamentosAtuais,
+      medicamentos_atuais: medicamentosAtuais,
       observacoesClinicas,
+      observacoes_clinicas: observacoesClinicas,
       foto_url: photoPreview,
       data_submissao: new Date().toISOString()
     };
 
     try {
-      toast.success("Anamnese pré-consulta enviada com sucesso! Alertas clínicos ativos.");
+      // 1. Salvar no localStorage
+      try {
+        if (cleanPhone) localStorage.setItem(`anamnese_${cleanPhone}`, JSON.stringify(payload));
+        if (cleanWithout55) localStorage.setItem(`anamnese_${cleanWithout55}`, JSON.stringify(payload));
+        if (appointmentId) localStorage.setItem(`anamnese_app_${appointmentId}`, JSON.stringify(payload));
+      } catch (lsErr) {
+        console.warn("Aviso localStorage:", lsErr);
+      }
+
+      // 2. Salvar no Supabase (se disponível)
+      try {
+        if (supabase) {
+          if (appointmentId && appointmentId !== '1') {
+            await supabase.from('agendamentos').update({
+              status: 'confirmado',
+              paciente_cpf: cpf || undefined,
+              data_nascimento: dataNascimento || undefined,
+              foto_url: photoPreview || undefined,
+              cep: cep || undefined,
+              logradouro: logradouro || undefined,
+              bairro: bairro || undefined,
+              cidade: cidade || undefined,
+              estado: estado || undefined,
+              numero: numero || undefined,
+              complemento: complemento || undefined
+            }).eq('id', appointmentId);
+          }
+
+          await supabase.from('prontuarios').insert([{
+            paciente_nome_completo: nome,
+            paciente_telefone: telefone,
+            paciente_cpf: cpf,
+            paciente_data_nascimento: dataNascimento,
+            url_midia: photoPreview || null,
+            resumo_formatado: `Pré-cadastro digital realizado. Alertas: ${alertas.join(', ') || 'Nenhum'}.`,
+            dados_clinicos: {
+              alertas_clinicos: alertas,
+              medicamentos_atuais: medicamentosAtuais,
+              observacoes: observacoesClinicas,
+              foto_url: photoPreview
+            },
+            created_at: new Date().toISOString()
+          }]);
+        }
+      } catch (supaErr) {
+        console.warn("Aviso Supabase:", supaErr);
+      }
+
+      // 3. Salvar no backend / disco
+      try {
+        await fetch('/api/public/submit-anamnese', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (apiErr) {
+        console.warn("Aviso submit API:", apiErr);
+      }
+
+      toast.success("Anamnese pré-consulta salva com sucesso! Alertas clínicos ativos.");
       if (onAnamneseSubmitted) {
         onAnamneseSubmitted(payload);
       }
       onClose();
     } catch (err: any) {
-      toast.error("Erro ao enviar anamnese: " + err.message);
+      toast.error("Erro ao salvar anamnese: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -435,31 +733,81 @@ export default function PreConsultationAnamneseModal({
               {/* Campos Principais */}
               <div className="md:col-span-2 space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Nome Completo *</label>
-                  <input
-                    type="text"
-                    required
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    placeholder="Seu nome sem abreviações"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">Nome Completo *</label>
+                    <button
+                      type="button"
+                      onClick={() => performFullScan(nome, telefone, true)}
+                      disabled={isScanningHistory}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline cursor-pointer"
+                    >
+                      <Search className={`w-3 h-3 ${isScanningHistory ? 'animate-spin' : ''}`} />
+                      {isScanningHistory ? "Fazendo varredura..." : "Fazer Varredura de Histórico"}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={nome}
+                      onChange={(e) => setNome(e.target.value)}
+                      onBlur={() => {
+                        if (nome.trim().length >= 3 && !dataNascimento && !photoPreview) {
+                          performFullScan(nome, telefone, false);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          performFullScan(nome, telefone, true);
+                        }
+                      }}
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-9 font-medium"
+                      placeholder="Nome do paciente para busca ou cadastro"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => performFullScan(nome, telefone, true)}
+                      disabled={isScanningHistory}
+                      title="Buscar dados no histórico"
+                      className="absolute right-2 top-2 p-1 text-slate-400 hover:text-blue-600 rounded-md transition-colors"
+                    >
+                      <Search className={`w-4 h-4 ${isScanningHistory ? 'animate-spin text-blue-600' : ''}`} />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Telefone (WhatsApp)</label>
                     <input
                       type="text"
                       value={telefone}
                       onChange={(e) => setTelefone(e.target.value)}
+                      onBlur={() => {
+                        if (telefone.replace(/\D/g, '').length >= 8 && !dataNascimento) {
+                          performFullScan(nome, telefone, false);
+                        }
+                      }}
                       className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
                       placeholder="(11) 99999-9999"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">CPF</label>
+                    <input
+                      type="text"
+                      value={cpf}
+                      onChange={(e) => setCpf(e.target.value)}
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                      placeholder="000.000.000-00"
+                    />
+                  </div>
+
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-bold text-slate-700">Data de Nascimento (DD/MM/AAAA)</label>
+                      <label className="block text-xs font-bold text-slate-700">Nascimento</label>
                       {calculateAge(dataNascimento) !== null && (
                         <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-md">
                           {calculateAge(dataNascimento)} anos
@@ -611,11 +959,23 @@ export default function PreConsultationAnamneseModal({
               <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
                 temCardiopatia ? 'bg-amber-50 border-amber-400 text-amber-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-700'
               }`}>
-                <span>Problemas Cardíacos / Marcapasso?</span>
+                <span>Problemas Cardíacos (Cardiopatia)?</span>
                 <input
                   type="checkbox"
                   checked={temCardiopatia}
                   onChange={(e) => setTemCardiopatia(e.target.checked)}
+                  className="w-4 h-4 rounded-md accent-amber-600"
+                />
+              </label>
+
+              <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                temMarcapasso ? 'bg-amber-50 border-amber-400 text-amber-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}>
+                <span>Possui Marcapasso?</span>
+                <input
+                  type="checkbox"
+                  checked={temMarcapasso}
+                  onChange={(e) => setTemMarcapasso(e.target.checked)}
                   className="w-4 h-4 rounded-md accent-amber-600"
                 />
               </label>
@@ -643,12 +1003,12 @@ export default function PreConsultationAnamneseModal({
                     type="button"
                     onClick={() => toggleAlergia(item)}
                     className={`px-3 py-1.5 rounded-xl font-medium border transition-all ${
-                      alergias.includes(item)
+                      isAlergiaChecked(item)
                         ? 'bg-red-600 text-white border-red-700 shadow-xs'
                         : 'bg-white text-slate-700 border-slate-200 hover:border-red-300'
                     }`}
                   >
-                    {alergias.includes(item) ? '✓ ' : '+ '}{item}
+                    {isAlergiaChecked(item) ? '✓ ' : '+ '}{item}
                   </button>
                 ))}
               </div>

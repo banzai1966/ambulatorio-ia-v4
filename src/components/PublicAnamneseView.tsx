@@ -92,6 +92,7 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
   const [isHipertenso, setIsHipertenso] = useState(false);
   const [isDiabetico, setIsDiabetico] = useState(false);
   const [temCardiopatia, setTemCardiopatia] = useState(false);
+  const [temMarcapasso, setTemMarcapasso] = useState(false);
   const [usaAnticoagulante, setUsaAnticoagulante] = useState(false);
   const [alergias, setAlergias] = useState<string[]>([]);
   const [alergiaTexto, setAlergiaTexto] = useState('');
@@ -196,18 +197,27 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
               if (rec.observacoes_clinicas || rec.observacoesClinicas) setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas);
 
               if (rec.alertas_clinicos && Array.isArray(rec.alertas_clinicos)) {
-                setIsHipertenso(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "HIPERTENSO" || String(a).toUpperCase().includes("HIPERTENSO")));
-                setIsDiabetico(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "DIABÉTICO" || String(a).toUpperCase().includes("DIABÉTICO") || String(a).toUpperCase().includes("DIABETES")));
-                setTemCardiopatia(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "CARDIOPATIA" || String(a).toUpperCase().includes("CARDIOPATIA") || String(a).toUpperCase().includes("MARCAPASSO") || String(a).toUpperCase().includes("CARDÍACO")));
-                setUsaAnticoagulante(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().trim() === "ANTICOAGULANTE" || String(a).toUpperCase().includes("ANTICOAGULANTE")));
+                setIsHipertenso(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().includes("HIPERTENS")));
+                setIsDiabetico(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().includes("DIABÉT") || String(a).toUpperCase().includes("DIABET")));
+                setTemCardiopatia(rec.alertas_clinicos.some((a: string) => (String(a).toUpperCase().includes("CARDIO") || String(a).toUpperCase().includes("CARDÍACO")) && !String(a).toUpperCase().includes("MARCAPASSO")));
+                setTemMarcapasso(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().includes("MARCAPASSO")));
+                setUsaAnticoagulante(rec.alertas_clinicos.some((a: string) => String(a).toUpperCase().includes("ANTICOAGULANTE")));
 
+                const defaultAlergiasList = ['Penicilina', 'Dipirona', 'Ibuprofeno', 'Anestésico Local', 'Frutos do Mar', 'Látex'];
                 const alergiasEncontradas = rec.alertas_clinicos
-                  .filter((a: string) => String(a).toUpperCase().startsWith("ALERGIA:"))
+                  .filter((a: string) => String(a).toUpperCase().includes("ALERGIA:"))
                   .map((a: string) => String(a).replace(/ALERGIA:\s*/i, '').trim());
                 
                 if (alergiasEncontradas.length > 0) {
-                  setAlergias(alergiasEncontradas);
-                  setAlergiaTexto(alergiasEncontradas.join(', '));
+                  const matchedAlergias = alergiasEncontradas.map(found => {
+                    const normFound = found.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                    const match = defaultAlergiasList.find(opt => 
+                      opt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normFound
+                    );
+                    return match || found;
+                  });
+                  setAlergias(matchedAlergias);
+                  setAlergiaTexto(matchedAlergias.join(', '));
                 }
               }
             }
@@ -259,17 +269,39 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
 
   const capturePhotoFromWebcam = () => {
     if (!videoRef.current) return;
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      setPhotoPreview(canvas.toDataURL('image/jpeg', 0.85));
-      toast.success("Foto capturada com sucesso!");
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      const maxDim = 480;
+      let width = video.videoWidth || 640;
+      let height = video.videoHeight || 480;
+
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, width, height);
+        setPhotoPreview(canvas.toDataURL('image/jpeg', 0.72));
+        toast.success("Foto capturada com sucesso!");
+      }
+    } catch (err) {
+      console.error("Erro ao capturar foto da webcam:", err);
+      toast.error("Erro ao capturar imagem.");
+    } finally {
+      stopWebcam();
     }
-    stopWebcam();
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,28 +311,33 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
       reader.onload = (event) => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const MAX_SIZE = 800;
-          if (width > height) {
-            if (width > MAX_SIZE) {
-              height = Math.round((height * MAX_SIZE) / width);
-              width = MAX_SIZE;
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const MAX_SIZE = 480;
+            if (width > height) {
+              if (width > MAX_SIZE) {
+                height = Math.round((height * MAX_SIZE) / width);
+                width = MAX_SIZE;
+              }
+            } else {
+              if (height > MAX_SIZE) {
+                width = Math.round((width * MAX_SIZE) / height);
+                height = MAX_SIZE;
+              }
             }
-          } else {
-            if (height > MAX_SIZE) {
-              width = Math.round((width * MAX_SIZE) / height);
-              height = MAX_SIZE;
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              setPhotoPreview(canvas.toDataURL('image/jpeg', 0.72));
+              toast.success("Foto otimizada e anexada com sucesso!");
             }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            setPhotoPreview(canvas.toDataURL('image/jpeg', 0.82));
-            toast.success("Foto anexada com sucesso!");
+          } catch (err) {
+            console.error("Erro ao comprimir imagem:", err);
+            toast.error("Falha ao processar arquivo de imagem.");
           }
         };
         img.src = event.target?.result as string;
@@ -348,8 +385,21 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
     }
   };
 
+  const isAlergiaChecked = (item: string) => {
+    const normItem = item.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    return alergias.some(a => a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normItem);
+  };
+
   const toggleAlergia = (item: string) => {
-    setAlergias(prev => prev.includes(item) ? prev.filter(a => a !== item) : [...prev, item]);
+    const normItem = item.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    setAlergias(prev => {
+      const exists = prev.some(a => a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() === normItem);
+      if (exists) {
+        return prev.filter(a => a.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() !== normItem);
+      } else {
+        return [...prev, item];
+      }
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -368,10 +418,14 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
     const alertas: string[] = [];
     if (isHipertenso) alertas.push("HIPERTENSO");
     if (isDiabetico) alertas.push("DIABÉTICO");
-    if (temCardiopatia) alertas.push("CARDIOPATIA");
-    if (usaAnticoagulante) alertas.push("ANTICOAGULANTE");
+    if (temCardiopatia) alertas.push("PROBLEMAS CARDÍACOS");
+    if (temMarcapasso) alertas.push("USO DE MARCAPASSO");
+    if (usaAnticoagulante) alertas.push("USO DE ANTICOAGULANTE");
     if (alergias.length > 0) {
-      alergias.forEach(a => alertas.push(`ALERGIA: ${a.toUpperCase()}`));
+      alergias.forEach(a => {
+        const cleanA = a.replace(/^ALERGIA:\s*/i, '').trim();
+        alertas.push(`ALERGIA: ${cleanA.toUpperCase()}`);
+      });
     } else if (alergiaTexto.trim()) {
       alertas.push(`ALERGIA: ${alergiaTexto.toUpperCase()}`);
     }
@@ -420,15 +474,18 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
 
         // Registra o pré-cadastro na tabela de prontuários/anamneses
         await supabase.from('prontuarios').insert([{
-          paciente_nome: nome,
+          paciente_nome_completo: nome,
           paciente_telefone: telefone,
           paciente_cpf: cpf,
-          data_nascimento: dataNascimento,
-          alergias: alertas.join(', '),
-          medicamentos_em_uso: medicamentosAtuais,
-          observacoes: observacoesClinicas,
-          foto_url: photoPreview,
-          status: 'precadastro_enviado',
+          paciente_data_nascimento: dataNascimento,
+          url_midia: photoPreview || null,
+          resumo_formatado: `Pré-cadastro digital realizado. Alertas: ${alertas.join(', ') || 'Nenhum'}.`,
+          dados_clinicos: {
+            alertas_clinicos: alertas,
+            medicamentos_atuais: medicamentosAtuais,
+            observacoes: observacoesClinicas,
+            foto_url: photoPreview
+          },
           created_at: new Date().toISOString()
         }]);
       }
@@ -819,24 +876,29 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
             </h2>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer hover:bg-slate-100/80 transition-colors">
                 <input type="checkbox" checked={isHipertenso} onChange={(e) => setIsHipertenso(e.target.checked)} className="rounded text-blue-600" />
                 <span className="font-medium text-slate-700">Pressão Alta (Hipertensão)</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer hover:bg-slate-100/80 transition-colors">
                 <input type="checkbox" checked={isDiabetico} onChange={(e) => setIsDiabetico(e.target.checked)} className="rounded text-blue-600" />
                 <span className="font-medium text-slate-700">Diabetes</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer hover:bg-slate-100/80 transition-colors">
                 <input type="checkbox" checked={temCardiopatia} onChange={(e) => setTemCardiopatia(e.target.checked)} className="rounded text-blue-600" />
-                <span className="font-medium text-slate-700">Problemas Cardíacos</span>
+                <span className="font-medium text-slate-700">Problemas Cardíacos (Cardiopatia)</span>
               </label>
 
-              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer">
+              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer hover:bg-slate-100/80 transition-colors">
+                <input type="checkbox" checked={temMarcapasso} onChange={(e) => setTemMarcapasso(e.target.checked)} className="rounded text-blue-600" />
+                <span className="font-medium text-slate-700">Uso de Marcapasso</span>
+              </label>
+
+              <label className="flex items-center gap-2 p-2.5 bg-slate-50 border rounded-xl cursor-pointer hover:bg-slate-100/80 transition-colors col-span-2">
                 <input type="checkbox" checked={usaAnticoagulante} onChange={(e) => setUsaAnticoagulante(e.target.checked)} className="rounded text-blue-600" />
-                <span className="font-medium text-slate-700">Usa Anticoagulantes</span>
+                <span className="font-medium text-slate-700">Usa Anticoagulantes (Aspirina, Marevan, etc.)</span>
               </label>
             </div>
 
@@ -849,12 +911,12 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
                     type="button"
                     onClick={() => toggleAlergia(item)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all border ${
-                      alergias.includes(item)
-                        ? 'bg-red-600 text-white border-red-600'
+                      isAlergiaChecked(item)
+                        ? 'bg-red-600 text-white border-red-600 shadow-xs'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    + {item}
+                    {isAlergiaChecked(item) ? '✓ ' : '+ '}{item}
                   </button>
                 ))}
               </div>

@@ -52,6 +52,8 @@ interface PatientDossierViewProps {
   patientDob?: string;
   patientStatus?: string;
   convenio?: string;
+  statusPagamento?: string;
+  valorConsulta?: string;
   currentRecord: any;
   history: any[];
   examMode: string;
@@ -78,17 +80,66 @@ interface PatientDossierViewProps {
 
 // Precise age calculation function according to AGENTS.md Rule 1
 function calculateAgeExact(dobString?: string): number | string {
-  if (!dobString) return '--';
-  const dob = new Date(dobString);
-  if (isNaN(dob.getTime())) return '--';
-  
+  if (!dobString || typeof dobString !== 'string' || !dobString.trim()) return '--';
+  const clean = dobString.trim();
+  let day: number, month: number, year: number;
+
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1; // 0-indexed month
+      year = parseInt(parts[2], 10);
+    } else {
+      return '--';
+    }
+  } else if (clean.includes('-')) {
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        year = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1;
+        day = parseInt(parts[2], 10);
+      } else {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1;
+        year = parseInt(parts[2], 10);
+      }
+    } else {
+      return '--';
+    }
+  } else {
+    return '--';
+  }
+
+  if (isNaN(day) || isNaN(month) || isNaN(year) || year < 1900 || year > 2100) return '--';
+
   const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDiff = today.getMonth() - dob.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+  let age = today.getFullYear() - year;
+  const currentMonth = today.getMonth();
+  const currentDay = today.getDate();
+
+  if (currentMonth < month || (currentMonth === month && currentDay < day)) {
     age--;
   }
   return age >= 0 ? age : '--';
+}
+
+function formatDobDisplay(dobString?: string): string {
+  if (!dobString || typeof dobString !== 'string' || !dobString.trim()) return 'N/D';
+  const clean = dobString.trim();
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      return `${parts[0].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[2]}`;
+    }
+  } else if (clean.includes('-')) {
+    const parts = clean.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parts[2].padStart(2, '0')}/${parts[1].padStart(2, '0')}/${parts[0]}`;
+    }
+  }
+  return clean;
 }
 
 function getPatientDisplayId(record: any, name: string): string {
@@ -185,6 +236,8 @@ export default function PatientDossierView({
   patientDob = '',
   patientStatus = 'Estável',
   convenio = 'Particular',
+  statusPagamento,
+  valorConsulta,
   currentRecord,
   history,
   examMode,
@@ -212,7 +265,99 @@ export default function PatientDossierView({
     'evolucao' | 'anamnese' | 'plano' | 'especialidade' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
   >('evolucao');
 
-  const age = calculateAgeExact(patientDob);
+  const [clinicalAlerts, setClinicalAlerts] = useState<string[]>(
+    currentRecord?.alertas_copiloto || currentRecord?.alertas_clinicos || []
+  );
+
+  const effectiveName = (patientName && patientName !== 'Consulta em Andamento' && patientName !== 'PACIENTE NÃO INFORMADO')
+    ? patientName 
+    : (currentRecord?.paciente_nome_completo || currentRecord?.paciente_nome || (patientPhone ? `Paciente (${patientPhone})` : 'Paciente'));
+  
+  const rawDob = patientDob || currentRecord?.paciente_data_nascimento || currentRecord?.data_nascimento || '';
+  const effectiveDob = (rawDob && typeof rawDob === 'string' && rawDob.includes('-') && rawDob.split('-')[0].length === 4)
+    ? `${rawDob.split('-')[2]}/${rawDob.split('-')[1]}/${rawDob.split('-')[0]}`
+    : rawDob;
+  
+  const age = calculateAgeExact(effectiveDob);
+  const effectivePhoto = currentRecord?.foto_url || currentRecord?.photoPreview || (currentRecord as any)?.foto || '';
+  const effectivePaymentStatus = statusPagamento || currentRecord?.status_pagamento || '';
+  const effectivePaymentValue = valorConsulta || currentRecord?.valor_consulta || '';
+
+  // Auto-sync de foto, data de nascimento, CPF e alertas clínicos caso estejam faltando no prontuário ativo
+  useEffect(() => {
+    const fetchPatientAnamneseAuto = async () => {
+      const cleanPhone = (patientPhone || currentRecord?.paciente_telefone || '').replace(/\D/g, '');
+      const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+      const targetName = effectiveName || '';
+      const appointmentId = currentRecord?.agendamento_id || currentRecord?.id || '';
+
+      // 1. Tenta carregar do localStorage imediatamente
+      try {
+        let localData: any = null;
+        if (appointmentId) {
+          const s = localStorage.getItem(`anamnese_app_${appointmentId}`);
+          if (s) localData = JSON.parse(s);
+        }
+        if (!localData && cleanPhone) {
+          const s = localStorage.getItem(`anamnese_${cleanPhone}`) || localStorage.getItem(`anamnese_55${cleanPhone}`);
+          if (s) localData = JSON.parse(s);
+        }
+        if (!localData && cleanWithout55) {
+          const s = localStorage.getItem(`anamnese_${cleanWithout55}`);
+          if (s) localData = JSON.parse(s);
+        }
+
+        if (localData) {
+          if (localData.foto_url && !currentRecord?.foto_url && setCurrentRecord) {
+            setCurrentRecord((prev: any) => ({ ...prev, foto_url: localData.foto_url }));
+          }
+          if (localData.data_nascimento && !currentRecord?.paciente_data_nascimento && !patientDob && setCurrentRecord) {
+            setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: localData.data_nascimento }));
+          }
+          if (localData.paciente_cpf && !currentRecord?.paciente_cpf && !patientCpf && setCurrentRecord) {
+            setCurrentRecord((prev: any) => ({ ...prev, paciente_cpf: localData.paciente_cpf }));
+          }
+          if (localData.alertas_clinicos && localData.alertas_clinicos.length > 0 && clinicalAlerts.length === 0) {
+            setClinicalAlerts(localData.alertas_clinicos);
+          }
+        }
+      } catch (e) {
+        console.warn("Aviso busca local storage no prontuário:", e);
+      }
+
+      // 2. Busca na API de dados de anamnese do servidor
+      try {
+        const queryParams = new URLSearchParams();
+        if (cleanPhone) queryParams.set('phone', cleanPhone);
+        if (appointmentId) queryParams.set('id', String(appointmentId));
+        if (targetName && targetName !== 'Paciente') queryParams.set('name', targetName);
+
+        const res = await fetch(`/api/public/anamnese-data?${queryParams.toString()}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            const d = json.data;
+            if (d.foto_url && !currentRecord?.foto_url && setCurrentRecord) {
+              setCurrentRecord((prev: any) => ({ ...prev, foto_url: d.foto_url }));
+            }
+            if (d.data_nascimento && !currentRecord?.paciente_data_nascimento && !patientDob && setCurrentRecord) {
+              setCurrentRecord((prev: any) => ({ ...prev, paciente_data_nascimento: d.data_nascimento }));
+            }
+            if (d.paciente_cpf && !currentRecord?.paciente_cpf && !patientCpf && setCurrentRecord) {
+              setCurrentRecord((prev: any) => ({ ...prev, paciente_cpf: d.paciente_cpf }));
+            }
+            if (d.alertas_clinicos && d.alertas_clinicos.length > 0) {
+              setClinicalAlerts(d.alertas_clinicos);
+            }
+          }
+        }
+      } catch (apiErr) {
+        console.warn("Aviso fetch remoto anamnese:", apiErr);
+      }
+    };
+
+    fetchPatientAnamneseAuto();
+  }, [patientPhone, effectiveName, currentRecord?.agendamento_id]);
 
   // SOAP format state if doctor prefers divided boxes
   const [useDividedSoap, setUseDividedSoap] = useState(true);
@@ -270,11 +415,8 @@ export default function PatientDossierView({
   const [isAnamneseModalOpen, setIsAnamneseModalOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [isNpsModalOpen, setIsNpsModalOpen] = useState(false);
-  const [isPromoter, setIsPromoter] = useState(true);
+  const [isPromoter, setIsPromoter] = useState(false);
   const [showVitalMonitor, setShowVitalMonitor] = useState(false);
-  const [clinicalAlerts, setClinicalAlerts] = useState<string[]>(
-    currentRecord?.alertas_copiloto || currentRecord?.alertas_clinicos || []
-  );
   const [isLocalProcessing, setIsLocalProcessing] = useState(false);
 
   const handleProcessTextAI = async (textToProcess?: string) => {
@@ -430,38 +572,53 @@ export default function PatientDossierView({
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             {/* Patient Info */}
             <div className="flex items-start gap-4">
-              <div className={`relative w-16 h-16 bg-blue-100 text-blue-800 rounded-2xl flex items-center justify-center font-extrabold text-2xl shadow-inner shrink-0 transition-all ${
-                isPromoter 
-                  ? 'ring-4 ring-emerald-500 ring-offset-2 shadow-emerald-500/30' 
-                  : 'border border-blue-200'
-              }`}>
-                {patientName ? patientName.charAt(0).toUpperCase() : 'P'}
-                {isPromoter && (
-                  <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 bg-emerald-500 text-white text-[9px] font-black rounded-full shadow-xs uppercase">
-                    Promotor 5★
-                  </span>
+              <div className="relative w-16 h-16 bg-blue-100 text-blue-800 rounded-2xl flex items-center justify-center font-extrabold text-2xl shadow-inner shrink-0 transition-all overflow-hidden border border-blue-200">
+                {effectivePhoto ? (
+                  <img 
+                    src={effectivePhoto} 
+                    alt={effectiveName} 
+                    className="w-full h-full object-cover rounded-2xl" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  effectiveName ? effectiveName.charAt(0).toUpperCase() : 'P'
                 )}
               </div>
 
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{patientName || 'PACIENTE NÃO INFORMADO'}</h1>
+                  <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">{effectiveName}</h1>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                    ID: {getPatientDisplayId(currentRecord, patientName)}
+                    ID: {getPatientDisplayId(currentRecord, effectiveName)}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                     {convenio || 'Particular'}
                   </span>
+                  {isPromoter && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                      ★ Promotor 5★
+                    </span>
+                  )}
+                  {effectivePaymentStatus && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                      effectivePaymentStatus.startsWith('Pago') 
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                    }`}>
+                      {effectivePaymentStatus}{effectivePaymentValue ? ` • R$ ${effectivePaymentValue}` : ''}
+                    </span>
+                  )}
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {patientStatus}
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-500 font-medium mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span>🎂 {patientDob ? (isNaN(new Date(patientDob).getTime()) ? patientDob : new Date(patientDob).toLocaleDateString('pt-BR')) : 'N/D'} • <strong>{age !== '--' ? `${age} anos` : 'Idade N/D'}</strong></span>
+                  <span>🎂 {formatDobDisplay(effectiveDob)} • <strong>{age !== '--' ? `${age} anos` : 'Idade N/D'}</strong></span>
                   <span>👤 Paciente Ativo</span>
-                  {patientCpf && <span>📄 CPF: {patientCpf}</span>}
-                  {patientPhone && <span>📞 Tel: {patientPhone}</span>}
+                  {(patientCpf || currentRecord?.paciente_cpf) && <span>📄 CPF: {patientCpf || currentRecord?.paciente_cpf}</span>}
+                  {(patientPhone || currentRecord?.paciente_telefone) && <span>📞 Tel: {patientPhone || currentRecord?.paciente_telefone}</span>}
+                  {currentRecord?.endereco && <span>📍 {currentRecord.endereco}</span>}
                 </p>
 
                 {/* Etiquetas de Alertas Clínicos Pulsantes */}
@@ -743,35 +900,50 @@ export default function PatientDossierView({
                 {history.length > 0 ? (
                   history.map((rec, index) => {
                     const isCurrentPatient = !patientName || (rec.paciente_nome_completo && rec.paciente_nome_completo.toLowerCase().trim() === patientName.toLowerCase().trim());
+                    const isPreCad = Boolean(
+                      rec.resumo_formatado?.toLowerCase().includes('pré-cadastro') || 
+                      rec.especialidade?.toLowerCase().includes('pré-cadastro') ||
+                      rec.paciente_status?.toLowerCase().includes('pré-cadastro')
+                    );
                     return (
                       <div 
                         key={rec.id || `rec-${index}`} 
                         onClick={() => setSelectedHistoryRecord(rec)}
                         className={`p-3.5 space-y-2 cursor-pointer transition-all hover:shadow-md group rounded-2xl border ${
-                          isCurrentPatient 
-                            ? 'bg-emerald-50/80 border-emerald-300 hover:border-emerald-500 shadow-xs' 
-                            : 'bg-slate-50 border-slate-200 hover:border-blue-400'
+                          isPreCad
+                            ? 'bg-blue-50/50 border-blue-200 hover:border-blue-400'
+                            : isCurrentPatient 
+                              ? 'bg-emerald-50/80 border-emerald-300 hover:border-emerald-500 shadow-xs' 
+                              : 'bg-slate-50 border-slate-200 hover:border-blue-400'
                         }`}
                       >
                         <div className="flex items-center justify-between text-xs font-bold text-slate-900">
                           <span className="flex items-center gap-1.5">
-                            <Clock size={13} className={isCurrentPatient ? "text-emerald-600" : "text-slate-400"} />
-                            {rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : 'Atendimento'}
+                            <Clock size={13} className={isPreCad ? "text-blue-600" : isCurrentPatient ? "text-emerald-600" : "text-slate-400"} />
+                            {rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : 'Atendimento')}
                           </span>
                           <span className={`px-2 py-0.5 text-[9px] rounded-full uppercase flex items-center gap-1 font-extrabold ${
-                            isCurrentPatient ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-200 text-slate-700'
+                            isPreCad 
+                              ? 'bg-blue-600 text-white shadow-xs' 
+                              : isCurrentPatient 
+                                ? 'bg-emerald-600 text-white shadow-xs' 
+                                : 'bg-slate-200 text-slate-700'
                           }`}>
-                            <Eye size={10} /> {rec.especialidade || rec.paciente_status || 'Gravado'}
+                            <Eye size={10} /> {isPreCad ? '📋 PRÉ-CADASTRO DIGITAL' : (rec.especialidade ? `🩺 ${rec.especialidade.toUpperCase()}` : '✅ CONSULTA GRAVADA')}
                           </span>
                         </div>
 
                         <div className="space-y-1.5 text-xs">
-                          <p className="font-semibold text-slate-800 line-clamp-2 bg-white p-2.5 rounded-xl border border-slate-200/80 group-hover:border-emerald-300">
+                          <p className={`font-semibold text-slate-800 line-clamp-2 bg-white p-2.5 rounded-xl border ${
+                            isPreCad ? 'border-blue-200/80 group-hover:border-blue-300' : 'border-slate-200/80 group-hover:border-emerald-300'
+                          }`}>
                             "{rec.resumo_formatado || rec.queixa_principal || rec.conduta_plano_terapeutico || 'Atendimento salvo no prontuário.'}"
                           </p>
                           <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-0.5">
                             <span className="font-medium text-slate-600">👤 {rec.paciente_nome_completo || patientName || 'Paciente'}</span>
-                            <span className="font-bold text-slate-500">🩺 {rec.profissional_responsavel || 'Médico'}</span>
+                            <span className="font-bold text-slate-500">
+                              {isPreCad ? '📲 Ficha Digital' : `🩺 ${rec.profissional_responsavel || 'Médico'}`}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1780,9 +1952,16 @@ export default function PatientDossierView({
         patientNamePrefill={patientName}
         patientPhonePrefill={patientPhone}
         patientCpfPrefill={patientCpf}
+        patientDobPrefill={patientDob}
         onAnamneseSubmitted={(data) => {
           if (data.alertas_clinicos) {
             setClinicalAlerts(data.alertas_clinicos);
+          }
+          if (data.foto_url) {
+            setCurrentRecord((prev: any) => ({ ...prev, foto_url: data.foto_url }));
+          }
+          if (data.data_nascimento) {
+            setCurrentRecord((prev: any) => ({ ...prev, data_nascimento: data.data_nascimento }));
           }
         }}
       />

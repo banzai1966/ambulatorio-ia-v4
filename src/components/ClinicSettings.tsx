@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { Save, Building2, MapPin, Phone, Mail, Globe, Loader2, QrCode, MessageSquare, CheckCircle2, Key, Link2, Server, HelpCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, Mail, Globe, Loader2, QrCode, MessageSquare, CheckCircle2, Key, Link2, Server, HelpCircle, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import WhatsAppQRModal from './WhatsAppQRModal';
 
 export interface ClinicInfo {
@@ -35,6 +35,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
   const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const [showAdvancedWhatsapp, setShowAdvancedWhatsapp] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const checkStatus = (currentInfo?: ClinicInfo) => {
     const activeInfo = currentInfo || info;
@@ -219,17 +220,44 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                      <Key size={13} className="text-slate-400" />
-                      API Key / Token
-                    </label>
-                    <input 
-                      type="password"
-                      value={info.evolution_apikey || ''}
-                      onChange={(e) => setInfo({ ...info, evolution_apikey: e.target.value.trim() })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-mono"
-                      placeholder="E6247913DB92-48B4..."
-                    />
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Key size={13} className="text-slate-400" />
+                        API Key / Token
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium"
+                      >
+                        {showApiKey ? (
+                          <>
+                            <EyeOff size={12} /> Ocultar
+                          </>
+                        ) : (
+                          <>
+                            <Eye size={12} /> Visualizar
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type={showApiKey ? "text" : "password"}
+                        value={info.evolution_apikey || ''}
+                        onChange={(e) => setInfo({ ...info, evolution_apikey: e.target.value.trim() })}
+                        className="w-full pr-8 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-mono"
+                        placeholder="E6247913DB92-48B4..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                        title={showApiKey ? "Ocultar chave" : "Visualizar chave"}
+                      >
+                        {showApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 

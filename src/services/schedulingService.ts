@@ -201,37 +201,32 @@ export const getDoctorsBySpecialty = async (specialtyName: string) => {
 
   if (!specialty) return [];
 
-  // 2. Busca os médicos com essa especialidade (tenta por ID e por texto)
+  // 2. Busca os médicos com essa especialidade (aceita role doctor ou admin)
   try {
     const { data: doctors, error } = await supabase
       .from('profiles')
-      .select('id, full_name, especialidade')
-      .eq('role', 'doctor')
+      .select('id, full_name, especialidade, role')
+      .in('role', ['doctor', 'admin'])
       .eq('especialidade', specialtyName);
 
     if (error) {
       console.warn("Erro ao buscar médicos por especialidade, tentando fallback:", error.message);
       
-      // Se o erro for de cache de esquema, tenta buscar sem a coluna problemática
-      if (error.message.includes('schema cache')) {
-        const { data: allDoctors, error: allErr } = await supabase
-          .from('profiles')
-          .select('id, full_name, especialidade')
-          .eq('role', 'doctor');
-        
-        if (allErr) throw allErr;
-        
-        // Filtra localmente apenas pelo campo de texto que sabemos que funciona
-        return (allDoctors || []).filter(d => d.especialidade === specialtyName);
-      }
-      throw error;
+      const { data: allDoctors, error: allErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, especialidade, role')
+        .in('role', ['doctor', 'admin']);
+      
+      if (allErr) throw allErr;
+      
+      return (allDoctors || []).filter(d => d.especialidade === specialtyName);
     }
 
     return doctors || [];
   } catch (err) {
     console.error("Erro crítico ao buscar médicos por especialidade:", err);
-    // Fallback final: busca todos os médicos
-    const { data } = await supabase.from('profiles').select('id, full_name').eq('role', 'doctor');
+    // Fallback final: busca todos os profissionais clínicos (doctor e admin)
+    const { data } = await supabase.from('profiles').select('id, full_name').in('role', ['doctor', 'admin']);
     return data || [];
   }
 };

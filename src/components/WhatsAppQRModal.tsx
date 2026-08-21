@@ -14,7 +14,8 @@ import {
   MessageSquare, 
   Check, 
   HelpCircle,
-  Loader2
+  Loader2,
+  RotateCcw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -118,17 +119,22 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
       });
       const data = await res.json();
 
-      if (data.qrcode) {
+      if (data.connected) {
+        setStatus('connected');
+        toast.success(`WhatsApp (${data.instance || evolutionConfig?.instance || 'instância'}) já está conectado e pronto!`);
+        checkConnectionStatus();
+      } else if (data.qrcode) {
         // Garantir prefixo base64 se necessário
         const formattedQr = data.qrcode.startsWith('data:image') 
           ? data.qrcode 
           : `data:image/png;base64,${data.qrcode}`;
         setQrCodeBase64(formattedQr);
+        setStatus('connecting');
         toast.success(`QR Code gerado para a instância "${data.instance || evolutionConfig?.instance || 'instância'}"! Aponte a câmera.`);
         startPolling();
       } else {
-        toast.error("Não foi possível obter o QR Code. Verifique se a instância já está conectada.");
-        checkConnectionStatus();
+        toast.error(data.error || "Não foi possível obter o QR Code diretamente.");
+        setStatus('disconnected');
       }
     } catch (err: any) {
       toast.error("Erro ao solicitar QR Code: " + err.message);
@@ -138,13 +144,47 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
     }
   };
 
-  const handleDisconnect = async () => {
-    if (!window.confirm(`Deseja realmente desconectar a instância "${evolutionConfig?.instance || 'WhatsApp'}" do consultório?`)) {
-      return;
-    }
+  const handleForceReset = async () => {
+    setIsLoadingQr(true);
+    setQrCodeBase64(null);
+    setStatus('connecting');
 
-    setIsDisconnecting(true);
     try {
+      toast("Limpando socket e recriando instância limpa no servidor...", { icon: 'ℹ️' });
+      const res = await fetch('/api/whatsapp/force-reset', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(getRequestBody())
+      });
+      const data = await res.json();
+
+      if (data.qrcode) {
+        const formattedQr = data.qrcode.startsWith('data:image') 
+          ? data.qrcode 
+          : `data:image/png;base64,${data.qrcode}`;
+        setQrCodeBase64(formattedQr);
+        setStatus('connecting');
+        toast.success("Instância limpa e novo QR Code gerado!");
+        startPolling();
+      } else {
+        toast.success("Instância resetada com sucesso! Gerando QR Code...");
+        generateQrCode();
+      }
+    } catch (err: any) {
+      toast.error("Erro ao resetar: " + err.message);
+      setStatus('disconnected');
+    } finally {
+      setIsLoadingQr(false);
+    }
+  };
+
+  const [showConfirmDisconnect, setShowConfirmDisconnect] = useState(false);
+
+  const handleDisconnect = async () => {
+    setIsDisconnecting(true);
+    setShowConfirmDisconnect(false);
+    try {
+      toast.loading("Desconectando sessão do WhatsApp...", { id: "disconnect-toast" });
       const res = await fetch('/api/whatsapp/logout', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -152,15 +192,15 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("WhatsApp desconectado com sucesso!");
+        toast.success("WhatsApp desconectado com sucesso!", { id: "disconnect-toast" });
         setStatus('disconnected');
         setQrCodeBase64(null);
         setOwnerJid(null);
       } else {
-        toast.error("Erro ao desconectar: " + data.error);
+        toast.error("Erro ao desconectar: " + (data.error || "Tente novamente"), { id: "disconnect-toast" });
       }
     } catch (err: any) {
-      toast.error("Falha ao desconectar: " + err.message);
+      toast.error("Falha ao desconectar: " + err.message, { id: "disconnect-toast" });
     } finally {
       setIsDisconnecting(false);
     }
@@ -261,16 +301,43 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
                 </div>
               </div>
 
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleDisconnect}
-                  disabled={isDisconnecting}
-                  className="w-full py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs"
-                >
-                  {isDisconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
-                  Desconectar Este WhatsApp
-                </button>
+              <div className="pt-2">
+                {showConfirmDisconnect ? (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-2xl space-y-2">
+                    <p className="text-xs font-bold text-red-800">
+                      Tem certeza que deseja desconectar o WhatsApp da instância "{evolutionConfig?.instance || 'WhatsApp'}"?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleDisconnect}
+                        disabled={isDisconnecting}
+                        className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                      >
+                        {isDisconnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                        Confirmar Desconexão
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmDisconnect(false)}
+                        disabled={isDisconnecting}
+                        className="px-3 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 font-medium rounded-xl text-xs transition-all"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDisconnect(true)}
+                    disabled={isDisconnecting}
+                    className="w-full py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs"
+                  >
+                    {isDisconnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                    Desconectar Este WhatsApp
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -311,14 +378,16 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
                 </ol>
               </div>
 
-              <button
-                type="button"
-                onClick={generateQrCode}
-                disabled={isLoadingQr}
-                className="text-xs text-emerald-700 font-bold hover:underline flex items-center gap-1"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Atualizar / Gerar Novo QR Code
-              </button>
+              <div className="flex items-center justify-center gap-3 w-full">
+                <button
+                  type="button"
+                  onClick={generateQrCode}
+                  disabled={isLoadingQr}
+                  className="text-xs text-emerald-700 font-bold hover:underline flex items-center gap-1.5 py-1"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingQr ? 'animate-spin' : ''}`} /> Atualizar QR Code
+                </button>
+              </div>
             </div>
           )}
 
@@ -332,26 +401,28 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
               <div className="space-y-1">
                 <h3 className="text-base font-bold text-slate-800">Conecte o WhatsApp do seu Consultório</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  Você não precisa nos enviar nenhum número! Clique abaixo para gerar o QR Code de pareamento direto na tela.
+                  Clique no botão abaixo para gerar o QR Code de pareamento direto na tela.
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={generateQrCode}
-                disabled={isLoadingQr}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm flex items-center justify-center gap-2 transition-all"
-              >
-                {isLoadingQr ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" /> Gerando QR Code...
-                  </>
-                ) : (
-                  <>
-                    <QrCode className="w-5 h-5" /> Gerar QR Code para Pareamento
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col gap-2.5 w-full">
+                <button
+                  type="button"
+                  onClick={generateQrCode}
+                  disabled={isLoadingQr}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm flex items-center justify-center gap-2 transition-all"
+                >
+                  {isLoadingQr ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" /> Gerando QR Code...
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="w-5 h-5" /> Gerar QR Code para Pareamento
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
 

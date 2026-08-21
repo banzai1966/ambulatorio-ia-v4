@@ -260,7 +260,7 @@ app.post("/api/auth/ensure-user", async (req, res) => {
 
     // 1. Verifica se o usuário já existe no Supabase Auth
     const { data: usersList } = await supabase.auth.admin.listUsers();
-    const existingUser = usersList?.users?.find(u => u.email?.toLowerCase().trim() === normEmail);
+    const existingUser = (usersList?.users as any[])?.find((u: any) => u.email?.toLowerCase().trim() === normEmail);
 
     let userId: string;
 
@@ -378,7 +378,7 @@ app.post("/api/admin/delete-member", async (req, res) => {
       }
       if (normEmail) {
         const { data: usersData } = await supabase.auth.admin.listUsers();
-        const found = usersData?.users?.find(u => u.email?.toLowerCase().trim() === normEmail);
+        const found = (usersData?.users as any[])?.find((u: any) => u.email?.toLowerCase().trim() === normEmail);
         if (found) {
           await supabase.auth.admin.deleteUser(found.id).catch(() => {});
         }
@@ -696,8 +696,11 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
     }
     const cleanPhone = formatPhoneBR(phone);
     const host = req.get('host') || `localhost:${PORT}`;
-    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
-    const origin = req.headers.origin || `${protocol}://${host}`;
+    const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+    let origin = req.body.appUrl || req.headers.origin || `${protocol}://${host}`;
+    if (origin.includes('aistudio.google.com') || origin.includes('localhost')) {
+      origin = 'https://ais-dev-rb5uztjihjvkduwo7bhuyk-51327969358.us-east1.run.app';
+    }
     const anamneseLink = `${origin}/#anamnese?phone=${cleanPhone}&id=${appointmentId || '1'}`;
 
     const msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde e envie sua foto pelo link:\n${anamneseLink}`;
@@ -842,54 +845,227 @@ app.get("/api/whatsapp/status", async (req, res) => {
 app.post("/api/whatsapp/connect", async (req, res) => {
   try {
     const { url, instance, apikey } = getEvolutionConfig(req);
-    let response;
+    console.log(`[WHATSAPP] Conectando instância "${instance}" em ${url}...`);
+
+    // Helper para extrair QR code de múltiplos formatos da Evolution API v1 / v2
+    const extractQr = (data: any): string | null => {
+      if (!data) return null;
+      if (typeof data === 'string' && data.startsWith('data:image')) return data;
+      if (data.base64 && typeof data.base64 === 'string') return data.base64;
+      if (data.qrcode?.base64 && typeof data.qrcode.base64 === 'string') return data.qrcode.base64;
+      if (data.qrcode && typeof data.qrcode === 'string' && data.qrcode.startsWith('data:image')) return data.qrcode;
+      if (data.code && typeof data.code === 'string' && data.code.startsWith('data:image')) return data.code;
+      if (data.instance?.qrcode?.base64) return data.instance.qrcode.base64;
+      return null;
+    };
+
+    // 1. Verifica se já está conectado ('open')
     try {
-      response = await axios.get(`${url}/instance/connect/${instance}`, {
+      const stateRes = await axios.get(`${url}/instance/connectionState/${instance}`, {
         headers: { 'apikey': apikey },
-        timeout: 10000
+        timeout: 5000
       });
-    } catch (e: any) {
-      // Se a instância não existir, cria a instância na Evolution
-      response = await axios.post(`${url}/instance/create`, {
-        instanceName: instance,
-        token: apikey,
-        qrcode: true
-      }, {
+      const st = stateRes.data?.instance?.state || stateRes.data?.state;
+      if (st === 'open') {
+        return res.json({
+          success: true,
+          connected: true,
+          message: "Esta instância já está conectada no WhatsApp!",
+          instance
+        });
+      }
+    } catch (stErr: any) {
+      console.log(`[WHATSAPP] connectionState: ${stErr.message}`);
+    }
+
+    let qrCode: string | null = null;
+    let pairingCode: string | null = null;
+
+    // 2. Tenta obter o QR code via GET /instance/connect/:instance
+    try {
+      const resp = await axios.get(`${url}/instance/connect/${instance}`, {
         headers: { 'apikey': apikey },
-        timeout: 10000
+        timeout: 8000
+      });
+      qrCode = extractQr(resp.data);
+      pairingCode = resp.data?.pairingCode || resp.data?.qrcode?.pairingCode || null;
+    } catch (e1: any) {
+      console.log(`[WHATSAPP] GET /instance/connect falhou (${e1.message}), tentando POST...`);
+    }
+
+    // 3. Tenta via POST /instance/connect/:instance
+    if (!qrCode) {
+      try {
+        const resp = await axios.post(`${url}/instance/connect/${instance}`, {}, {
+          headers: { 'apikey': apikey },
+          timeout: 8000
+        });
+        qrCode = extractQr(resp.data);
+        pairingCode = resp.data?.pairingCode || resp.data?.qrcode?.pairingCode || null;
+      } catch (e2: any) {
+        console.log(`[WHATSAPP] POST /instance/connect falhou (${e2.message})`);
+      }
+    }
+
+    // 4. Se não existe ou não gerou QR code, tenta criar a instância
+    if (!qrCode) {
+      try {
+        console.log(`[WHATSAPP] Tentando criar instância "${instance}" na Evolution API...`);
+        const createResp = await axios.post(`${url}/instance/create`, {
+          instanceName: instance,
+          token: apikey,
+          qrcode: true,
+          integration: "WHATSAPP-BAILEYS"
+        }, {
+          headers: { 'apikey': apikey },
+          timeout: 10000
+        });
+
+        qrCode = extractQr(createResp.data);
+        pairingCode = createResp.data?.pairingCode || createResp.data?.qrcode?.pairingCode || null;
+      } catch (createErr: any) {
+        const errMsg = createErr.response?.data?.response?.message || createErr.response?.data?.message || createErr.message;
+        console.warn(`[WHATSAPP] Resposta na criação de instância:`, errMsg);
+        
+        // Se a instância já existe ou a chave não bate, repassa mensagem explicativa
+        if (createErr.response?.status === 401) {
+          return res.status(401).json({
+            success: false,
+            error: `API Key não autorizada para a instância "${instance}". Verifique se a chave corresponde a esta instância no Evolution Manager.`
+          });
+        }
+      }
+    }
+
+    if (qrCode) {
+      return res.json({
+        success: true,
+        qrcode: qrCode,
+        pairingCode: pairingCode || null,
+        instance
       });
     }
 
-    const data = response.data || {};
-    const base64 = data.base64 || data.qrcode?.base64 || data.code;
-    const pairingCode = data.pairingCode || data.qrcode?.pairingCode;
-
-    res.json({
-      success: true,
-      qrcode: base64 || null,
-      pairingCode: pairingCode || null,
-      instance
+    return res.status(400).json({
+      success: false,
+      error: `Não foi possível gerar o QR Code para a instância "${instance}". Verifique no Evolution Manager se o nome da instância e a API Key estão corretos.`
     });
+
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
+    const errorDetails = err.response?.data?.message || err.response?.data || err.message;
+    console.error("[WHATSAPP] ❌ Erro ao conectar:", errorDetails);
+    res.status(500).json({ 
+      success: false, 
+      error: typeof errorDetails === 'string' ? errorDetails : JSON.stringify(errorDetails)
+    });
   }
 });
 
 app.post("/api/whatsapp/logout", async (req, res) => {
   try {
     const { url, instance, apikey } = getEvolutionConfig(req);
-    const response = await axios.delete(`${url}/instance/logout/${instance}`, {
-      headers: { 'apikey': apikey },
-      timeout: 7000
+    console.log(`[WHATSAPP] Solicitando logout e limpeza de sessão para "${instance}" em ${url}...`);
+
+    let logoutSuccess = false;
+    let logoutData = null;
+
+    // 1. Tenta DELETE /instance/logout/:instance (Evolution API v1/v2 padrão)
+    try {
+      const response = await axios.delete(`${url}/instance/logout/${instance}`, {
+        headers: { 'apikey': apikey },
+        timeout: 8000
+      });
+      logoutData = response.data;
+      logoutSuccess = true;
+    } catch (e: any) {
+      console.log(`[WHATSAPP] DELETE logout falhou (${e.message}), tentando POST /instance/logout...`);
+    }
+
+    // 2. Se falhou, tenta POST /instance/logout/:instance
+    if (!logoutSuccess) {
+      try {
+        const response = await axios.post(`${url}/instance/logout/${instance}`, {}, {
+          headers: { 'apikey': apikey },
+          timeout: 8000
+        });
+        logoutData = response.data;
+        logoutSuccess = true;
+      } catch (e: any) {
+        console.log(`[WHATSAPP] POST logout falhou (${e.message})`);
+      }
+    }
+
+    // 3. Tenta reiniciar a instância para garantir limpeza de sockets
+    try {
+      await axios.put(`${url}/instance/restart/${instance}`, {}, {
+        headers: { 'apikey': apikey },
+        timeout: 5000
+      });
+    } catch (_) {
+      try {
+        await axios.post(`${url}/instance/restart/${instance}`, {}, {
+          headers: { 'apikey': apikey },
+          timeout: 5000
+        });
+      } catch (_) {}
+    }
+
+    return res.json({ 
+      success: true, 
+      message: `Sessão da instância "${instance}" resetada com sucesso! Pronto para gerar novo QR Code.`, 
+      data: logoutData 
     });
-    res.json({ success: true, message: "Instância desconectada com sucesso", data: response.data });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.response?.data?.message || err.message });
+    console.error("[WHATSAPP] Erro geral ao desconectar:", err.message);
+    // Mesmo em caso de erro, permitir que a interface desmarque o estado conectado
+    return res.json({ 
+      success: true, 
+      message: "Comando de desconexão enviado.",
+      warning: err.response?.data?.message || err.message 
+    });
   }
 });
 
-// In-memory cache for submitted anamneses
+// Persistent store for submitted anamneses
+const ANAMNESE_STORE_FILE = path.join(process.cwd(), 'data', 'anamneses.json');
+
+function getStoredAnamneses(): Record<string, any> {
+  try {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    if (fs.existsSync(ANAMNESE_STORE_FILE)) {
+      return JSON.parse(fs.readFileSync(ANAMNESE_STORE_FILE, 'utf-8'));
+    }
+  } catch (e) {
+    console.warn("[SERVER] Erro ao ler anamneses.json:", e);
+  }
+  return {};
+}
+
+function saveStoredAnamnese(key: string, record: any) {
+  try {
+    const dataDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const current = getStoredAnamneses();
+    current[key] = record;
+    fs.writeFileSync(ANAMNESE_STORE_FILE, JSON.stringify(current, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn("[SERVER] Erro ao salvar em anamneses.json:", e);
+  }
+}
+
 const anamneseStore = new Map<string, any>();
+// Preload from disk
+try {
+  const diskData = getStoredAnamneses();
+  Object.entries(diskData).forEach(([k, v]) => {
+    anamneseStore.set(k, v);
+  });
+} catch (_) {}
 
 // --- LISTAR MEMBROS DA EQUIPE (SERVER-SIDE COM SERVICE ROLE E FILTRO DE EXCLUÍDOS) ---
 app.get("/api/admin/members", async (req, res) => {
@@ -983,35 +1159,190 @@ app.get("/api/public/appointment", async (req, res) => {
 // --- ROTA PÚBLICA: OBTER DADOS DA ANAMNESE SUBMETIDA ---
 app.get("/api/public/anamnese-data", async (req, res) => {
   try {
-    const { phone, id } = req.query;
+    const { phone, id, name } = req.query;
     const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
     const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+    const with55 = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
+    const normalizeStr = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const cleanNameNorm = normalizeStr(name ? String(name) : '');
 
-    // 1. Verificar no Cache em Memória
-    if (id && anamneseStore.has(String(id))) {
-      return res.json({ success: true, data: anamneseStore.get(String(id)) });
-    }
-    if (cleanPhone && anamneseStore.has(cleanPhone)) {
-      return res.json({ success: true, data: anamneseStore.get(cleanPhone) });
-    }
-    if (cleanWithout55 && anamneseStore.has(cleanWithout55)) {
-      return res.json({ success: true, data: anamneseStore.get(cleanWithout55) });
+    // 1. PRIORIDADE MÁXIMA: Verificar no Cache em Memória / Disco de Anamneses Submetidas
+    const memKeys = [id, cleanPhone, cleanWithout55, with55].filter(Boolean) as string[];
+    for (const k of memKeys) {
+      if (anamneseStore.has(k)) {
+        return res.json({ success: true, data: anamneseStore.get(k), source: 'anamnese_store' });
+      }
     }
 
-    // 2. Tentar buscar em Supabase anamnese_pre_consulta
+    // Busca por aproximação de nome ou telefone no store em memória
+    if (cleanNameNorm || cleanPhone) {
+      for (const [, item] of anamneseStore.entries()) {
+        if (!item) continue;
+        const itemPhone = String(item.paciente_telefone || '').replace(/\D/g, '');
+        const itemNameNorm = normalizeStr(item.paciente_nome || item.paciente_nome_completo || '');
+        if (cleanPhone && (itemPhone.includes(cleanWithout55) || itemPhone.includes(cleanPhone) || cleanPhone.includes(itemPhone))) {
+          return res.json({ success: true, data: item, source: 'anamnese_store' });
+        }
+        if (cleanNameNorm && (itemNameNorm === cleanNameNorm || (itemNameNorm.length > 3 && (itemNameNorm.includes(cleanNameNorm) || cleanNameNorm.includes(itemNameNorm))))) {
+          return res.json({ success: true, data: item, source: 'anamnese_store' });
+        }
+      }
+    }
+
+    // 2. PRIORIDADE 2: Tentar buscar na tabela oficial anamnese_pre_consulta do Supabase
     try {
       let query = supabase.from('anamnese_pre_consulta').select('*');
       if (id && id !== '1' && id !== 'undefined' && id !== 'null') {
         query = query.eq('agendamento_id', id);
       } else if (cleanPhone) {
         query = query.or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
+      } else if (cleanName) {
+        query = query.ilike('paciente_nome', `%${cleanName}%`);
       }
       const { data } = await query.order('created_at', { ascending: false }).limit(1);
       if (data && data.length > 0) {
-        return res.json({ success: true, data: data[0] });
+        return res.json({ success: true, data: data[0], source: 'anamnese_pre_consulta' });
       }
-    } catch (e) {
-      // Ignora erro se tabela não existir
+    } catch (_) {}
+
+    // 3. PRIORIDADE 3: Tentar buscar em Supabase agendamentos (para pré-preenchimento cadastral de endereço, CPF e nascimento)
+    try {
+      if (id && id !== '1' && id !== 'undefined' && id !== 'null') {
+        const { data: agData } = await supabase.from('agendamentos').select('*').eq('id', id).limit(1);
+        if (agData && agData.length > 0) {
+          const ag = agData[0];
+          if (ag.paciente_cpf || ag.data_nascimento || ag.foto_url || ag.cep) {
+            let rawDob = ag.data_nascimento || ag.paciente_data_nascimento || '';
+            if (rawDob && typeof rawDob === 'string' && rawDob.includes('-')) {
+              const parts = rawDob.split('-');
+              if (parts.length === 3 && parts[0].length === 4) {
+                rawDob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+              }
+            }
+
+            return res.json({
+              success: true,
+              source: 'agendamentos',
+              data: {
+                paciente_nome: ag.paciente_nome,
+                paciente_telefone: ag.paciente_telefone,
+                paciente_cpf: ag.paciente_cpf,
+                data_nascimento: rawDob,
+                paciente_data_nascimento: ag.data_nascimento || ag.paciente_data_nascimento,
+                foto_url: ag.foto_url,
+                convenio: ag.convenio,
+                status_pagamento: ag.status_pagamento,
+                valor_consulta: ag.valor_consulta,
+                endereco: { cep: ag.cep, logradouro: ag.logradouro, numero: ag.numero, bairro: ag.bairro, cidade: ag.cidade, estado: ag.estado, complemento: ag.complemento },
+                alertas_clinicos: [],
+                medicamentos_atuais: '',
+                observacoes_clinicas: ''
+              }
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 4. PRIORIDADE 4: Tentar buscar no Supabase prontuarios APENAS DADOS CADASTRAIS (CPF, data de nascimento, foto)
+    // NUNCA injetar prescrições médicas passadas (rec.medicamentos_em_uso) no questionário do paciente!
+    try {
+      if (cleanPhone || cleanName) {
+        const orFilters: string[] = [];
+        if (cleanPhone) {
+          orFilters.push(`paciente_telefone.ilike.%${cleanWithout55}%`);
+          orFilters.push(`paciente_telefone.ilike.%${cleanPhone}%`);
+        }
+        if (nameWords.length > 0) {
+          nameWords.forEach(word => {
+            orFilters.push(`paciente_nome_completo.ilike.%${word}%`);
+          });
+        }
+
+        if (orFilters.length > 0) {
+          const { data: pData, error: pError } = await supabase
+            .from('prontuarios')
+            .select('*')
+            .or(orFilters.join(','))
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+          if (!pError && pData && pData.length > 0) {
+            const rec = pData.find((p: any) => p.paciente_data_nascimento || p.data_nascimento || p.foto_url || p.paciente_cpf) || pData[0];
+
+            let rawDob = rec.paciente_data_nascimento || rec.data_nascimento || '';
+            if (rawDob && typeof rawDob === 'string' && rawDob.includes('-')) {
+              const parts = rawDob.split('-');
+              if (parts.length === 3 && parts[0].length === 4) {
+                rawDob = `${parts[2]}/${parts[1]}/${parts[0]}`;
+              }
+            }
+
+            const rawAlerts = rec.alertas_clinicos ? (Array.isArray(rec.alertas_clinicos) ? rec.alertas_clinicos : [rec.alertas_clinicos]) : [];
+            const rawAlergias = rec.alergias ? (typeof rec.alergias === 'string' ? rec.alergias.split(',').map((s: string) => s.trim()) : rec.alergias) : [];
+            
+            const alertsList: string[] = [...rawAlerts];
+            if (Array.isArray(rawAlergias)) {
+              rawAlergias.forEach((a: string) => {
+                if (a && !alertsList.includes(a)) {
+                  if (a.toUpperCase().startsWith("ALERGIA:")) alertsList.push(a);
+                  else alertsList.push(`ALERGIA: ${a.toUpperCase()}`);
+                }
+              });
+            }
+
+            // Varredura de histórico clínico para recuperar alertas vitais (Cardiopatia, Marcapasso, Látex, etc.)
+            const fullTextSearch = `${rec.resumo_formatado || ''} ${rec.hipotese_diagnostica || ''} ${rec.conduta_plano_terapeutico || ''} ${typeof rec.dados_clinicos === 'string' ? rec.dados_clinicos : JSON.stringify(rec.dados_clinicos || {})} ${typeof rec.dados_especialidade === 'string' ? rec.dados_especialidade : JSON.stringify(rec.dados_especialidade || {})}`.toUpperCase();
+
+            if (fullTextSearch.includes("MARCAPASSO") && !alertsList.some(a => a.includes("MARCAPASSO"))) {
+              alertsList.push("USO DE MARCAPASSO");
+            }
+            if ((fullTextSearch.includes("CARDIOPATIA") || fullTextSearch.includes("CARDIACO") || fullTextSearch.includes("CARDÍACO")) && !alertsList.some(a => a.includes("CARDIO"))) {
+              alertsList.push("PROBLEMAS CARDÍACOS");
+            }
+            if ((fullTextSearch.includes("HIPERTENS") || fullTextSearch.includes("PRESSAO ALTA") || fullTextSearch.includes("PRESSÃO ALTA")) && !alertsList.some(a => a.includes("HIPERTENS"))) {
+              alertsList.push("HIPERTENSO");
+            }
+            if (fullTextSearch.includes("DIABET") && !alertsList.some(a => a.includes("DIABET"))) {
+              alertsList.push("DIABÉTICO");
+            }
+            if (fullTextSearch.includes("ANTICOAGULANTE") && !alertsList.some(a => a.includes("ANTICOAGULANTE"))) {
+              alertsList.push("USO DE ANTICOAGULANTE");
+            }
+            if (fullTextSearch.includes("LATEX") || fullTextSearch.includes("LÁTEX")) {
+              if (!alertsList.some(a => a.includes("LÁTEX") || a.includes("LATEX"))) {
+                alertsList.push("ALERGIA: LÁTEX");
+              }
+            }
+            if (fullTextSearch.includes("PENICILINA") && !alertsList.some(a => a.includes("PENICILINA"))) {
+              alertsList.push("ALERGIA: PENICILINA");
+            }
+            if (fullTextSearch.includes("DIPIRONA") && !alertsList.some(a => a.includes("DIPIRONA"))) {
+              alertsList.push("ALERGIA: DIPIRONA");
+            }
+
+            const foto = rec.foto_url || rec.foto || rec.url_midia || (rec.dados_clinicos && rec.dados_clinicos.foto_url) || (rec.dados_especialidade && rec.dados_especialidade.foto_url) || null;
+
+            return res.json({ 
+              success: true, 
+              source: 'prontuarios_cadastral',
+              data: {
+                paciente_nome: rec.paciente_nome_completo || rec.paciente_nome,
+                paciente_telefone: rec.paciente_telefone || cleanPhone,
+                paciente_cpf: rec.paciente_cpf || rec.cpf,
+                data_nascimento: rawDob,
+                paciente_data_nascimento: rec.paciente_data_nascimento || rec.data_nascimento,
+                foto_url: foto,
+                alertas_clinicos: alertsList,
+                medicamentos_atuais: '', // NÃO copia prescrição médica antiga
+                observacoes_clinicas: '' // NÃO copia evolução médica antiga
+              }
+            });
+          }
+        }
+      }
+    } catch (prontErr) {
+      console.warn("[SERVER] Erro ao buscar em prontuarios:", prontErr);
     }
 
     return res.json({ success: true, data: null });
@@ -1025,6 +1356,8 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
   try {
     const {
       appointmentId,
+      agendamento_id,
+      id,
       paciente_nome,
       paciente_telefone,
       paciente_cpf,
@@ -1032,38 +1365,73 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
       endereco,
       alertas_clinicos,
       medicamentosAtuais,
+      medicamentos_atuais,
       observacoesClinicas,
+      observacoes_clinicas,
       foto_url
     } = req.body;
 
+    const aptId = appointmentId || agendamento_id || id;
+    const meds = medicamentosAtuais !== undefined ? medicamentosAtuais : (medicamentos_atuais || '');
+    const obs = observacoesClinicas !== undefined ? observacoesClinicas : (observacoes_clinicas || '');
+
     const cleanPhone = paciente_telefone ? String(paciente_telefone).replace(/\D/g, '') : '';
     const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+    const with55 = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
+    const cleanName = paciente_nome ? String(paciente_nome).toLowerCase().trim() : '';
 
     const anamneseRecord = {
-      agendamento_id: appointmentId || null,
+      agendamento_id: aptId || null,
       paciente_nome,
       paciente_telefone,
       paciente_cpf,
       data_nascimento,
       endereco,
-      alertas_clinicos,
-      medicamentos_atuais: medicamentosAtuais,
-      observacoes_clinicas: observacoesClinicas,
+      alertas_clinicos: alertas_clinicos || [],
+      medicamentos_atuais: meds,
+      observacoes_clinicas: obs,
       foto_url,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
-    // Armazena em memória para garantia imediata
-    if (appointmentId) anamneseStore.set(String(appointmentId), anamneseRecord);
-    if (cleanPhone) anamneseStore.set(cleanPhone, anamneseRecord);
-    if (cleanWithout55) anamneseStore.set(cleanWithout55, anamneseRecord);
+    // Armazena em memória e persiste em disco
+    if (aptId) {
+      anamneseStore.set(String(aptId), anamneseRecord);
+      saveStoredAnamnese(String(aptId), anamneseRecord);
+    }
+    if (cleanPhone) {
+      anamneseStore.set(cleanPhone, anamneseRecord);
+      saveStoredAnamnese(cleanPhone, anamneseRecord);
+    }
+    if (cleanWithout55) {
+      anamneseStore.set(cleanWithout55, anamneseRecord);
+      saveStoredAnamnese(cleanWithout55, anamneseRecord);
+    }
+    if (with55) {
+      anamneseStore.set(with55, anamneseRecord);
+      saveStoredAnamnese(with55, anamneseRecord);
+    }
+    if (cleanName) {
+      anamneseStore.set(`name_${cleanName}`, anamneseRecord);
+      saveStoredAnamnese(`name_${cleanName}`, anamneseRecord);
+    }
+    if (paciente_cpf) {
+      const cleanCpf = String(paciente_cpf).replace(/\D/g, '');
+      if (cleanCpf) {
+        anamneseStore.set(`cpf_${cleanCpf}`, anamneseRecord);
+        saveStoredAnamnese(`cpf_${cleanCpf}`, anamneseRecord);
+      }
+    }
 
     // 1. Se houver ID de agendamento, atualiza status para 'confirmado' e salva dados no agendamento
-    if (appointmentId && appointmentId !== '1') {
+    if (aptId && aptId !== '1') {
       try {
-        await supabase.from('agendamentos').update({
+        const numAptId = Number(aptId);
+        const updateData: any = {
           status: 'confirmado',
           paciente_cpf: paciente_cpf || undefined,
+          foto_url: foto_url || undefined,
           cep: endereco?.cep || undefined,
           logradouro: endereco?.logradouro || undefined,
           bairro: endereco?.bairro || undefined,
@@ -1071,7 +1439,11 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
           estado: endereco?.estado || undefined,
           numero: endereco?.numero || undefined,
           complemento: endereco?.complemento || undefined
-        }).eq('id', appointmentId);
+        };
+        if (!isNaN(numAptId)) {
+          await supabase.from('agendamentos').update(updateData).eq('id', numAptId);
+        }
+        await supabase.from('agendamentos').update(updateData).eq('id', String(aptId));
       } catch (err) {
         console.warn("Erro ao atualizar agendamento em Supabase:", err);
       }

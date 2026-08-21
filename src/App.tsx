@@ -258,7 +258,9 @@ export default function App() {
   const [selectedPatientPhone, setSelectedPatientPhone] = useState('');
   const [selectedPatientCpf, setSelectedPatientCpf] = useState('');
   const [selectedPatientDob, setSelectedPatientDob] = useState('');
-  const [selectedPatientConvenio, setSelectedPatientConvenio] = useState<string>('SulAmérica Saúde');
+  const [selectedPatientConvenio, setSelectedPatientConvenio] = useState<string>('Particular');
+  const [selectedPatientStatusPagamento, setSelectedPatientStatusPagamento] = useState<string>('');
+  const [selectedPatientValorConsulta, setSelectedPatientValorConsulta] = useState<string>('');
   const [selectedAppointmentReason, setSelectedAppointmentReason] = useState('');
   const [selectedMedicoId, setSelectedMedicoId] = useState<string | null>(null);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
@@ -2863,12 +2865,10 @@ export default function App() {
                 setShowHistory(false);
                 setShowMessageHistory(false);
                 setShowFinancial(false);
-                setSelectedPatient(null);
-                setCurrentRecord(null);
               }}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
-                (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial && !selectedPatient)
+                (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial)
                   ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
                   : "text-slate-300 hover:bg-slate-800 hover:text-white"
               )}
@@ -3245,8 +3245,8 @@ export default function App() {
               setShowDashboard(false);
               setShowFinancial(false);
             }}
-            onStartConsultation={(paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade) => {
-              console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "convenio:", convenio, "especialidade:", especialidade);
+            onStartConsultation={async (paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade, statusPagamento, valorConsulta) => {
+              console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "convenio:", convenio, "statusPagamento:", statusPagamento, "valor:", valorConsulta);
               setShowAgenda(false);
               setShowDashboard(false);
               setShowFinancial(false);
@@ -3255,7 +3255,9 @@ export default function App() {
               setSelectedAppointmentReason(motivo || '');
               setSelectedMedicoId(medicoId || null);
               setSelectedAppointmentId(appointmentId || null);
-              setSelectedPatientConvenio(convenio || 'SulAmérica Saúde');
+              setSelectedPatientConvenio(convenio || 'Particular');
+              setSelectedPatientStatusPagamento(statusPagamento || '');
+              setSelectedPatientValorConsulta(valorConsulta || '');
               setPrefillPatient(null);
 
               const specLower = (especialidade || '').toLowerCase();
@@ -3269,15 +3271,114 @@ export default function App() {
               }
 
               setExamMode(targetExamMode);
-              setCurrentRecord({
+
+              // 1. Carrega dados prévios locais de anamnese
+              const cleanPhone = (telefone || '').replace(/\D/g, '');
+              const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
+              let localAnamnese: any = null;
+              try {
+                const savedApp = appointmentId ? localStorage.getItem(`anamnese_app_${appointmentId}`) : null;
+                const savedPhone = cleanPhone ? localStorage.getItem(`anamnese_${cleanPhone}`) : null;
+                const savedPhoneWithout55 = cleanWithout55 ? localStorage.getItem(`anamnese_${cleanWithout55}`) : null;
+                const savedPhoneWith55 = cleanPhone ? localStorage.getItem(`anamnese_55${cleanPhone}`) : null;
+                
+                if (savedApp) localAnamnese = JSON.parse(savedApp);
+                else if (savedPhone) localAnamnese = JSON.parse(savedPhone);
+                else if (savedPhoneWithout55) localAnamnese = JSON.parse(savedPhoneWithout55);
+                else if (savedPhoneWith55) localAnamnese = JSON.parse(savedPhoneWith55);
+
+                // Fallback: varre chaves do localStorage caso o número esteja formatado diferente
+                if (!localAnamnese) {
+                  for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith('anamnese_')) {
+                      try {
+                        const parsed = JSON.parse(localStorage.getItem(key) || '');
+                        if (parsed && (
+                          (parsed.paciente_nome && parsed.paciente_nome.toLowerCase().trim() === paciente.toLowerCase().trim()) ||
+                          (cleanWithout55 && String(parsed.paciente_telefone || '').replace(/\D/g, '').includes(cleanWithout55))
+                        )) {
+                          localAnamnese = parsed;
+                          break;
+                        }
+                      } catch (_) {}
+                    }
+                  }
+                }
+              } catch (e) {}
+
+              // Fallback 2: busca no histórico clínico já carregado do paciente
+              const prevHistoryRecord: any = history.find(h => 
+                (h.paciente_nome_completo && h.paciente_nome_completo.toLowerCase().trim() === paciente.toLowerCase().trim()) ||
+                (cleanWithout55 && h.paciente_telefone && h.paciente_telefone.replace(/\D/g, '').includes(cleanWithout55))
+              );
+
+              const initialAlerts = localAnamnese?.alertas_clinicos || prevHistoryRecord?.alertas_copiloto || prevHistoryRecord?.alertas_clinicos || [];
+              const initialDob = localAnamnese?.data_nascimento || prevHistoryRecord?.paciente_data_nascimento || '';
+              const initialCpf = localAnamnese?.paciente_cpf || prevHistoryRecord?.paciente_cpf || '';
+              const initialPhoto = localAnamnese?.foto_url || prevHistoryRecord?.foto_url || '';
+              const initialAddress = localAnamnese?.endereco ? (typeof localAnamnese.endereco === 'object' ? [localAnamnese.endereco.logradouro, localAnamnese.endereco.numero, localAnamnese.endereco.bairro, localAnamnese.endereco.cidade].filter(Boolean).join(', ') : localAnamnese.endereco) : (prevHistoryRecord?.endereco || '');
+              const initialMeds = localAnamnese?.medicamentosAtuais || localAnamnese?.medicamentos_atuais || prevHistoryRecord?.medicamentos_em_uso || '';
+
+              if (initialCpf) setSelectedPatientCpf(initialCpf);
+              if (initialDob) setSelectedPatientDob(initialDob);
+
+              const initialRecord = {
                 paciente_nome_completo: paciente,
                 paciente_telefone: telefone || '',
-                convenio: convenio || 'SulAmérica Saúde',
+                paciente_cpf: initialCpf,
+                paciente_data_nascimento: initialDob,
+                convenio: convenio || prevHistoryRecord?.convenio || 'Particular',
+                status_pagamento: statusPagamento || '',
+                valor_consulta: valorConsulta || '',
                 especialidade: especialidade || 'Geral',
                 paciente_status: 'Estável',
                 resumo_formatado: motivo ? `Queixa principal agendada: ${motivo}` : '',
-                sugestao_conduta: ''
-              } as any);
+                sugestao_conduta: '',
+                alertas_clinicos: initialAlerts,
+                alertas_copiloto: initialAlerts,
+                foto_url: initialPhoto,
+                endereco: initialAddress,
+                medicamentos_em_uso: initialMeds,
+                medicamentosAtuais: initialMeds
+              };
+
+              setCurrentRecord(initialRecord as any);
+
+              // 2. Busca assíncrona no backend / Supabase para garantir sincronia de foto, nascimento e alertas
+              try {
+                const res = await fetch(`/api/public/anamnese-data?phone=${encodeURIComponent(cleanPhone)}&id=${encodeURIComponent(appointmentId || '')}&name=${encodeURIComponent(paciente || '')}`);
+                if (res.ok) {
+                  const json = await res.json();
+                  if (json.data) {
+                    const d = json.data;
+                    if (d.paciente_cpf) setSelectedPatientCpf(d.paciente_cpf);
+                    if (d.data_nascimento) setSelectedPatientDob(d.data_nascimento);
+                    if (d.convenio) setSelectedPatientConvenio(d.convenio);
+                    if (d.status_pagamento) setSelectedPatientStatusPagamento(d.status_pagamento);
+                    if (d.valor_consulta) setSelectedPatientValorConsulta(d.valor_consulta);
+
+                    const dbAddress = d.endereco ? (typeof d.endereco === 'object' ? [d.endereco.logradouro, d.endereco.numero, d.endereco.bairro, d.endereco.cidade].filter(Boolean).join(', ') : d.endereco) : initialAddress;
+
+                    setCurrentRecord((prev: any) => ({
+                      ...prev,
+                      paciente_cpf: d.paciente_cpf || prev?.paciente_cpf,
+                      paciente_data_nascimento: d.data_nascimento || prev?.paciente_data_nascimento,
+                      alertas_clinicos: (d.alertas_clinicos && d.alertas_clinicos.length > 0) ? d.alertas_clinicos : prev?.alertas_clinicos || [],
+                      alertas_copiloto: (d.alertas_clinicos && d.alertas_clinicos.length > 0) ? d.alertas_clinicos : prev?.alertas_copiloto || [],
+                      foto_url: d.foto_url || prev?.foto_url,
+                      convenio: d.convenio || prev?.convenio,
+                      status_pagamento: d.status_pagamento || prev?.status_pagamento,
+                      valor_consulta: d.valor_consulta || prev?.valor_consulta,
+                      endereco: dbAddress || prev?.endereco,
+                      medicamentos_em_uso: d.medicamentos_atuais || d.medicamentosAtuais || prev?.medicamentos_em_uso,
+                      medicamentosAtuais: d.medicamentos_atuais || d.medicamentosAtuais || prev?.medicamentosAtuais
+                    }));
+                  }
+                }
+              } catch (asyncErr) {
+                console.warn("Erro ao buscar dados remotos de anamnese:", asyncErr);
+              }
             }} />
         ) : showMessageHistory ? (
           <motion.div 
@@ -3562,12 +3663,14 @@ export default function App() {
                 className="space-y-8"
               >
                 <PatientDossierView
-                  patientName={selectedPatient || currentRecord?.paciente_nome_completo || 'Consulta em Andamento'}
+                  patientName={selectedPatient || currentRecord?.paciente_nome_completo || (currentRecord as any)?.paciente_nome || ''}
                   patientPhone={selectedPatientPhone || currentRecord?.paciente_telefone || ''}
                   patientCpf={currentRecord?.paciente_cpf || selectedPatientCpf || ''}
-                  patientDob={currentRecord?.paciente_data_nascimento || selectedPatientDob || ''}
+                  patientDob={currentRecord?.paciente_data_nascimento || (currentRecord as any)?.data_nascimento || selectedPatientDob || ''}
                   patientStatus={currentRecord?.paciente_status || 'Estável'}
                   convenio={selectedPatientConvenio || (currentRecord as any)?.convenio || 'Particular'}
+                  statusPagamento={selectedPatientStatusPagamento || (currentRecord as any)?.status_pagamento || ''}
+                  valorConsulta={selectedPatientValorConsulta || (currentRecord as any)?.valor_consulta || ''}
                   currentRecord={currentRecord}
                   history={history}
                   examMode={examMode}

@@ -67,7 +67,17 @@ interface Doctor {
 }
 
 export default function Agenda({ onStartConsultation, onOpenChat, user, prefillPatient }: { 
-  onStartConsultation: (paciente: string, telefone?: string, motivo?: string, medicoId?: string, appointmentId?: string, convenio?: string, especialidade?: string) => void, 
+  onStartConsultation: (
+    paciente: string, 
+    telefone?: string, 
+    motivo?: string, 
+    medicoId?: string, 
+    appointmentId?: string, 
+    convenio?: string, 
+    especialidade?: string,
+    statusPagamento?: string,
+    valorConsulta?: string
+  ) => void, 
   onOpenChat: (phone: string) => void,
   user: any, 
   prefillPatient?: {name: string, phone: string} | null 
@@ -330,7 +340,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     const toastId = toast.loading("Enviando confirmação via WhatsApp...");
     const digitsPhone = (app.paciente_telefone || '').replace(/\D/g, '');
     const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
-    const baseUrl = window.location.origin;
+    let baseUrl = window.location.origin;
+    if (baseUrl.includes('localhost') || baseUrl.includes('aistudio.google.com')) {
+      baseUrl = 'https://ais-dev-rb5uztjihjvkduwo7bhuyk-51327969358.us-east1.run.app';
+    }
     const docName = app.medico_nome || 'Dr(a). da Clínica';
     
     // Tratamento robusto de data e hora para evitar 'Invalid Date'
@@ -541,11 +554,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       
       // Se não encontrou médicos pela especialidade ou não tem especialidade selecionada
       if (doctorsList.length === 0) {
-        console.log("Agenda: Buscando todos os médicos (fallback)...");
+        console.log("Agenda: Buscando todos os médicos e administradores clínicos (fallback)...");
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, email, full_name')
-          .eq('role', 'doctor');
+          .select('id, email, full_name, role')
+          .in('role', ['doctor', 'admin']);
         
         if (error) throw error;
         doctorsList = data || [];
@@ -556,8 +569,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     } catch (err) {
       console.error("Erro ao buscar médicos:", err);
       // Fallback final: tenta buscar sem filtros
-      const { data } = await supabase.from('profiles').select('id, email, full_name').eq('role', 'doctor');
-      if (data) setDoctors(data);
+      const { data } = await supabase.from('profiles').select('id, email, full_name, role').in('role', ['doctor', 'admin']);
+      if (data) setDoctors(data || []);
     }
   };
 
@@ -660,11 +673,24 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           const valor_consulta = app.valor_consulta || '';
           const status_pagamento = app.status_pagamento || '';
           const tipo_consulta = app.tipo_consulta || 'Primeira Consulta';
+          const foto_url = app.foto_url || app.url_midia || app.foto || app.avatar_url || '';
+          const paciente_cpf = app.paciente_cpf || app.cpf || '';
+          const data_nascimento = app.data_nascimento || app.paciente_data_nascimento || '';
 
           return {
             id: app.id,
             paciente_nome,
             paciente_telefone,
+            paciente_cpf,
+            data_nascimento,
+            foto_url,
+            cep: app.cep || '',
+            logradouro: app.logradouro || '',
+            numero: app.numero || '',
+            complemento: app.complemento || '',
+            bairro: app.bairro || '',
+            cidade: app.cidade || '',
+            estado: app.estado || '',
             data_hora_inicio: dataHoraInicio,
             motivo,
             medico_id,
@@ -881,18 +907,6 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
-            {/* Filtro de Médico para Recepcionista/Admin */}
-            {(user?.role === 'admin' || user?.role === 'receptionist') && (
-              <select 
-                className="p-3.5 rounded-2xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-xs outline-none focus:border-clinical-blue transition-all"
-                value={selectedMedicoId}
-                onChange={(e) => setSelectedMedicoId(e.target.value)}
-              >
-                <option value="">Todos os Médicos</option>
-                {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
-              </select>
-            )}
-
             <button 
               onClick={fetchAppointments}
               className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs"
@@ -927,8 +941,17 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             appointments.map((app) => (
               <div key={app.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-clinical-blue/30 transition-all group">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-clinical-blue group-hover:bg-clinical-blue group-hover:text-white transition-colors">
-                    <User size={24} />
+                  <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-clinical-blue group-hover:bg-clinical-blue group-hover:text-white transition-colors overflow-hidden shrink-0 border border-slate-200/80">
+                    {app.foto_url ? (
+                      <img 
+                        src={app.foto_url} 
+                        alt={app.paciente_nome} 
+                        className="w-full h-full object-cover rounded-2xl" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <User size={24} />
+                    )}
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1050,8 +1073,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                         app.motivo, 
                         app.medico_id, 
                         app.id, 
-                        app.convenio || 'SulAmérica Saúde', 
-                        app.medico_especialidade || 'Clínico Geral'
+                        app.convenio || 'Particular', 
+                        app.medico_especialidade || 'Clínico Geral',
+                        app.status_pagamento,
+                        app.valor_consulta
                       );
                     }}
                     className="bg-slate-900 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all font-bold group-hover:bg-clinical-blue"
@@ -1415,9 +1440,12 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           setIsAnamneseModalOpen(false);
           setSelectedAppointmentForAnamnese(null);
         }}
+        appointmentId={selectedAppointmentForAnamnese?.id}
         patientNamePrefill={selectedAppointmentForAnamnese?.paciente_nome || ''}
         patientPhonePrefill={selectedAppointmentForAnamnese?.paciente_telefone || ''}
         patientCpfPrefill={selectedAppointmentForAnamnese?.paciente_cpf || ''}
+        patientDobPrefill={(selectedAppointmentForAnamnese as any)?.data_nascimento || (selectedAppointmentForAnamnese as any)?.paciente_data_nascimento || ''}
+        patientPhotoPrefill={(selectedAppointmentForAnamnese as any)?.foto_url || (selectedAppointmentForAnamnese as any)?.url_midia || (selectedAppointmentForAnamnese as any)?.foto || ''}
         patientCepPrefill={selectedAppointmentForAnamnese?.cep || ''}
         patientLogradouroPrefill={selectedAppointmentForAnamnese?.logradouro || ''}
         patientBairroPrefill={selectedAppointmentForAnamnese?.bairro || ''}
@@ -1426,6 +1454,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         patientNumeroPrefill={selectedAppointmentForAnamnese?.numero || ''}
         patientComplementoPrefill={selectedAppointmentForAnamnese?.complemento || ''}
         onAnamneseSubmitted={() => {
+          fetchAppointments();
           toast.success("Ficha Pré-Consulta vinculada com sucesso!");
         }}
       />
