@@ -268,9 +268,12 @@ export default function App() {
   const [preselectedChatPhone, setPreselectedChatPhone] = useState<string | null>(null);
   const [history, setHistory] = useState<ClinicalRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [showAgenda, setShowAgenda] = useState(false);
-  const [showMessageHistory, setShowMessageHistory] = useState(false);
+  
+  // Persistência de Aba Ativa
+  const savedActiveTab = typeof window !== 'undefined' ? localStorage.getItem('ambulatorio_active_tab') : null;
+  const [showHistory, setShowHistory] = useState(savedActiveTab === 'historico');
+  const [showAgenda, setShowAgenda] = useState(savedActiveTab === 'agenda');
+  const [showMessageHistory, setShowMessageHistory] = useState(savedActiveTab === 'mensagens');
   const [showSystemOverview, setShowSystemOverview] = useState(false);
   const [showClinicSettings, setShowClinicSettings] = useState(false);
   const [clinicInfo, setClinicInfo] = useState<any>(null);
@@ -300,11 +303,51 @@ export default function App() {
     return () => window.removeEventListener('clinic_info_updated', loadClinicInfo);
   }, []);
   const [showHelp, setShowHelp] = useState(false);
-  const [showManageTeam, setShowManageTeam] = useState(false);
-  const [showFinancial, setShowFinancial] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(true);
+  const [showManageTeam, setShowManageTeam] = useState(savedActiveTab === 'equipe');
+  const [showFinancial, setShowFinancial] = useState(savedActiveTab === 'financeiro');
+  const [showDashboard, setShowDashboard] = useState(!savedActiveTab || savedActiveTab === 'dashboard');
   const [pendingCount, setPendingCount] = useState(0);
-  const [user, setUser] = useState<{ email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string } | null>(null);
+
+  // Inicializa sessão de usuário a partir do localStorage para manter logado ao alternar abas (ex: n8n)
+  const [user, setUser] = useState<{ email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string } | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('ambulatorio_user_session');
+        if (saved) {
+          return JSON.parse(saved);
+        }
+      } catch (e) {
+        console.warn("Erro ao restaurar sessão:", e);
+      }
+    }
+    return null;
+  });
+
+  const updateUserState = (newUser: { email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string } | null) => {
+    setUser(newUser);
+    if (typeof window !== 'undefined') {
+      if (newUser) {
+        localStorage.setItem('ambulatorio_user_session', JSON.stringify(newUser));
+      } else {
+        localStorage.removeItem('ambulatorio_user_session');
+      }
+    }
+  };
+
+  const navigateToTab = (tab: 'dashboard' | 'atendimento' | 'agenda' | 'mensagens' | 'historico' | 'financeiro' | 'equipe') => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ambulatorio_active_tab', tab);
+    }
+    setShowDashboard(tab === 'dashboard');
+    setShowAgenda(tab === 'agenda');
+    setShowMessageHistory(tab === 'mensagens');
+    setShowHistory(tab === 'historico');
+    setShowFinancial(tab === 'financeiro');
+    setShowManageTeam(tab === 'equipe');
+    if (tab !== 'atendimento') {
+      setSelectedPatient(null);
+    }
+  };
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -493,8 +536,8 @@ export default function App() {
         if (session?.user) {
           checkUser();
           fetchPendingCount();
-        } else {
-          setUser(null);
+        } else if (event === 'SIGNED_OUT') {
+          updateUserState(null);
           setHistory([]);
           setCurrentRecord(null);
         }
@@ -625,7 +668,7 @@ export default function App() {
           // Só atualiza se houver mudança real para evitar loops
           if (!user || user.id !== authUser.id || user.role !== role || user.status !== status) {
             console.log("Atualizando estado do usuário no React...");
-            setUser({ 
+            updateUserState({ 
               email: authUser.email || '', 
               id: authUser.id, 
               role: role,
@@ -663,7 +706,7 @@ export default function App() {
           const finalStatus = newProfile?.status || status;
             
           if (!user || user.id !== authUser.id || user.role !== finalRole || user.status !== finalStatus) {
-            setUser({ 
+            updateUserState({ 
               email: authUser.email || '', 
               id: authUser.id, 
               role: finalRole,
@@ -705,7 +748,7 @@ export default function App() {
       });
 
       if (data?.user) {
-        setUser({
+        updateUserState({
           email: marcoEmail,
           id: data.user.id,
           role: 'admin',
@@ -717,7 +760,7 @@ export default function App() {
       }
 
       // Fallback Master imediato para garantir acesso sem bloqueios
-      setUser({
+      updateUserState({
         email: marcoEmail,
         id: 'master-admin-marco',
         role: 'admin',
@@ -727,7 +770,7 @@ export default function App() {
       toast.success("🔑 Acesso Master Dr. Marco Duarte Liberado!");
     } catch (err: any) {
       console.warn("Acesso Master Fallback ativado:", err);
-      setUser({
+      updateUserState({
         email: marcoEmail,
         id: 'master-admin-marco',
         role: 'admin',
@@ -887,7 +930,7 @@ export default function App() {
           
           const profile = profiles && profiles.length > 0 ? profiles[0] : null;
           
-          setUser({ 
+          updateUserState({ 
             email: data.user.email || '', 
             id: data.user.id, 
             role: isAdminEmail ? 'admin' : (profile?.role || 'doctor'),
@@ -930,7 +973,7 @@ export default function App() {
             full_name: name
           });
 
-          setUser({ 
+          updateUserState({ 
             email: data.user.email || '', 
             id: data.user.id, 
             role: 'doctor',
@@ -954,8 +997,12 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("SignOut warning:", e);
+    }
+    updateUserState(null);
     setHistory([]);
     setCurrentRecord(null);
     setShowSecretControls(false);
@@ -2815,15 +2862,7 @@ export default function App() {
           {/* Logo Brand */}
           <div 
             className="flex items-center gap-3 p-2 cursor-pointer rounded-2xl hover:bg-slate-800/80 transition-all"
-            onClick={() => {
-              setShowManageTeam(false);
-              setShowAgenda(false);
-              setShowHistory(false);
-              setShowMessageHistory(false);
-              setShowFinancial(false);
-              setShowDashboard(true);
-              setSelectedPatient(null);
-            }}
+            onClick={() => navigateToTab('dashboard')}
           >
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/30 shrink-0">
               <Stethoscope size={22} />
@@ -2837,15 +2876,7 @@ export default function App() {
           {/* Navigation Links */}
           <nav className="space-y-1">
             <button
-              onClick={() => {
-                setShowDashboard(true);
-                setShowManageTeam(false);
-                setShowAgenda(false);
-                setShowHistory(false);
-                setShowMessageHistory(false);
-                setShowFinancial(false);
-                setSelectedPatient(null);
-              }}
+              onClick={() => navigateToTab('dashboard')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                 showDashboard 
@@ -2858,14 +2889,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => {
-                setShowDashboard(false);
-                setShowManageTeam(false);
-                setShowAgenda(false);
-                setShowHistory(false);
-                setShowMessageHistory(false);
-                setShowFinancial(false);
-              }}
+              onClick={() => navigateToTab('atendimento')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                 (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial)
@@ -2878,15 +2902,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => {
-                setShowAgenda(!showAgenda);
-                setShowHistory(false);
-                setShowMessageHistory(false);
-                setShowDashboard(false);
-                setShowManageTeam(false);
-                setShowFinancial(false);
-                setSelectedPatient(null);
-              }}
+              onClick={() => navigateToTab('agenda')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                 showAgenda 
@@ -2899,15 +2915,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => {
-                setShowMessageHistory(!showMessageHistory);
-                setShowHistory(false);
-                setShowAgenda(false);
-                setShowDashboard(false);
-                setShowManageTeam(false);
-                setShowFinancial(false);
-                setSelectedPatient(null);
-              }}
+              onClick={() => navigateToTab('mensagens')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                 showMessageHistory 
@@ -2920,15 +2928,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => {
-                setShowHistory(!showHistory);
-                setShowAgenda(false);
-                setShowMessageHistory(false);
-                setShowDashboard(false);
-                setShowManageTeam(false);
-                setShowFinancial(false);
-                setSelectedPatient(null);
-              }}
+              onClick={() => navigateToTab('historico')}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                 showHistory 
@@ -2944,15 +2944,7 @@ export default function App() {
             {user?.role === 'admin' && (
               <>
                 <button
-                  onClick={() => {
-                    setShowFinancial(!showFinancial);
-                    setShowHistory(false);
-                    setShowAgenda(false);
-                    setShowMessageHistory(false);
-                    setShowDashboard(false);
-                    setShowManageTeam(false);
-                    setSelectedPatient(null);
-                  }}
+                  onClick={() => navigateToTab('financeiro')}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                     showFinancial 
@@ -2965,15 +2957,7 @@ export default function App() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setShowManageTeam(true);
-                    setShowAgenda(false);
-                    setShowHistory(false);
-                    setShowMessageHistory(false);
-                    setShowDashboard(false);
-                    setShowFinancial(false);
-                    setSelectedPatient(null);
-                  }}
+                  onClick={() => navigateToTab('equipe')}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
                     showManageTeam 
@@ -3226,12 +3210,11 @@ export default function App() {
                       resumo_formatado: '',
                       sugestao_conduta: ''
                     });
-                    setShowDashboard(false);
-                    setShowFinancial(false);
+                    navigateToTab('atendimento');
                   }}
-                  onOpenAgenda={() => { setShowAgenda(true); setShowDashboard(false); setShowFinancial(false); }}
-                  onOpenMessages={() => { setShowMessageHistory(true); setShowDashboard(false); setShowFinancial(false); }}
-                  onOpenHistory={() => { setShowHistory(true); setShowDashboard(false); setShowFinancial(false); }}
+                  onOpenAgenda={() => navigateToTab('agenda')}
+                  onOpenMessages={() => navigateToTab('mensagens')}
+                  onOpenHistory={() => navigateToTab('historico')}
                 />
               </motion.div>
             ) : showAgenda ? (
@@ -3240,16 +3223,19 @@ export default function App() {
             prefillPatient={prefillPatient} 
             onOpenChat={(phone) => {
               setPreselectedChatPhone(phone);
-              setShowMessageHistory(true);
-              setShowAgenda(false);
-              setShowDashboard(false);
-              setShowFinancial(false);
+              navigateToTab('mensagens');
             }}
             onStartConsultation={async (paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade, statusPagamento, valorConsulta) => {
               console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "convenio:", convenio, "statusPagamento:", statusPagamento, "valor:", valorConsulta);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('ambulatorio_active_tab', 'atendimento');
+              }
               setShowAgenda(false);
               setShowDashboard(false);
               setShowFinancial(false);
+              setShowHistory(false);
+              setShowMessageHistory(false);
+              setShowManageTeam(false);
               setSelectedPatient(paciente);
               setSelectedPatientPhone(telefone || '');
               setSelectedAppointmentReason(motivo || '');
@@ -3685,10 +3671,7 @@ export default function App() {
                   saveSuccess={saveSuccess}
                   onOpenChat={(phone) => {
                     setPreselectedChatPhone(phone);
-                    setShowMessageHistory(true);
-                    setShowDashboard(false);
-                    setShowAgenda(false);
-                    setShowHistory(false);
+                    navigateToTab('mensagens');
                   }}
                   onGeneratePDF={(rec) => generatePDF(rec)}
                   onGenerateAtestadoPDF={() => {
@@ -3702,7 +3685,7 @@ export default function App() {
                   onClose={() => {
                     setSelectedPatient(null);
                     setCurrentRecord(null);
-                    setShowDashboard(true);
+                    navigateToTab('dashboard');
                   }}
                   setCurrentRecord={setCurrentRecord}
                   specialtyData={specialtyData}
