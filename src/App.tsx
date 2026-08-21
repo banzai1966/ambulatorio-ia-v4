@@ -323,6 +323,34 @@ export default function App() {
     return null;
   });
 
+  useEffect(() => {
+    // Ao voltar para a aba do Ambulatório vindo do n8n ou outra janela, restaura a sessão imediatamente
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible' || !document.hidden) {
+        if (!user && typeof window !== 'undefined') {
+          const saved = localStorage.getItem('ambulatorio_user_session');
+          if (saved) {
+            try {
+              const parsed = JSON.parse(saved);
+              if (parsed && parsed.email) {
+                setUser(parsed);
+              }
+            } catch (e) {
+              console.warn("Restore on focus error:", e);
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    return () => {
+      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [user]);
+
   const updateUserState = (newUser: { email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string } | null) => {
     setUser(newUser);
     if (typeof window !== 'undefined') {
@@ -537,6 +565,7 @@ export default function App() {
           checkUser();
           fetchPendingCount();
         } else if (event === 'SIGNED_OUT') {
+          // Apenas limpa se for explicitamente SIGNED_OUT
           updateUserState(null);
           setHistory([]);
           setCurrentRecord(null);
@@ -600,7 +629,16 @@ export default function App() {
 
   const checkUser = async () => {
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+      // 1. Tenta obter a sessão salva localmente primeiro (ultra-rápido, não quebra offline/troca de abas)
+      const { data: sessionData } = await supabase.auth.getSession();
+      const sessionUser = sessionData?.session?.user;
+      
+      let authUser = sessionUser;
+      if (!authUser) {
+        const { data: userData } = await supabase.auth.getUser();
+        authUser = userData?.user || null;
+      }
+
       if (authUser) {
         console.log("Verificando usuário:", authUser.email);
         

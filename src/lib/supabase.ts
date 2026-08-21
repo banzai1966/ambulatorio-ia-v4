@@ -26,12 +26,16 @@ const memoryLock = (() => {
   };
 })();
 
+// Lock resiliente para abas e iframes (evita bloqueios ou perda de lock ao trocar de aba)
+const tabStorage = typeof window !== 'undefined' ? window.localStorage : undefined;
+
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // Bypass Navigator LockManager to prevent timeout in iframes
+    storage: tabStorage,
+    storageKey: 'ambulatorio-auth-token',
     lock: memoryLock,
   }
 });
