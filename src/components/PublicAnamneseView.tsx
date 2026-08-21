@@ -1,26 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Stethoscope, 
   User, 
   Phone, 
   MapPin, 
-  Camera, 
   AlertTriangle, 
   ShieldCheck, 
   CheckCircle2, 
   Search, 
-  X, 
-  Heart, 
-  Upload, 
-  Video, 
   Calendar, 
   Clock, 
   Sparkles,
   Check,
-  AlertCircle,
-  ExternalLink
+  AlertCircle
 } from 'lucide-react';
-import toast, { Toaster } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import { calculateAge, formatDateMask } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 
@@ -98,26 +92,7 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
   const [alergiaTexto, setAlergiaTexto] = useState('');
   const [medicamentosAtuais, setMedicamentosAtuais] = useState('');
   const [observacoesClinicas, setObservacoesClinicas] = useState('');
-
-  // Foto & Câmera
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isWebcamActive, setIsWebcamActive] = useState(false);
   const [aceitouTermoVeracidade, setAceitouTermoVeracidade] = useState(true);
-  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
-
-  // Detecta se o paciente está abrindo de dentro do WebView do WhatsApp / Instagram / Facebook
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.navigator) {
-      const ua = window.navigator.userAgent || '';
-      const isWA = /WhatsApp|FBAN|FBAV|Instagram|Line/i.test(ua) || (ua.includes('wv') && !ua.includes('Chrome/1'));
-      if (isWA) {
-        setIsInAppBrowser(true);
-      }
-    }
-  }, []);
 
   // Buscar agendamento e anamnese prévia ao carregar
   useEffect(() => {
@@ -192,7 +167,6 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
               if (rec.paciente_nome) setNome(rec.paciente_nome);
               if (rec.paciente_cpf) setCpf(rec.paciente_cpf);
               if (rec.data_nascimento) setDataNascimento(rec.data_nascimento);
-              if (rec.foto_url) setPhotoPreview(rec.foto_url);
               if (rec.medicamentos_atuais || rec.medicamentosAtuais) setMedicamentosAtuais(rec.medicamentos_atuais || rec.medicamentosAtuais);
               if (rec.observacoes_clinicas || rec.observacoesClinicas) setObservacoesClinicas(rec.observacoes_clinicas || rec.observacoesClinicas);
 
@@ -234,117 +208,6 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
 
     fetchAppointment();
   }, [initialPhone, initialAppointmentId]);
-
-  // Câmera ao vivo ou fallback input
-  const startWebcam = async () => {
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: 'user' },
-          audio: false
-        });
-        setIsWebcamActive(true);
-        setTimeout(() => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.play().catch(() => {});
-          }
-        }, 150);
-      } else {
-        cameraInputRef.current?.click();
-      }
-    } catch (err) {
-      cameraInputRef.current?.click();
-    }
-  };
-
-  const stopWebcam = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsWebcamActive(false);
-  };
-
-  const capturePhotoFromWebcam = () => {
-    if (!videoRef.current) return;
-    try {
-      const video = videoRef.current;
-      const canvas = document.createElement('canvas');
-      const maxDim = 480;
-      let width = video.videoWidth || 640;
-      let height = video.videoHeight || 480;
-
-      if (width > height) {
-        if (width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        }
-      } else {
-        if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, width, height);
-        setPhotoPreview(canvas.toDataURL('image/jpeg', 0.72));
-        toast.success("Foto capturada com sucesso!");
-      }
-    } catch (err) {
-      console.error("Erro ao capturar foto da webcam:", err);
-      toast.error("Erro ao capturar imagem.");
-    } finally {
-      stopWebcam();
-    }
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            const MAX_SIZE = 480;
-            if (width > height) {
-              if (width > MAX_SIZE) {
-                height = Math.round((height * MAX_SIZE) / width);
-                width = MAX_SIZE;
-              }
-            } else {
-              if (height > MAX_SIZE) {
-                width = Math.round((width * MAX_SIZE) / height);
-                height = MAX_SIZE;
-              }
-            }
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              setPhotoPreview(canvas.toDataURL('image/jpeg', 0.72));
-              toast.success("Foto otimizada e anexada com sucesso!");
-            }
-          } catch (err) {
-            console.error("Erro ao comprimir imagem:", err);
-            toast.error("Falha ao processar arquivo de imagem.");
-          }
-        };
-        img.src = event.target?.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   const handleCepSearch = async () => {
     const cleanCep = cep.replace(/\D/g, '');
@@ -440,7 +303,6 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
       alertas_clinicos: alertas,
       medicamentosAtuais,
       observacoesClinicas,
-      foto_url: photoPreview,
       updated_at: new Date().toISOString()
     };
 
@@ -478,13 +340,11 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
           paciente_telefone: telefone,
           paciente_cpf: cpf,
           paciente_data_nascimento: dataNascimento,
-          url_midia: photoPreview || null,
           resumo_formatado: `Pré-cadastro digital realizado. Alertas: ${alertas.join(', ') || 'Nenhum'}.`,
           dados_clinicos: {
             alertas_clinicos: alertas,
             medicamentos_atuais: medicamentosAtuais,
-            observacoes: observacoesClinicas,
-            foto_url: photoPreview
+            observacoes: observacoesClinicas
           },
           created_at: new Date().toISOString()
         }]);
@@ -519,7 +379,7 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Agendamento Confirmado!</h1>
             <p className="text-sm text-slate-500 mt-2">
-              Olá, <strong className="text-slate-800">{nome}</strong>! Seus dados de pré-cadastro e foto foram recebidos com sucesso.
+              Olá, <strong className="text-slate-800">{nome}</strong>! Seus dados de pré-cadastro foram recebidos com sucesso.
             </p>
           </div>
 
@@ -550,7 +410,6 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
 
   return (
     <div className="min-h-screen bg-slate-100 py-6 px-3 sm:px-6 flex justify-center">
-      <Toaster position="top-right" />
       <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl border border-slate-200/80 overflow-hidden">
         
         {/* Cabeçalho da Clínica */}
@@ -572,223 +431,67 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          
-          {/* Banner Didático de Ajuda para Câmera & Navegador */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300/90 p-4 sm:p-5 rounded-2xl space-y-3 text-amber-950 text-xs shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-500 text-white rounded-xl shadow-xs shrink-0 mt-0.5">
-                <Camera className="w-5 h-5" />
-              </div>
-              <div className="flex-1 space-y-1">
-                <h3 className="font-extrabold text-sm text-amber-950 flex items-center gap-1.5">
-                  📸 Dica para Tirar a Foto / Selfie:
-                </h3>
-                <p className="text-amber-900 leading-relaxed font-medium">
-                  Se você abriu pelo <strong>WhatsApp</strong> e a câmera não abrir ao clicar no botão azul, toque nos <strong>3 pontinhos (⋮)</strong> no canto superior do celular e selecione <strong>"Abrir no Chrome / Navegador"</strong>.
-                </p>
-              </div>
-            </div>
 
-            {/* Guia Visual Passo a Passo */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-semibold text-[11px] text-amber-950">
-              <div className="flex items-center gap-2 p-2 bg-white/90 rounded-xl border border-amber-200 shadow-2xs">
-                <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[10px]">1</span>
-                <span>Toque nos <strong>3 pontinhos (⋮)</strong> no topo</span>
-              </div>
-              <div className="flex items-center gap-2 p-2 bg-white/90 rounded-xl border border-amber-200 shadow-2xs">
-                <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-[10px]">2</span>
-                <span>Escolha <strong>"Abrir no Chrome / Navegador"</strong></span>
-              </div>
-            </div>
-
-            {/* Botão de Atalho Direto para o Chrome */}
-            <div className="pt-1 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const currentUrl = window.location.href;
-                  if (/android/i.test(navigator.userAgent)) {
-                    const cleanUrl = currentUrl.replace(/^https?:\/\//, '');
-                    window.location.href = `intent://${cleanUrl}#Intent;scheme=https;package=com.android.chrome;end;`;
-                  } else {
-                    window.open(currentUrl, '_blank');
-                  }
-                }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-extrabold rounded-xl text-xs transition-all shadow-md shadow-amber-600/20 active:scale-95 cursor-pointer"
-              >
-                <ExternalLink className="w-4 h-4" /> Abrir no Google Chrome (Recomendado)
-              </button>
-            </div>
-          </div>
-
-          {/* Seção 1: Dados Pessoais & Foto */}
+          {/* Seção 1: Identificação & Dados Pessoais */}
           <div className="space-y-4">
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b border-slate-100 pb-2">
-              <User className="w-4 h-4 text-blue-600" /> 1. Identificação & Foto
+              <User className="w-4 h-4 text-blue-600" /> 1. Identificação & Dados Pessoais
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-              {/* Câmera / Selfie */}
-              <div className="flex flex-col items-center justify-center p-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl min-h-[150px]">
-                {photoPreview ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-blue-600 shadow-md">
-                      <img src={photoPreview} alt="Selfie" className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => setPhotoPreview(null)}
-                        className="absolute top-1 right-1 p-1 bg-red-600 text-white rounded-full shadow-sm"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Foto Anexada
-                    </span>
-                  </div>
-                ) : isWebcamActive ? (
-                  <div className="flex flex-col items-center gap-2 w-full">
-                    <div className="relative w-full h-32 bg-black rounded-xl overflow-hidden">
-                      <video ref={videoRef} className="w-full h-full object-cover transform -scale-x-100" autoPlay playsInline muted />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={capturePhotoFromWebcam}
-                        className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold"
-                      >
-                        Capturar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={stopWebcam}
-                        className="px-3 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-bold"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center text-center space-y-2 w-full">
-                    <div className="p-2.5 bg-blue-100 text-blue-600 rounded-full">
-                      <Camera className="w-5 h-5" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-800">Foto para Recepção</span>
-                    
-                    {/* Inputs HTML5 Nativos Reais (Compatíveis com todos os celulares e navegadores) */}
-                    <input 
-                      id="anamnese-camera-input"
-                      ref={cameraInputRef}
-                      type="file" 
-                      accept="image/*" 
-                      capture="user" 
-                      onChange={handlePhotoUpload} 
-                      className="hidden" 
-                    />
-                    <input 
-                      id="anamnese-gallery-input"
-                      ref={galleryInputRef}
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handlePhotoUpload} 
-                      className="hidden" 
-                    />
-
-                    <div className="flex gap-2 w-full pt-1">
-                      {/* Botão Tirar Foto / Câmera */}
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          if (cameraInputRef.current) {
-                            cameraInputRef.current.click();
-                          }
-                        }}
-                        className="flex-1 py-2 px-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white shadow-sm active:scale-95 transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer select-none"
-                      >
-                        <Camera className="w-3.5 h-3.5" /> Tirar Foto
-                      </button>
-
-                      {/* Botão Galeria */}
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          if (galleryInputRef.current) {
-                            galleryInputRef.current.click();
-                          }
-                        }}
-                        className="flex-1 py-2 px-2 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 active:bg-slate-100 text-slate-700 shadow-sm active:scale-95 transition-all text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer select-none"
-                      >
-                        <Upload className="w-3.5 h-3.5 text-blue-600" /> Galeria
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={startWebcam}
-                      className="text-[11px] text-blue-600 hover:underline font-semibold flex items-center gap-1 pt-0.5"
-                    >
-                      <Camera className="w-3 h-3" /> Usar Câmera ao Vivo do Navegador
-                    </button>
-                  </div>
-                )}
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-600">Nome Completo *</label>
+                <input
+                  type="text"
+                  required
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600 focus:bg-white transition-all"
+                  placeholder="Seu nome completo"
+                />
               </div>
 
-              {/* Campos Textuais */}
-              <div className="md:col-span-2 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs font-bold text-slate-600">Nome Completo *</label>
+                  <label className="text-xs font-bold text-slate-600">Telefone (WhatsApp)</label>
                   <input
                     type="text"
-                    required
-                    value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-600 focus:bg-white transition-all"
-                    placeholder="Seu nome completo"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-600 focus:bg-white"
+                    placeholder="(00) 00000-0000"
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">Telefone (WhatsApp)</label>
-                    <input
-                      type="text"
-                      value={telefone}
-                      onChange={(e) => setTelefone(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-600 focus:bg-white"
-                      placeholder="(00) 00000-0000"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-600">CPF</label>
-                    <input
-                      type="text"
-                      value={cpf}
-                      onChange={(e) => setCpf(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-600 focus:bg-white"
-                      placeholder="000.000.000-00"
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-600">Data de Nascimento (DD/MM/AAAA)</label>
-                    {calculateAge(dataNascimento) !== null && (
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
-                        {calculateAge(dataNascimento)} anos
-                      </span>
-                    )}
-                  </div>
+                  <label className="text-xs font-bold text-slate-600">CPF</label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    maxLength={10}
-                    placeholder="Ex: 08/05/1966"
-                    value={dataNascimento}
-                    onChange={(e) => setDataNascimento(formatDateMask(e.target.value))}
-                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-600 focus:bg-white"
+                    value={cpf}
+                    onChange={(e) => setCpf(e.target.value)}
+                    className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-600 focus:bg-white"
+                    placeholder="000.000.000-00"
                   />
                 </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-600">Data de Nascimento (DD/MM/AAAA)</label>
+                  {calculateAge(dataNascimento) !== null && (
+                    <span className="text-[11px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">
+                      {calculateAge(dataNascimento)} anos
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="Ex: 08/05/1966"
+                  value={dataNascimento}
+                  onChange={(e) => setDataNascimento(formatDateMask(e.target.value))}
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-blue-600 focus:bg-white"
+                />
               </div>
             </div>
           </div>

@@ -41,6 +41,8 @@ interface Appointment {
   paciente_nome: string;
   paciente_telefone?: string;
   paciente_cpf?: string;
+  data_nascimento?: string;
+  foto_url?: string;
   cep?: string;
   logradouro?: string;
   numero?: string;
@@ -363,7 +365,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     if (!aptTime) aptTime = 'Horário agendado';
 
     const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
-    const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha Pré-Cadastro & Foto de Identificação:*\nPara agilizar sua recepção sem filas, acesse o link:\n${anamneseLink}\n\n💡 *Dica:* Ao abrir o link, se o celular não abrir a câmera ou foto, toque nos *3 pontinhos (⋮)* no topo e selecione *"Abrir no Chrome / Navegador"* para liberar o acesso! 📸`;
+    const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha de Pré-Cadastro Digital:*\nPara agilizar sua recepção e evitar filas na clínica, preencha seus dados rápidos pelo link:\n${anamneseLink}`;
 
     let sent = false;
 

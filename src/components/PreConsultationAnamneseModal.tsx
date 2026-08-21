@@ -635,9 +635,14 @@ export default function PreConsultationAnamneseModal({
           
           {/* Seção 1: Dados Pessoais & Foto/Selfie */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-              <User className="w-4 h-4 text-blue-600" />
-              1. Identificação do Paciente & Foto
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-600" />
+                1. Identificação do Paciente & Foto
+              </span>
+              <span className="text-[11px] font-normal normal-case text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                Foto Opcional (pode ser tirada na recepção)
+              </span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
@@ -688,8 +693,8 @@ export default function PreConsultationAnamneseModal({
                       <Camera className="w-6 h-6" />
                     </div>
                     <div className="text-center">
-                      <span className="text-xs font-bold text-slate-800 block">Identificação por Foto</span>
-                      <span className="text-[10px] text-slate-400 block">Reconhecimento na Recepção</span>
+                      <span className="text-xs font-bold text-slate-800 block">Foto de Identificação</span>
+                      <span className="text-[10px] text-slate-500 block">Opcional • Se preferir, tiramos na recepção</span>
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 w-full pt-1">
@@ -698,7 +703,7 @@ export default function PreConsultationAnamneseModal({
                         onClick={startWebcam}
                         className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all"
                       >
-                        <Video className="w-3.5 h-3.5" /> Webcam / Câmera
+                        <Video className="w-3.5 h-3.5" /> Câmera / Selfie
                       </button>
                       
                       <button

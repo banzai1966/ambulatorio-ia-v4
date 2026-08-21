@@ -1163,8 +1163,10 @@ app.get("/api/public/anamnese-data", async (req, res) => {
     const cleanPhone = phone ? String(phone).replace(/\D/g, '') : '';
     const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
     const with55 = cleanPhone.length === 10 || cleanPhone.length === 11 ? `55${cleanPhone}` : cleanPhone;
+    const cleanName = name ? String(name).trim() : '';
+    const nameWords = cleanName.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
     const normalizeStr = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-    const cleanNameNorm = normalizeStr(name ? String(name) : '');
+    const cleanNameNorm = normalizeStr(cleanName);
 
     // 1. PRIORIDADE MÁXIMA: Verificar no Cache em Memória / Disco de Anamneses Submetidas
     const memKeys = [id, cleanPhone, cleanWithout55, with55].filter(Boolean) as string[];
