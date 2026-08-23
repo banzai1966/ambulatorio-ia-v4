@@ -28,7 +28,8 @@ import {
   DollarSign,
   Wallet,
   Receipt,
-  CheckCircle2
+  CheckCircle2,
+  MoreVertical
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -100,6 +101,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Estados da Baixa de Pagamento Rápido na Recepção
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -165,18 +167,20 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   const getStatusBadgeClass = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'confirmado':
-        return 'bg-amber-100 text-amber-900 border-amber-300 font-bold'; // Amarelo
+        return 'bg-blue-50 text-blue-800 border-blue-200/80';
       case 'presente':
       case 'aguardando':
-        return 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold'; // Verde
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200/80';
       case 'em atendimento':
-        return 'bg-purple-100 text-purple-900 border-purple-300 font-bold'; // Roxo
+        return 'bg-indigo-50 text-indigo-800 border-indigo-200/80';
       case 'atendido':
-        return 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold'; // Indigo
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'cancelado':
+        return 'bg-rose-50 text-rose-700 border-rose-200';
       case 'agendado':
       case 'não confirmado':
       default:
-        return 'bg-blue-100 text-blue-900 border-blue-300 font-bold'; // Azul
+        return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
@@ -1002,171 +1006,239 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               <p className="text-slate-500">Clique em "Novo Agendamento" para começar.</p>
             </div>
           ) : (
-            appointments.map((app) => (
-              <div key={app.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-clinical-blue/30 transition-all group">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-clinical-blue group-hover:bg-clinical-blue group-hover:text-white transition-colors overflow-hidden shrink-0 border border-slate-200/80">
-                    {app.foto_url ? (
-                      <img 
-                        src={app.foto_url} 
-                        alt={app.paciente_nome} 
-                        className="w-full h-full object-cover rounded-2xl" 
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <User size={24} />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-bold text-lg text-slate-900">{app.paciente_nome}</h3>
-                      <select
-                        value={(app.status || 'Agendado').toLowerCase() === 'confirmado' ? 'Confirmado' : (app.status || 'Agendado')}
-                        onChange={(e) => handleStatusChange(app.id, e.target.value)}
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border outline-none cursor-pointer transition-all shadow-2xs ${getStatusBadgeClass(app.status)}`}
-                        title="Clique para alterar o status do agendamento"
-                      >
-                        <option value="Agendado" className="bg-white text-slate-900 font-normal">Agendado</option>
-                        <option value="Confirmado" className="bg-white text-slate-900 font-normal">Confirmado</option>
-                        <option value="Em Atendimento" className="bg-white text-slate-900 font-normal">Em Atendimento</option>
-                        <option value="Atendido" className="bg-white text-slate-900 font-normal">Atendido</option>
-                        <option value="Cancelado" className="bg-white text-slate-900 font-normal">Cancelado</option>
-                      </select>
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                        {app.convenio || 'Particular'}
-                      </span>
+            appointments.map((app) => {
+              const isMenuOpen = activeActionMenuId === app.id;
+              const isPaid = (app.status_pagamento || '').startsWith('Pago');
+              const isFree = app.status_pagamento === 'Cortesia / Isento';
+              const timeDate = new Date(app.data_hora_inicio);
+              const timeFormatted = !isNaN(timeDate.getTime()) 
+                ? `${timeDate.getHours().toString().padStart(2, '0')}:${timeDate.getMinutes().toString().padStart(2, '0')}`
+                : '--:--';
+              const dateFormatted = !isNaN(timeDate.getTime())
+                ? timeDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+                : '';
 
-                      {/* Badge de Pagamento / Status Financeiro */}
-                      {app.status_pagamento === 'Cortesia / Isento' ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          Cortesia / Isento
-                        </span>
+              return (
+                <div 
+                  key={app.id} 
+                  className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-200/90 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative group"
+                >
+                  {/* LADO ESQUERDO: HORÁRIO + AVATAR + DADOS CLÍNICOS */}
+                  <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                    
+                    {/* Bloco de Horário */}
+                    <div className="flex flex-col items-center justify-center bg-slate-50 border border-slate-200/80 rounded-2xl px-3 py-2 text-center min-w-[64px] shrink-0 group-hover:bg-blue-50/60 group-hover:border-blue-200/60 transition-colors">
+                      <span className="text-xs font-black text-slate-900 tracking-tight">
+                        {timeFormatted}
+                      </span>
+                      <span className="text-[10px] font-semibold text-slate-400">
+                        {dateFormatted}
+                      </span>
+                    </div>
+
+                    {/* Avatar com foto ou inicial */}
+                    <div className="w-11 h-11 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl flex items-center justify-center text-blue-700 font-extrabold text-xs shrink-0 overflow-hidden shadow-2xs">
+                      {app.foto_url ? (
+                        <img 
+                          src={app.foto_url} 
+                          alt={app.paciente_nome} 
+                          className="w-full h-full object-cover rounded-2xl" 
+                          referrerPolicy="no-referrer"
+                        />
                       ) : (
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${(app.status_pagamento || '').startsWith('Pago') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-                          {(app.status_pagamento || '').startsWith('Pago') 
-                            ? (app.status_pagamento || 'Pago') 
-                            : (app.status_pagamento || 'Pendente no Balcão')
-                          }
-                          {app.valor_consulta ? ` • R$ ${app.valor_consulta}` : ' • R$ 250,00'}
-                        </span>
-                      )}
-
-                      {app.tipo_consulta && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600">
-                          {app.tipo_consulta}
-                        </span>
+                        app.paciente_nome ? app.paciente_nome.charAt(0).toUpperCase() : <User size={18} />
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mt-1">
-                      <span className="flex items-center gap-1.5">
-                        <Clock size={14} /> {new Date(app.data_hora_inicio).getHours().toString().padStart(2, '0')}:{new Date(app.data_hora_inicio).getMinutes().toString().padStart(2, '0')}
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <Calendar size={14} /> {new Date(app.data_hora_inicio).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'})}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-clinical-blue font-medium">
-                        <Stethoscope size={14} /> {app.medico_nome} {app.medico_especialidade && `(${app.medico_especialidade})`}
-                      </span>
-                      {app.paciente_cpf && (
-                        <span className="flex items-center gap-1.5 text-slate-600 font-medium bg-slate-100 px-2 py-0.5 rounded-md text-xs">
-                          <ShieldCheck size={13} className="text-slate-500" /> CPF: {app.paciente_cpf}
+                    {/* Dados do Paciente e Consulta */}
+                    <div className="space-y-1 min-w-0">
+                      
+                      {/* Nome + Badges de Status & Pagamento */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-extrabold text-base text-slate-900 tracking-tight truncate">
+                          {app.paciente_nome}
+                        </h3>
+
+                        {/* Status da Consulta */}
+                        <select
+                          value={(app.status || 'Agendado').toLowerCase() === 'confirmado' ? 'Confirmado' : (app.status || 'Agendado')}
+                          onChange={(e) => handleStatusChange(app.id, e.target.value)}
+                          className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border outline-none cursor-pointer transition-all ${getStatusBadgeClass(app.status)}`}
+                          title="Clique para alterar o status do agendamento"
+                        >
+                          <option value="Agendado" className="bg-white text-slate-900 font-normal">Agendado</option>
+                          <option value="Confirmado" className="bg-white text-slate-900 font-normal">Confirmado</option>
+                          <option value="Em Atendimento" className="bg-white text-slate-900 font-normal">Em Atendimento</option>
+                          <option value="Atendido" className="bg-white text-slate-900 font-normal">Atendido</option>
+                          <option value="Cancelado" className="bg-white text-slate-900 font-normal">Cancelado</option>
+                        </select>
+
+                        {/* Convênio / Particular */}
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200/60">
+                          {app.convenio || 'Particular'}
                         </span>
-                      )}
-                      {app.data_nascimento && (
-                        <span className="flex items-center gap-1.5 text-blue-700 font-medium bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-md text-xs">
-                          🎂 {app.data_nascimento} {calculateAge(app.data_nascimento) !== null ? `(${calculateAge(app.data_nascimento)} anos)` : ''}
+
+                        {/* Status de Pagamento Elegante (Clicável para Baixa no Caixa) */}
+                        {isFree ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                            Cortesia
+                          </span>
+                        ) : isPaid ? (
+                          <button
+                            type="button"
+                            onClick={() => openPaymentModal(app)}
+                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Clique para ver ou alterar detalhes do pagamento"
+                          >
+                            <CheckCircle2 size={11} className="text-emerald-600" />
+                            {app.status_pagamento} {app.valor_consulta ? `• R$ ${app.valor_consulta}` : ''}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openPaymentModal(app)}
+                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Clique para receber / registrar pagamento"
+                          >
+                            <CreditCard size={11} className="text-amber-600" />
+                            Pendente {app.valor_consulta ? `• R$ ${app.valor_consulta}` : '• R$ 250,00'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Médico, Especialidade, Idade e Queixa */}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                        <span className="flex items-center gap-1 text-blue-700 font-semibold">
+                          <Stethoscope size={13} className="text-blue-600" /> 
+                          {app.medico_nome || 'Dr(a). da Clínica'} {app.medico_especialidade && `(${app.medico_especialidade})`}
                         </span>
-                      )}
-                      {(app.logradouro || app.cidade) && (
-                        <span className="flex items-center gap-1.5 text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-xs">
-                          <MapPin size={13} className="text-rose-500" /> 
-                          {[app.logradouro, app.numero, app.bairro, app.cidade && `${app.cidade}${app.estado ? `/${app.estado}` : ''}`].filter(Boolean).join(', ')}
-                        </span>
+
+                        {app.data_nascimento && (
+                          <span className="flex items-center gap-1 text-slate-500 text-[11px]">
+                            🎂 {app.data_nascimento} {calculateAge(app.data_nascimento) !== null ? `(${calculateAge(app.data_nascimento)} anos)` : ''}
+                          </span>
+                        )}
+
+                        {app.motivo && (
+                          <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md text-[11px] font-medium truncate max-w-xs">
+                            {app.motivo}
+                          </span>
+                        )}
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* LADO DIREITO: INICIAR ATENDIMENTO (PRINCIPAL) + AÇÕES SECUNDÁRIAS */}
+                  <div className="flex items-center gap-2 self-end lg:self-center shrink-0">
+                    
+                    {/* Botão de Chat WhatsApp */}
+                    {app.paciente_telefone && (
+                      <button 
+                        onClick={() => onOpenChat(app.paciente_telefone!)}
+                        className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-2xl border border-slate-200/70 transition-all shadow-2xs"
+                        title="Abrir WhatsApp deste paciente"
+                      >
+                        <MessageSquare size={16} />
+                      </button>
+                    )}
+
+                    {/* Menu Mais Opções (•••) */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setActiveActionMenuId(isMenuOpen ? null : app.id)}
+                        className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-2xl border border-slate-200/70 transition-all shadow-2xs"
+                        title="Mais opções do agendamento"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+
+                      {isMenuOpen && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-20" 
+                            onClick={() => setActiveActionMenuId(null)}
+                          />
+                          <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100">
+                            <button
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                handleSendConfirmation(app);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Send size={14} className="text-blue-600" />
+                              Reenviar WhatsApp
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                setSelectedAppointmentForAnamnese(app);
+                                setIsAnamneseModalOpen(true);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <ClipboardList size={14} className="text-indigo-600" />
+                              Visualizar Ficha Prévia
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                openPaymentModal(app);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <CreditCard size={14} className="text-amber-600" />
+                              {isPaid ? 'Ver / Editar Pagamento' : 'Dar Baixa no Caixa'}
+                            </button>
+
+                            <div className="border-t border-slate-100 my-1" />
+
+                            <button
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                handleDeleteAppointment(app.id, app.paciente_nome);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                              Cancelar Agendamento
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
-                    <p className="text-sm text-slate-600 mt-2 bg-slate-50 px-3 py-1 rounded-lg inline-block">{app.motivo}</p>
+
+                    {/* BOTÃO PRINCIPAL: INICIAR ATENDIMENTO (ABRE A ANAMNESE COMPLETA) */}
+                    <button 
+                      onClick={() => {
+                        onStartConsultation(
+                          app.paciente_nome, 
+                          app.paciente_telefone, 
+                          app.motivo, 
+                          app.medico_id, 
+                          app.id, 
+                          app.convenio || 'Particular', 
+                          app.medico_especialidade || 'Clínico Geral',
+                          app.status_pagamento,
+                          app.valor_consulta,
+                          app.data_nascimento,
+                          app.paciente_cpf
+                        );
+                      }}
+                      className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-2xl text-xs flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                    >
+                      <FileText size={15} />
+                      <span>Iniciar Atendimento</span>
+                      <ChevronRight size={15} className="opacity-70" />
+                    </button>
+
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => openPaymentModal(app)}
-                    className={`flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
-                      (app.status_pagamento || '').startsWith('Pago')
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-                        : 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20 animate-pulse'
-                    }`}
-                    title="Realizar Cobrança / Baixa no Caixa da Recepção"
-                  >
-                    <CreditCard size={14} />
-                    {(app.status_pagamento || '').startsWith('Pago') ? 'Pago' : 'Receber'}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setSelectedAppointmentForAnamnese(app);
-                      setIsAnamneseModalOpen(true);
-                    }}
-                    className="flex items-center gap-1 px-3 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold transition-all shadow-xs"
-                    title="Abrir Anamnese Pré-Consulta preenchida com os dados do agendamento"
-                  >
-                    <ClipboardList size={14} /> Ficha Pré-Consulta
-                  </button>
-
-                  <button
-                    onClick={() => handleSendConfirmation(app)}
-                    className="flex items-center gap-1 px-3 py-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-all shadow-xs"
-                    title="Disparar confirmação de consulta com link de Anamnese no WhatsApp"
-                  >
-                    <Send size={14} /> Confirmação
-                  </button>
-
-                  <button 
-                    onClick={() => {
-                      if (app.paciente_telefone) {
-                        onOpenChat(app.paciente_telefone);
-                      } else {
-                        toast.error("Paciente sem telefone cadastrado.");
-                      }
-                    }}
-                    className="p-3 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
-                    title="Enviar Mensagem"
-                  >
-                    <MessageSquare size={20} />
-                  </button>
-
-                  <button 
-                    onClick={() => handleDeleteAppointment(app.id, app.paciente_nome)}
-                    className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                    title="Remover / Cancelar Agendamento"
-                  >
-                    <Trash2 size={20} />
-                  </button>
-                  <button 
-                    onClick={() => {
-                      console.log("Agenda - Iniciar Atendimento - paciente:", app.paciente_nome, "telefone:", app.paciente_telefone, "convenio:", app.convenio, "especialidade:", app.medico_especialidade);
-                      onStartConsultation(
-                        app.paciente_nome, 
-                        app.paciente_telefone, 
-                        app.motivo, 
-                        app.medico_id, 
-                        app.id, 
-                        app.convenio || 'Particular', 
-                        app.medico_especialidade || 'Clínico Geral',
-                        app.status_pagamento,
-                        app.valor_consulta,
-                        app.data_nascimento,
-                        app.paciente_cpf
-                      );
-                    }}
-                    className="bg-slate-900 text-white px-6 py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all font-bold group-hover:bg-clinical-blue"
-                  >
-                    <FileText size={18} /> Iniciar Atendimento
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

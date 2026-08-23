@@ -625,10 +625,10 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
   if (loading && messages.length === 0) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs h-[650px] flex items-center justify-center p-8">
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs h-[650px] flex items-center justify-center p-8">
         <div className="flex flex-col items-center gap-3 text-slate-500">
-          <Loader2 size={32} className="animate-spin text-emerald-600" />
-          <p className="text-sm font-semibold">Carregando painel do WhatsApp Web...</p>
+          <Loader2 size={32} className="animate-spin text-blue-600" />
+          <p className="text-sm font-semibold">Carregando painel de mensagens...</p>
         </div>
       </div>
     );
@@ -637,20 +637,20 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const currentPatientName = patientHistory[0]?.paciente_nome_completo || (selectedPhone ? patientNamesMap[normalizePhone(selectedPhone)] : null) || selectedPhone;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex h-[680px] relative overflow-hidden font-sans">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs flex h-[680px] relative overflow-hidden font-sans">
       
-      {/* PAINEL ESQUERDO: LISTA DE CONVERSAS (WhatsApp Web) */}
-      <div className={`w-full md:w-80 lg:w-96 border-r border-slate-200 flex flex-col bg-slate-50 ${selectedPhone ? 'hidden md:flex' : 'flex'}`}>
+      {/* PAINEL ESQUERDO: LISTA DE CONVERSAS */}
+      <div className={`w-full md:w-80 lg:w-96 border-r border-slate-200/70 flex flex-col bg-slate-50/50 ${selectedPhone ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Topo do Painel de Contatos */}
-        <div className="p-3.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between sticky top-0 z-10">
+        <div className="p-3.5 bg-white border-b border-slate-200/70 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
-              WA
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+              <MessageSquare size={18} />
             </div>
             <div>
-              <h2 className="font-extrabold text-xs text-slate-800">WhatsApp Clínica</h2>
-              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+              <h2 className="font-extrabold text-xs text-slate-900">Mensagens & WhatsApp</h2>
+              <span className="text-[10px] font-bold text-blue-600 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Conectado
               </span>
@@ -660,7 +660,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
           <div className="flex items-center gap-1">
             <button 
               onClick={() => setIsNewChatModalOpen(true)}
-              className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+              className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
               title="Iniciar nova conversa com um telefone"
             >
               <UserPlus size={15} />
@@ -669,7 +669,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
             
             <button 
               onClick={() => setIsQrModalOpen(true)}
-              className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-slate-200 rounded-xl transition-all"
+              className="p-2 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-xl transition-all"
               title="QR Code / Status da Conexão"
             >
               <QrCode size={18} />
@@ -680,10 +680,10 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                 fetchMessages();
                 fetchPatientNames();
               }} 
-              className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-slate-200 rounded-xl transition-all"
+              className="p-2 text-slate-500 hover:text-blue-700 hover:bg-slate-100 rounded-xl transition-all"
               title="Atualizar conversas"
             >
-              <RefreshCw size={18} className={loading ? 'animate-spin text-emerald-600' : ''} />
+              <RefreshCw size={18} className={loading ? 'animate-spin text-blue-600' : ''} />
             </button>
           </div>
         </div>
@@ -697,7 +697,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
               placeholder="Buscar por nome ou telefone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-slate-100 rounded-xl text-xs font-medium text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-medium text-slate-700 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
             {searchTerm && (
               <button onClick={() => setSearchTerm('')} className="absolute right-2.5 text-slate-400 hover:text-slate-600">
@@ -716,7 +716,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
               <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">Clique em "Nova" para digitar um número de WhatsApp.</p>
               <button 
                 onClick={() => setIsNewChatModalOpen(true)}
-                className="mt-3 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all"
+                className="mt-3 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all"
               >
                 + Iniciar Conversa
               </button>
@@ -741,12 +741,12 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                   onClick={() => setSelectedPhone(contact.phone)}
                   className={`p-3.5 cursor-pointer transition-all flex items-center gap-3 border-l-4 group ${
                     isSelected 
-                      ? 'bg-emerald-50/80 border-emerald-600 font-semibold' 
+                      ? 'bg-blue-50/70 border-blue-600 font-semibold' 
                       : 'hover:bg-slate-50 border-transparent'
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                    isSelected ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
+                  <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                    isSelected ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-700'
                   }`}>
                     {hasName ? displayName.charAt(0).toUpperCase() : <Phone size={16} />}
                   </div>
@@ -761,7 +761,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
                     <div className="flex items-center gap-1 text-[11px] text-slate-500">
                       {contact.lastMessage.direcao === 'enviada' && (
-                        <CheckCheck size={14} className="text-emerald-600 shrink-0" />
+                        <CheckCheck size={14} className="text-blue-600 shrink-0" />
                       )}
                       <p className="truncate text-slate-500 font-normal">{msgText}</p>
                     </div>
@@ -787,13 +787,13 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         </div>
       </div>
 
-      {/* PAINEL DIREITO: TELA DE CHAT & MENSAGENS (WhatsApp Web Style) */}
-      <div className={`flex-1 flex flex-col bg-[#efeae2] relative ${selectedPhone ? 'flex' : 'hidden md:flex items-center justify-center'}`}>
+      {/* PAINEL DIREITO: TELA DE CHAT & MENSAGENS */}
+      <div className={`flex-1 flex flex-col bg-[#f8fafc] relative ${selectedPhone ? 'flex' : 'hidden md:flex items-center justify-center'}`}>
         
         {selectedPhone ? (
           <>
             {/* Cabeçalho da Conversa */}
-            <div className="p-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between z-10 shadow-2xs">
+            <div className="p-3 bg-white border-b border-slate-200/70 flex items-center justify-between z-10 shadow-2xs">
               <div className="flex items-center gap-3 min-w-0">
                 <button 
                   onClick={() => setSelectedPhone(null)} 
@@ -802,7 +802,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                   <ArrowLeft size={18} />
                 </button>
 
-                <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
+                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
                   {currentPatientName ? currentPatientName.charAt(0).toUpperCase() : <User size={16} />}
                 </div>
 
@@ -818,16 +818,16 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
               {/* Botões do Topo do Chat */}
               <div className="flex items-center gap-2 shrink-0">
-                <div className="flex bg-slate-200/80 p-0.5 rounded-xl text-xs font-bold">
+                <div className="flex bg-slate-100 p-0.5 rounded-xl text-xs font-bold border border-slate-200/70">
                   <button 
                     onClick={() => setActiveTab('chat')} 
-                    className={`px-3 py-1 rounded-lg transition-all ${activeTab === 'chat' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                    className={`px-3 py-1 rounded-lg transition-all ${activeTab === 'chat' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
                   >
                     Conversa
                   </button>
                   <button 
                     onClick={() => setActiveTab('history')} 
-                    className={`px-3 py-1 rounded-lg transition-all ${activeTab === 'history' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
+                    className={`px-3 py-1 rounded-lg transition-all ${activeTab === 'history' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}`}
                   >
                     Prontuário ({patientHistory.length})
                   </button>
@@ -835,7 +835,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
                 <button 
                   onClick={() => onSchedule(currentPatientName || '', selectedPhone || '')}
-                  className="bg-clinical-blue hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
                   title="Criar agendamento para este paciente"
                 >
                   <Calendar size={13} />
@@ -852,11 +852,11 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
               </div>
             </div>
 
-            {/* ÁREA DE MENSAGENS (BALÕES ESTILO WHATSAPP) */}
+            {/* ÁREA DE MENSAGENS (BALÕES REFINADOS) */}
             {activeTab === 'chat' ? (
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2.5 flex flex-col bg-[#efeae2] bg-opacity-90">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2.5 flex flex-col bg-[#f1f5f9]/70">
                 
-                <div className="mx-auto my-2 px-3 py-1 bg-white/80 rounded-full border border-slate-200/60 text-[10px] font-bold text-slate-500 shadow-2xs">
+                <div className="mx-auto my-2 px-3.5 py-1 bg-white rounded-full border border-slate-200/80 text-[10px] font-bold text-slate-500 shadow-2xs">
                   Criptografia de ponta a ponta via Evolution WhatsApp API
                 </div>
 
@@ -899,17 +899,17 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                     return (
                       <div 
                         key={msg.id} 
-                        className={`p-3 rounded-2xl text-xs max-w-[82%] sm:max-w-[70%] shadow-2xs relative group transition-all ${
+                        className={`p-3.5 rounded-2xl text-xs max-w-[82%] sm:max-w-[70%] shadow-2xs relative group transition-all ${
                           isSent 
-                            ? 'bg-[#dcf8c6] text-slate-900 self-end rounded-tr-none border border-emerald-100/80 ml-auto' 
-                            : 'bg-white text-slate-900 self-start rounded-tl-none border border-slate-200/80'
+                            ? 'bg-[#eaf2fc] text-slate-900 self-end rounded-tr-none ml-auto border border-blue-200/90' 
+                            : 'bg-white text-slate-800 self-start rounded-tl-none border border-slate-200/80'
                         }`}
                       >
                         {isCall ? (
-                          <div className="flex items-center gap-2 text-red-600 font-bold py-1">
+                          <div className={`flex items-center gap-2 font-bold py-1 ${isSent ? 'text-blue-900' : 'text-red-600'}`}>
                             <Activity size={16} />
                             <span>Chamada {msgText.includes('missed') || mTipo.includes('missed') ? 'Perdida' : 'Recebida'}</span>
-                            {msg.mensagem && <span className="text-[10px] font-normal text-slate-500">({msg.mensagem})</span>}
+                            {msg.mensagem && <span className={`text-[10px] font-normal ${isSent ? 'text-slate-600' : 'text-slate-500'}`}>({msg.mensagem})</span>}
                           </div>
                         ) : mUrl && isImage ? (
                           <div className="flex flex-col gap-2">
@@ -923,7 +923,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                               }}
                             />
                             {cleanMessageText(msg.mensagem) && (
-                              <p className="text-slate-800 leading-relaxed font-normal">{cleanMessageText(msg.mensagem)}</p>
+                              <p className={`leading-relaxed font-normal ${isSent ? 'text-slate-900' : 'text-slate-800'}`}>{cleanMessageText(msg.mensagem)}</p>
                             )}
                           </div>
                         ) : mUrl && isDocument ? (
@@ -932,10 +932,14 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                               href={formatMediaUrl(mUrl, 'document')} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2.5 bg-white/80 p-2.5 rounded-xl hover:bg-white transition-colors border border-slate-200/80"
+                              className={`flex items-center gap-2.5 p-2.5 rounded-xl transition-colors border ${
+                                isSent 
+                                  ? 'bg-white/80 text-slate-900 hover:bg-white border-blue-200/80' 
+                                  : 'bg-slate-50 text-slate-800 hover:bg-slate-100 border-slate-200/80'
+                              }`}
                             >
-                              <FileText size={22} className="text-emerald-700 shrink-0" />
-                              <span className="truncate max-w-[200px] font-semibold text-slate-800">{msg.mensagem && msg.mensagem !== '[Documento]' ? msg.mensagem : 'Documento / PDF'}</span>
+                              <FileText size={22} className="text-blue-600 shrink-0" />
+                              <span className="truncate max-w-[200px] font-semibold">{msg.mensagem && msg.mensagem !== '[Documento]' ? msg.mensagem : 'Documento / PDF'}</span>
                             </a>
                           </div>
                         ) : isAudio && mUrl && (mUrl.startsWith('http') || mUrl.length > 100) ? (
@@ -951,18 +955,18 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                             {cleanMessageText(msg.mensagem) && <p className="text-[10px] opacity-70 italic">{cleanMessageText(msg.mensagem)}</p>}
                           </div>
                         ) : (
-                          <p className="whitespace-pre-wrap leading-relaxed font-normal text-slate-900">{cleanMessageText(msg.mensagem)}</p>
+                          <p className="whitespace-pre-wrap leading-relaxed font-normal">{cleanMessageText(msg.mensagem)}</p>
                         )}
 
-                        <div className="flex items-center justify-end gap-1 mt-1 text-[10px] text-slate-400">
+                        <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isSent ? 'text-slate-500' : 'text-slate-400'}`}>
                           <span>{formatMessageTimestamp(msg.created_at)}</span>
-                          {isSent && <CheckCheck size={13} className="text-emerald-600" />}
+                          {isSent && <CheckCheck size={13} className="text-blue-600" />}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteMessage(msg.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 p-0.5 text-slate-400 hover:text-red-600 rounded hover:bg-black/5"
+                            className={`opacity-0 group-hover:opacity-100 transition-opacity ml-1 p-0.5 rounded hover:bg-black/5 ${isSent ? 'text-slate-400 hover:text-red-600' : 'text-slate-400 hover:text-red-600'}`}
                             title="Apagar esta mensagem"
                           >
                             <Trash2 size={12} />
@@ -978,18 +982,18 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
                 {patientHistory.length > 0 ? (
                   patientHistory.map(record => (
-                    <div key={record.id} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-2xs hover:border-emerald-200 transition-all">
+                    <div key={record.id} className="p-4 bg-white rounded-2xl border border-slate-200/80 shadow-2xs hover:border-blue-200 transition-all">
                       <div className="flex justify-between items-center mb-2 pb-2 border-b border-slate-100">
                         <div className="font-extrabold text-xs text-slate-800">
                           {record.data_consulta ? new Date(record.data_consulta).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Consulta'} - {record.especialidade || 'Atendimento'}
                         </div>
-                        <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-clinical-blue rounded-full">
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">
                           {record.paciente_status || 'Realizado'}
                         </span>
                       </div>
 
                       <div className="text-[11px] text-slate-500 mb-2 flex items-center gap-1.5 font-medium">
-                        <Stethoscope size={13} className="text-emerald-600" />
+                        <Stethoscope size={13} className="text-blue-600" />
                         Médico: {record.profissional_responsavel || 'Não informado'}
                       </div>
 
@@ -1001,7 +1005,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                           </div>
                         )}
                         {record.sugestao_conduta && (
-                          <div className="text-emerald-900 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100">
+                          <div className="text-blue-950 bg-blue-50/70 p-2.5 rounded-xl border border-blue-100">
                             <b className="font-bold">Conduta / Plano:</b> {record.sugestao_conduta}
                           </div>
                         )}
@@ -1019,13 +1023,13 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
             )}
 
             {/* BARRA DE ENVIO DE MENSAGENS (FOOTER DO CHAT) */}
-            <div className="p-3 bg-slate-100 border-t border-slate-200 flex flex-col gap-2">
+            <div className="p-3 bg-white border-t border-slate-200/70 flex flex-col gap-2">
               {pendingMedia && (
-                <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 shadow-2xs">
                   {pendingMedia.type === 'image' ? (
                     <img src={`data:image/jpeg;base64,${pendingMedia.base64}`} alt="Preview" className="w-9 h-9 rounded-lg object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
+                    <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
                       <FileText size={18} />
                     </div>
                   )}
@@ -1041,10 +1045,10 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isSendingMedia}
-                  className="p-2.5 hover:bg-slate-200 text-slate-600 rounded-xl transition-all disabled:opacity-50 shrink-0"
+                  className="p-2.5 hover:bg-slate-100 text-slate-600 rounded-xl transition-all disabled:opacity-50 shrink-0"
                   title="Anexar foto ou arquivo"
                 >
-                  {isSendingMedia ? <Loader2 size={18} className="animate-spin text-emerald-600" /> : <Paperclip size={18} />}
+                  {isSendingMedia ? <Loader2 size={18} className="animate-spin text-blue-600" /> : <Paperclip size={18} />}
                 </button>
                 <input 
                   ref={fileInputRef}
@@ -1067,12 +1071,12 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleReply(selectedPhone)}
-                      className="flex-1 p-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                      className="flex-1 p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                       placeholder="Escreva uma mensagem..."
                     />
                     <button 
                       onClick={startRecordingAudio}
-                      className="p-2.5 text-slate-600 hover:bg-slate-200 rounded-xl transition-all shrink-0"
+                      className="p-2.5 text-slate-600 hover:bg-slate-100 rounded-xl transition-all shrink-0"
                       title="Gravar mensagem de áudio"
                     >
                       <Mic size={18} />
@@ -1083,7 +1087,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                 <button 
                   onClick={() => handleReply(selectedPhone)} 
                   disabled={isSendingMessage || isSendingMedia || isRecordingAudio || (!replyText.trim() && !pendingMedia)}
-                  className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-xs transition-all shrink-0"
+                  className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-xs transition-all shrink-0 active:scale-95"
                 >
                   {(isSendingMessage || isSendingMedia) ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
                   <span className="hidden sm:inline">Enviar</span>
@@ -1094,16 +1098,16 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         ) : (
           /* Tela Vazia quando nenhuma conversa é selecionada */
           <div className="text-center p-8 flex flex-col items-center justify-center h-full">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mb-3 shadow-xs">
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mb-3 shadow-xs border border-blue-100">
               <MessageSquare size={32} />
             </div>
-            <h3 className="text-base font-extrabold text-slate-800">WhatsApp Ambulatório IA</h3>
+            <h3 className="text-base font-extrabold text-slate-800">WhatsApp & Mensagens Ambulatório IA</h3>
             <p className="text-xs text-slate-500 max-w-xs mt-1">
               Selecione uma conversa ao lado ou clique no botão **"Nova"** para falar diretamente com qualquer número.
             </p>
             <button 
               onClick={() => setIsNewChatModalOpen(true)}
-              className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-1.5 shadow-xs"
+              className="mt-4 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
             >
               <UserPlus size={15} />
               Iniciar Nova Conversa
@@ -1112,13 +1116,13 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         )}
       </div>
 
-      {/* MODAL DE INICIAR NOVA CONVERSA (POR NÚMERO DE TELEFONE) */}
+      {/* MODAL DE INICIAR NOVA CONVERSA */}
       {isNewChatModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-5 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-3xl p-5 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
+                <div className="p-2.5 bg-blue-50 text-blue-600 rounded-2xl">
                   <UserPlus size={18} />
                 </div>
                 <div>
@@ -1141,7 +1145,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
                   placeholder="Ex: 11999998888 ou 5511999998888"
                   value={newChatPhone}
                   onChange={(e) => setNewChatPhone(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
                   autoFocus
                   required
                 />
@@ -1150,31 +1154,31 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Nome do Paciente (Opcional)
+                  Nome do Paciente / Contato (Opcional)
                 </label>
                 <input 
                   type="text"
-                  placeholder="Ex: Maria das Dores"
+                  placeholder="Ex: Maria da Silva"
                   value={newChatName}
                   onChange={(e) => setNewChatName(e.target.value)}
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-blue-500 focus:bg-white transition-all"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button 
-                  type="button" 
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
                   onClick={() => setIsNewChatModalOpen(false)}
-                  className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
                 >
                   Cancelar
                 </button>
-                <button 
+                <button
                   type="submit"
-                  className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1.5"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs flex items-center justify-center gap-1"
                 >
-                  <Send size={14} />
-                  Abrir Conversa
+                  <MessageSquare size={14} />
+                  Abrir Chat
                 </button>
               </div>
             </form>

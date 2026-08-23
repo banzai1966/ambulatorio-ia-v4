@@ -26,7 +26,8 @@ import {
   Zap,
   Printer,
   Brain,
-  Leaf
+  Leaf,
+  Layers
 } from 'lucide-react';
 import PatientMediaGallery from './PatientMediaGallery';
 import NeurologicalExamForm from './NeurologicalExamForm';
@@ -270,15 +271,29 @@ export default function PatientDossierView({
     currentRecord?.alertas_copiloto || currentRecord?.alertas_clinicos || []
   );
 
-  // Garante que o módulo do Dr. Carlos permaneça focado em Neurologia / Integrativa
-  useEffect(() => {
-    if (examMode === 'biological_dentistry') {
-      setExamMode('neurological');
-      if (activeTab === 'especialidade') {
+  // Perfil Clínico / Especialidade Ativa (Dr. Carlos x Dra. Lucy x Modo Desenvolvedor)
+  const [specialtyView, setSpecialtyView] = useState<'dr_carlos' | 'dra_lucy' | 'full'>(() => {
+    const saved = localStorage.getItem('clinic_active_specialty_view');
+    if (saved === 'dra_lucy' || saved === 'full' || saved === 'dr_carlos') return saved;
+    if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.includes('odonto') || currentRecord?.dados_especialidade?.implantes_zirconia !== undefined) {
+      return 'dra_lucy';
+    }
+    return 'dr_carlos';
+  });
+
+  const handleSwitchSpecialtyView = (newView: 'dr_carlos' | 'dra_lucy' | 'full') => {
+    setSpecialtyView(newView);
+    localStorage.setItem('clinic_active_specialty_view', newView);
+    if (newView === 'dra_lucy') {
+      setExamMode('biological_dentistry');
+      setActiveTab('especialidade');
+    } else if (newView === 'dr_carlos') {
+      if (examMode === 'biological_dentistry') {
+        setExamMode('neurological');
         setActiveTab('evolucao');
       }
     }
-  }, [examMode, setExamMode, activeTab]);
+  };
 
   const effectiveName = (patientName && patientName !== 'Consulta em Andamento' && patientName !== 'PACIENTE NÃO INFORMADO')
     ? patientName 
@@ -674,7 +689,7 @@ export default function PatientDossierView({
                       {effectivePaymentStatus}{effectivePaymentValue ? ` • R$ ${effectivePaymentValue}` : ''}
                     </span>
                   )}
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                     {patientStatus}
                   </span>
                 </div>
@@ -752,6 +767,7 @@ export default function PatientDossierView({
             </div>
 
             {/* Clean Action Command Bar */}
+            {/* Clean Action Command Bar */}
             <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
               {/* Primary IA Dictation */}
               <button
@@ -760,13 +776,13 @@ export default function PatientDossierView({
                   if (isRecording) stopRecording();
                   else startRecording();
                 }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 border ${
                   isRecording 
-                    ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse' 
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 animate-pulse' 
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-950 border-blue-200/90'
                 }`}
               >
-                <Mic size={16} />
+                <Mic size={16} className={isRecording ? "text-white animate-bounce" : "text-blue-600"} />
                 {isRecording ? 'Ouvindo...' : 'Atender IA'}
               </button>
 
@@ -778,7 +794,7 @@ export default function PatientDossierView({
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 ${
                   saveSuccess 
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                    : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    : 'bg-slate-500 hover:bg-slate-600 text-white shadow-xs'
                 }`}
               >
                 <CheckCircle2 size={16} />
@@ -791,12 +807,12 @@ export default function PatientDossierView({
                 onClick={() => setShowVitalMonitor(!showVitalMonitor)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${
                   showVitalMonitor
-                    ? 'bg-cyan-50 text-cyan-800 border-cyan-300 ring-1 ring-cyan-400'
+                    ? 'bg-blue-50 text-blue-900 border-blue-300 ring-1 ring-blue-400'
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                 }`}
                 title="Monitor de Sinais Vitais em Tempo Real"
               >
-                <Activity size={14} className={showVitalMonitor ? "text-cyan-600 animate-pulse" : "text-slate-500"} />
+                <Activity size={14} className={showVitalMonitor ? "text-blue-600 animate-pulse" : "text-slate-500"} />
                 <span>Vitais</span>
               </button>
 
@@ -823,10 +839,10 @@ export default function PatientDossierView({
               <button
                 type="button"
                 onClick={() => setIsNpsModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-semibold transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all"
                 title="Pesquisa de Satisfação NPS & Google"
               >
-                <HeartHandshake size={14} className="text-amber-600" />
+                <HeartHandshake size={14} className="text-slate-500" />
                 <span>NPS</span>
               </button>
 
@@ -834,7 +850,7 @@ export default function PatientDossierView({
                 <button
                   type="button"
                   onClick={() => onOpenChat(patientPhone)}
-                  className="p-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 rounded-xl transition-all"
+                  className="p-2 bg-blue-50 text-blue-800 border border-blue-200 hover:bg-blue-100 rounded-xl transition-all"
                   title="Abrir WhatsApp do Paciente"
                 >
                   <MessageSquare size={16} />
@@ -852,94 +868,173 @@ export default function PatientDossierView({
             </div>
           </div>
 
-          {/* Unified Clinical Tabs Bar (Prontuário Limpo) */}
-          <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center gap-2 overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => {
-                setExamMode('standard');
-                setActiveTab('evolucao');
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'evolucao' && examMode === 'standard' 
-                  ? 'bg-slate-900 text-white shadow-xs' 
-                  : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <Activity size={14} />
-              Evolução & Atendimento (SOAP)
-            </button>
+          {/* Unified Specialty Switcher & Clinical Tabs Bar */}
+          <div className="mt-5 pt-3.5 border-t border-slate-100 space-y-3">
+            {/* Seletor de Perfil / Visão de Especialidade */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+                <span className="text-[11px] font-bold text-slate-500 px-2 flex items-center gap-1">
+                  <Layers size={13} /> Visão Clínica:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSpecialtyView('dr_carlos')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                    specialtyView === 'dr_carlos'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                  title="Visão do Dr. Carlos: Prontuário focado em Neurologia, Medicina Integrativa e SOAP"
+                >
+                  <Brain size={13} />
+                  Dr. Carlos (Neuro)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSpecialtyView('dra_lucy')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                    specialtyView === 'dra_lucy'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                  title="Visão da Dra. Lucy: Planejamento de implantes de zircônia, remoção segura de amálgama, focos NICO e tomografias"
+                >
+                  <Sparkles size={13} />
+                  Dra. Lucy (Odonto Biológica)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSwitchSpecialtyView('full')}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
+                    specialtyView === 'full'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
+                  }`}
+                  title="Visão Completa: Exibe todas as abas e especialidades juntas"
+                >
+                  Todas as Abas
+                </button>
+              </div>
 
-            {/* Destaque Neurológico - Dr. Carlos */}
-            <button
-              onClick={() => {
-                setExamMode('neurological');
-                setActiveTab('especialidade');
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'especialidade' && examMode === 'neurological' 
-                  ? 'bg-purple-700 text-white shadow-xs' 
-                  : 'bg-purple-50 text-purple-700 border border-purple-200/70 hover:bg-purple-100'
-              }`}
-            >
-              <Brain size={14} className={activeTab === 'especialidade' && examMode === 'neurological' ? 'text-white' : 'text-purple-600'} />
-              Exame Neurológico
-            </button>
+              {specialtyView === 'dra_lucy' && (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-800 rounded-lg text-xs font-semibold border border-blue-200/60">
+                  <Sparkles size={13} className="text-blue-600" />
+                  <span>Módulo Dra. Lucy • Odontologia Biológica & Implantes Zircônia</span>
+                </div>
+              )}
+            </div>
 
-            {/* Destaque Medicina Integrativa */}
-            <button
-              onClick={() => {
-                setExamMode('integrative');
-                setActiveTab('especialidade');
-              }}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'especialidade' && examMode === 'integrative' 
-                  ? 'bg-emerald-700 text-white shadow-xs' 
-                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200/70 hover:bg-emerald-100'
-              }`}
-            >
-              <Leaf size={14} className={activeTab === 'especialidade' && examMode === 'integrative' ? 'text-white' : 'text-emerald-600'} />
-              Medicina Integrativa
-            </button>
+            {/* Abas Dinâmicas de acordo com a Especialidade Selecionada */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
+              {/* Odonto Tab para Dra. Lucy ou Modo Completo */}
+              {(specialtyView === 'dra_lucy' || specialtyView === 'full') && (
+                <button
+                  onClick={() => {
+                    setExamMode('biological_dentistry');
+                    setActiveTab('especialidade');
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    activeTab === 'especialidade' && examMode === 'biological_dentistry'
+                      ? 'bg-slate-700 text-white shadow-xs'
+                      : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-white' : 'text-slate-500'} />
+                  Odontologia Biológica & Zircônia
+                </button>
+              )}
 
-            <button
-              onClick={() => setActiveTab('anamnese')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'anamnese' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <FileText size={14} />
-              Mapeamento de Dores (BodyMap)
-            </button>
+              <button
+                onClick={() => {
+                  setExamMode('standard');
+                  setActiveTab('evolucao');
+                }}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'evolucao' && examMode === 'standard' 
+                    ? 'bg-slate-700 text-white shadow-xs' 
+                    : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                }`}
+              >
+                <Activity size={14} />
+                Evolução & Atendimento (SOAP)
+              </button>
 
-            <button
-              onClick={() => setActiveTab('prescricoes')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'prescricoes' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <FileSignature size={14} />
-              Prescrições & Receituário
-            </button>
+              {/* Destaque Neurológico - Dr. Carlos ou Modo Completo */}
+              {(specialtyView === 'dr_carlos' || specialtyView === 'full') && (
+                <button
+                  onClick={() => {
+                    setExamMode('neurological');
+                    setActiveTab('especialidade');
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'especialidade' && examMode === 'neurological' 
+                      ? 'bg-slate-700 text-white shadow-xs' 
+                      : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <Brain size={14} className={activeTab === 'especialidade' && examMode === 'neurological' ? 'text-white' : 'text-slate-500'} />
+                  Exame Neurológico
+                </button>
+              )}
 
-            <button
-              onClick={() => setActiveTab('plano')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'plano' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <Stethoscope size={14} />
-              Plano Terapêutico
-            </button>
+              {/* Destaque Medicina Integrativa - Dr. Carlos ou Modo Completo */}
+              {(specialtyView === 'dr_carlos' || specialtyView === 'full') && (
+                <button
+                  onClick={() => {
+                    setExamMode('integrative');
+                    setActiveTab('especialidade');
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'especialidade' && examMode === 'integrative' 
+                      ? 'bg-slate-700 text-white shadow-xs' 
+                      : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <Leaf size={14} className={activeTab === 'especialidade' && examMode === 'integrative' ? 'text-white' : 'text-slate-500'} />
+                  Medicina Integrativa
+                </button>
+              )}
 
-            <button
-              onClick={() => setActiveTab('anexos')}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                activeTab === 'anexos' ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70'
-              }`}
-            >
-              <Paperclip size={14} />
-              Exames & Imagens (TC/X-Ray)
-            </button>
+              <button
+                onClick={() => setActiveTab('anamnese')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'anamnese' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                }`}
+              >
+                <FileText size={14} />
+                Mapeamento de Dores (BodyMap)
+              </button>
+
+              <button
+                onClick={() => setActiveTab('prescricoes')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'prescricoes' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                }`}
+              >
+                <FileSignature size={14} />
+                Prescrições & Receituário
+              </button>
+
+              <button
+                onClick={() => setActiveTab('plano')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'plano' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                }`}
+              >
+                <Stethoscope size={14} />
+                Plano Terapêutico
+              </button>
+
+              <button
+                onClick={() => setActiveTab('anexos')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                  activeTab === 'anexos' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                }`}
+              >
+                <Paperclip size={14} />
+                {specialtyView === 'dra_lucy' ? 'Tomografias & Raios-X (CBCT)' : 'Exames & Imagens (TC/X-Ray)'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1010,23 +1105,23 @@ export default function PatientDossierView({
                         onClick={() => setSelectedHistoryRecord(rec)}
                         className={`p-3.5 space-y-2 cursor-pointer transition-all hover:shadow-sm group rounded-xl border ${
                           isPreCad
-                            ? 'bg-blue-50/40 border-blue-200 hover:border-blue-300'
+                            ? 'bg-slate-50/80 border-slate-200 hover:border-slate-300'
                             : isCurrentPatient 
-                              ? 'bg-emerald-50/40 border-emerald-200 hover:border-emerald-300 shadow-2xs' 
+                              ? 'bg-sky-50/30 border-sky-200/70 hover:border-sky-300 shadow-2xs' 
                               : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
                         }`}
                       >
                         <div className="flex items-center justify-between text-xs font-bold text-slate-900">
                           <span className="flex items-center gap-1.5">
-                            <Clock size={13} className={isPreCad ? "text-blue-600" : isCurrentPatient ? "text-emerald-600" : "text-slate-400"} />
+                            <Clock size={13} className={isPreCad ? "text-slate-500" : isCurrentPatient ? "text-sky-600" : "text-slate-400"} />
                             {rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : 'Atendimento')}
                           </span>
                           <span className={`px-2 py-0.5 text-[9px] rounded-md uppercase flex items-center gap-1 font-bold ${
                             isPreCad 
-                              ? 'bg-blue-600 text-white' 
+                              ? 'bg-slate-100 text-slate-700 border border-slate-200' 
                               : isCurrentPatient 
-                                ? 'bg-emerald-700 text-white' 
-                                : 'bg-slate-200 text-slate-700'
+                                ? 'bg-sky-100 text-sky-800 border border-sky-200/80' 
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
                           }`}>
                             <Eye size={10} /> {isPreCad ? 'PRÉ-CADASTRO' : (rec.especialidade ? rec.especialidade.toUpperCase() : 'CONSULTA')}
                           </span>
@@ -1034,7 +1129,7 @@ export default function PatientDossierView({
 
                         <div className="space-y-1.5 text-xs">
                           <p className={`font-medium text-slate-800 line-clamp-2 bg-white p-2.5 rounded-lg border ${
-                            isPreCad ? 'border-blue-200/80' : 'border-slate-200/80'
+                            isPreCad ? 'border-slate-200/80' : 'border-slate-200/80'
                           }`}>
                             "{rec.resumo_formatado || rec.queixa_principal || rec.conduta_plano_terapeutico || 'Atendimento salvo no prontuário.'}"
                           </p>
@@ -1052,7 +1147,7 @@ export default function PatientDossierView({
                   <>
                     <div className="p-4 text-center text-xs text-slate-600 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-1">
                       <p className="font-bold text-slate-800">Nenhum atendimento anterior salvo</p>
-                      <p className="text-[11px] text-slate-500">Ao clicar em <strong className="text-emerald-700">"Evoluir Prontuário"</strong>, o registro aparecerá nesta lista imediatamente.</p>
+                      <p className="text-[11px] text-slate-500">Ao clicar em <strong className="text-slate-800">"Evoluir Prontuário"</strong>, o registro aparecerá nesta lista imediatamente.</p>
                     </div>
 
                     <div 
@@ -1198,19 +1293,19 @@ export default function PatientDossierView({
                         type="button"
                         onClick={() => handleProcessTextAI(currentRecord?.resumo_formatado)}
                         disabled={isLocalProcessing || isProcessing || !currentRecord?.resumo_formatado?.trim()}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-all ${
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
                           currentRecord?.resumo_formatado?.trim() 
-                            ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white cursor-pointer' 
-                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            ? 'bg-blue-50 hover:bg-blue-100 text-blue-950 border border-blue-200 cursor-pointer shadow-xs active:scale-95' 
+                            : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
                         }`}
                         title="Clique para a IA analisar o texto e preencher automaticamente a ficha do paciente"
                       >
-                        <Sparkles size={14} />
+                        <Sparkles size={14} className="text-blue-600" />
                         <span>{isLocalProcessing || isProcessing ? 'Processando com IA...' : '✨ Processar com IA / Auto-Preencher'}</span>
                       </button>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      Este campo é ideal para colar um texto corrido. Para extrair os dados e preencher a ficha do paciente, basta clicar no botão roxo <strong className="text-purple-700 font-bold">"✨ Processar com IA"</strong> acima.
+                      Este campo é ideal para colar um texto corrido. Para extrair os dados e preencher a ficha do paciente, clique no botão <strong className="text-slate-800 font-bold">"✨ Processar com IA"</strong> acima.
                     </p>
                     <textarea
                       rows={10}
@@ -1222,7 +1317,7 @@ export default function PatientDossierView({
                         }
                       }}
                       placeholder="Digite ou cole a evolução da consulta aqui..."
-                      className="w-full flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none font-sans leading-relaxed"
+                      className="w-full flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans leading-relaxed"
                     />
                   </div>
                 )}
@@ -1230,7 +1325,7 @@ export default function PatientDossierView({
                 {/* Specialized Form Renderings */}
                 {examMode === 'neurological' && (
                   <div className="border-t pt-4">
-                    <h4 className="font-bold text-xs uppercase text-purple-700 mb-2">Formulário Especializado: Neurologia</h4>
+                    <h4 className="font-bold text-xs uppercase text-blue-900 mb-2">Formulário Especializado: Neurologia</h4>
                     <NeurologicalExamForm
                       data={currentRecord?.exame_neurologico || specialtyData || {}}
                       onChange={(data) => {
@@ -1361,7 +1456,7 @@ export default function PatientDossierView({
                 <div className="flex items-center justify-between border-b pb-4">
                   <div>
                     <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                      <Brain className="text-purple-600" size={22} />
+                      <Brain className="text-blue-600" size={22} />
                       Avaliação Neurológica Especializada
                     </h3>
                     <p className="text-xs text-slate-500">Registro completo de pares cranianos, força muscular, tônus, sensibilidade, reflexos e coordenação.</p>
@@ -1459,7 +1554,7 @@ export default function PatientDossierView({
                   onClick={() => setDocType('receituario')}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                     docType === 'receituario' 
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' 
+                      ? 'bg-slate-900 text-white shadow-xs' 
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1470,7 +1565,7 @@ export default function PatientDossierView({
                   onClick={() => setDocType('atestado')}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                     docType === 'atestado' 
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' 
+                      ? 'bg-slate-900 text-white shadow-xs' 
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -1484,10 +1579,10 @@ export default function PatientDossierView({
                 {/* Editor Column */}
                 <div className="lg:col-span-6 space-y-4">
                   {/* BARRA UNIFICADA: DITADO POR VOZ + CONTROLE ANVISA */}
-                  <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200 p-4 rounded-2xl space-y-3">
+                  <div className="bg-slate-50/90 border border-slate-200/80 p-4 rounded-2xl space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <Mic size={18} className="text-emerald-600 animate-pulse" />
+                        <Mic size={18} className="text-blue-600" />
                         <div>
                           <span className="text-xs font-bold text-slate-800 block">Ditado de Prescrição por Voz</span>
                           <span className="text-[10px] text-slate-500">Fale os remédios ou suplementos para preencher</span>
@@ -1497,27 +1592,27 @@ export default function PatientDossierView({
                       <button
                         type="button"
                         onClick={handleDictatePrescription}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-md active:scale-95 ${
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs active:scale-95 border ${
                           isDictatingPrescription
-                            ? 'bg-red-600 text-white animate-pulse'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                            ? 'bg-red-600 text-white border-red-600 animate-pulse'
+                            : 'bg-blue-50 hover:bg-blue-100 text-blue-950 border-blue-200/90'
                         }`}
                       >
-                        <Mic size={16} className={isDictatingPrescription ? 'animate-bounce' : ''} />
+                        <Mic size={16} className={isDictatingPrescription ? 'animate-bounce text-white' : 'text-blue-600'} />
                         <span>{isDictatingPrescription ? 'Ouvindo Prescrição...' : 'Ditar Prescrição por Voz'}</span>
                       </button>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-emerald-200/60 text-xs">
-                      <span className="text-slate-600 font-medium text-[11px]">Modelos Oficiais:</span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 text-xs">
+                      <span className="text-slate-500 font-medium text-[11px]">Modelos Oficiais:</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setIsPrescriptionAnvisaOpen(true)}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
                           title="Receita Controlada Oficial (Amarela A, Azul B, Branca C)"
                         >
-                          <ShieldCheck size={14} /> Notificação Controlada ANVISA
+                          <ShieldCheck size={14} className="text-slate-600" /> Notificação Controlada ANVISA
                         </button>
                       </div>
                     </div>
@@ -1543,9 +1638,9 @@ export default function PatientDossierView({
                         setPrescricaoText(newText);
                         toast.success('Suplementos integrativos importados para a receita!');
                       }}
-                      className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
                     >
-                      <Sparkles size={14} className="text-emerald-600" />
+                      <Sparkles size={14} className="text-blue-600" />
                       Importar do Checklist Integrativo
                     </button>
                   </div>
@@ -1555,13 +1650,13 @@ export default function PatientDossierView({
                     value={prescricaoText}
                     onChange={(e) => setPrescricaoText(e.target.value)}
                     placeholder="Digite os medicamentos, dosagens, posologia e fórmula de suplementação integrativa..."
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono leading-relaxed shadow-inner"
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-mono leading-relaxed shadow-inner"
                   />
 
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       onClick={handleSaveRecord}
-                      className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2"
+                      className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2"
                     >
                       <CheckCircle2 size={16} />
                       Salvar Receita no Prontuário
@@ -1570,7 +1665,7 @@ export default function PatientDossierView({
                     {onGenerateReceitaPDF && (
                       <button
                         onClick={onGenerateReceitaPDF}
-                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
+                        className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
                       >
                         <FileSignature size={16} />
                         Gerar PDF Oficial
@@ -1710,7 +1805,7 @@ export default function PatientDossierView({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSaveRecord}
-                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2"
+                  className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 active:scale-95"
                 >
                   <CheckCircle2 size={16} />
                   Salvar Plano no Prontuário
@@ -1737,7 +1832,7 @@ export default function PatientDossierView({
                   {onGeneratePDF && (
                     <button
                       onClick={() => onGeneratePDF(currentRecord)}
-                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 flex items-center gap-2"
+                      className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 active:scale-95"
                     >
                       <Download size={16} />
                       Gerar PDF do Plano Terapêutico
@@ -1749,7 +1844,7 @@ export default function PatientDossierView({
                       const msg = encodeURIComponent(`Olá ${patientName}, aqui está o resumo do seu Plano Terapêutico do Ambulatório IA:\n\n${condutaPlano}`);
                       window.open(`https://wa.me/55${patientPhone.replace(/\D/g, '')}?text=${msg}`, '_blank');
                     }}
-                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 flex items-center gap-2"
+                    className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 active:scale-95"
                   >
                     <MessageSquare size={16} />
                     Enviar via WhatsApp
@@ -1761,10 +1856,10 @@ export default function PatientDossierView({
               <div className="lg:col-span-5 bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-4 shadow-inner">
                 <div className="flex items-center justify-between border-b pb-3">
                   <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                    <Leaf className="text-emerald-600" size={18} />
+                    <Leaf className="text-blue-600" size={18} />
                     Suplementos Ativos no Checklist
                   </h4>
-                  <span className="text-[10px] font-extrabold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">
                     {getActiveIntegrativeItems(integrativeData).length} ativos
                   </span>
                 </div>
@@ -1772,12 +1867,12 @@ export default function PatientDossierView({
                 {getActiveIntegrativeItems(integrativeData).length > 0 ? (
                   <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar-blue">
                     {getActiveIntegrativeItems(integrativeData).map((item) => (
-                      <div key={item.key} className="p-3 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs hover:border-emerald-300 transition-all">
+                      <div key={item.key} className="p-3 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between shadow-2xs hover:border-blue-300 transition-all">
                         <div>
                           <p className="font-bold text-xs text-slate-800">{item.label}</p>
-                          <p className="text-[11px] text-emerald-700 font-semibold">{item.value}</p>
+                          <p className="text-[11px] text-blue-700 font-semibold">{item.value}</p>
                         </div>
-                        <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                        <CheckCircle2 size={16} className="text-blue-600 shrink-0" />
                       </div>
                     ))}
                   </div>
@@ -1791,7 +1886,7 @@ export default function PatientDossierView({
                         setExamMode('integrative');
                         setActiveTab('evolucao');
                       }}
-                      className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all mt-2 inline-block"
+                      className="px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all mt-2 inline-block cursor-pointer"
                     >
                       Abrir Checklist Integrativo
                     </button>
@@ -1916,8 +2011,8 @@ export default function PatientDossierView({
                 </p>
               </div>
 
-              <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100 space-y-1">
-                <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">Plano Terapêutico & Conduta</span>
+              <div className="bg-blue-50/40 p-4 rounded-2xl border border-blue-100/80 space-y-1">
+                <span className="text-xs font-bold text-blue-800 uppercase tracking-wider block">Plano Terapêutico & Conduta</span>
                 <p className="text-slate-800 font-medium whitespace-pre-line leading-relaxed">
                   {selectedHistoryRecord.conduta_plano_terapeutico || selectedHistoryRecord.sugestao_conduta || 'Manutenção da conduta habitual.'}
                 </p>

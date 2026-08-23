@@ -37,11 +37,11 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
 
   const getScoreStyle = (score: string) => {
     switch (score) {
-      case '0': return 'fill-slate-300 stroke-slate-500 text-slate-700 bg-slate-100';
-      case '1+': return 'fill-blue-200 stroke-blue-500 text-blue-800 bg-blue-50';
-      case '2+': return 'fill-emerald-300 stroke-emerald-600 text-emerald-900 bg-emerald-50';
-      case '3+': return 'fill-amber-300 stroke-amber-600 text-amber-900 bg-amber-50';
-      case '4+': return 'fill-rose-400 stroke-rose-600 text-rose-950 bg-rose-50';
+      case '0': return 'fill-slate-200 stroke-slate-400 text-slate-700 bg-slate-100';
+      case '1+': return 'fill-blue-100 stroke-blue-400 text-blue-800 bg-blue-50';
+      case '2+': return 'fill-emerald-200/90 stroke-emerald-500 text-emerald-950 bg-emerald-50';
+      case '3+': return 'fill-amber-200 stroke-amber-500 text-amber-900 bg-amber-50';
+      case '4+': return 'fill-rose-300 stroke-rose-500 text-rose-950 bg-rose-50';
       default: return 'fill-slate-100 stroke-slate-400 text-slate-600 bg-slate-50';
     }
   };
@@ -51,7 +51,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
         <div>
           <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
             Esquema de Reflexos de Wexler & Reflexos Patológicos
           </h4>
           <p className="text-xs text-slate-500">Clique nos pontos do boneco para alternar o grau de reflexo (0 a 4+)</p>
@@ -172,7 +172,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
 
         {/* Pathological / Axial Reflexes List */}
         <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200 text-xs">
-          <h5 className="font-bold text-slate-800 border-b pb-1.5 uppercase text-[10px] tracking-wide text-purple-700">Reflexos Patológicos & Axiais</h5>
+          <h5 className="font-bold text-slate-800 border-b pb-1.5 uppercase text-[10px] tracking-wide text-blue-900">Reflexos Patológicos & Axiais</h5>
 
           {[
             { id: 'axiais_face', label: 'Axiais da Face' },
@@ -195,8 +195,10 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
                       className={cn(
                         "px-2.5 py-1 rounded text-[11px] font-bold transition-all",
                         val === opt
-                          ? opt === 'Presente' ? 'bg-rose-600 text-white shadow-sm' : 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          ? opt === 'Presente' 
+                            ? 'bg-rose-600 text-white shadow-xs' 
+                            : 'bg-slate-200 text-slate-800 border border-slate-300 shadow-2xs font-semibold'
+                          : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
                       )}
                     >
                       {opt}

@@ -43,7 +43,10 @@ import {
   FolderOpen,
   UploadCloud,
   DollarSign,
-  Sparkles
+  Sparkles,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -276,6 +279,12 @@ export default function App() {
   const [showMessageHistory, setShowMessageHistory] = useState(savedActiveTab === 'mensagens');
   const [showSystemOverview, setShowSystemOverview] = useState(false);
   const [showClinicSettings, setShowClinicSettings] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ambulatorio_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
   const [clinicInfo, setClinicInfo] = useState<any>(null);
   const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
 
@@ -2806,7 +2815,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col md:flex-row min-w-0">
+    <div className="min-h-screen bg-[#f4f6fb] flex flex-col md:flex-row min-w-0 p-2 sm:p-3 md:p-4 gap-3 sm:gap-4">
       {/* Banner de Nova Atualização Disponível (PWA Auto-Update) */}
       <AnimatePresence>
         {hasUpdate && (
@@ -2894,251 +2903,340 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Lateral Navigation Sidebar (Prontuário Moderno) */}
-      <aside className="w-full md:w-64 bg-[#0c121e] text-slate-300 shrink-0 border-r border-slate-800/80 flex flex-col justify-between p-4 shadow-xl z-40">
-        <div className="space-y-6">
-          {/* Logo Brand */}
-          <div 
-            className="flex items-center gap-3 p-2.5 cursor-pointer rounded-2xl hover:bg-slate-800/60 transition-all group"
-            onClick={() => navigateToTab('dashboard')}
-          >
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0 group-hover:scale-105 transition-transform">
-              <Stethoscope size={20} />
+      {/* Lateral Navigation Sidebar (Modern Floating Card CRM Style) */}
+      <aside className={cn(
+        "bg-white text-slate-700 shrink-0 rounded-3xl border border-slate-200/70 flex flex-col justify-between p-3.5 shadow-xs z-40 transition-all duration-300",
+        isSidebarCollapsed ? "w-full md:w-20" : "w-full md:w-64"
+      )}>
+        <div className="space-y-4">
+          {/* Logo Brand + Collapse Arrow Toggle Button */}
+          <div className="flex items-center justify-between gap-1 p-1">
+            <div 
+              className="flex items-center gap-3 cursor-pointer rounded-2xl hover:bg-slate-50 transition-all group overflow-hidden"
+              onClick={() => navigateToTab('dashboard')}
+              title="Ambulatório IA - Gestão Clínica Inteligente"
+            >
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0 group-hover:scale-105 transition-transform">
+                <Stethoscope size={20} />
+              </div>
+              {!isSidebarCollapsed && (
+                <div className="min-w-0">
+                  <h1 className="font-extrabold text-base tracking-tight text-slate-900 leading-none truncate">Ambulatório IA</h1>
+                  <p className="text-[10px] uppercase tracking-wider text-blue-600 font-bold mt-1 truncate">Gestão Clínica Inteligente</p>
+                </div>
+              )}
             </div>
-            <div>
-              <h1 className="font-extrabold text-base tracking-tight text-white leading-none">Ambulatório IA</h1>
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mt-1">Prontuário Médico Inteligente</p>
-            </div>
+
+            {/* Minimize / Expand Sidebar Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const newState = !isSidebarCollapsed;
+                setIsSidebarCollapsed(newState);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('ambulatorio_sidebar_collapsed', String(newState));
+                }
+              }}
+              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors hidden md:flex items-center justify-center shrink-0"
+              title={isSidebarCollapsed ? "Expandir menu lateral" : "Minimizar menu lateral"}
+            >
+              {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
           </div>
 
           {/* Navigation Links */}
           <nav className="space-y-1">
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                Menu Principal
+              </div>
+            )}
+
             <button
               onClick={() => navigateToTab('dashboard')}
+              title={isSidebarCollapsed ? "Dashboard Geral" : undefined}
               className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                 showDashboard 
-                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
               )}
             >
-              <Activity size={17} className={showDashboard ? "text-blue-400" : "text-slate-400"} />
-              <span>Dashboard Geral</span>
+              <Activity size={17} className={showDashboard ? "text-white" : "text-slate-500"} />
+              {!isSidebarCollapsed && <span>Dashboard Geral</span>}
             </button>
 
             <button
               onClick={() => navigateToTab('atendimento')}
+              title={isSidebarCollapsed ? "Atendimento Clínico" : undefined}
               className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                 (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial)
-                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
               )}
             >
-              <Mic size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-blue-400" : "text-slate-400"} />
-              <span>Atendimento Clínico</span>
+              <Mic size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-white" : "text-slate-500"} />
+              {!isSidebarCollapsed && <span>Atendimento Clínico</span>}
             </button>
 
             <button
               onClick={() => navigateToTab('agenda')}
+              title={isSidebarCollapsed ? "Agenda Médica" : undefined}
               className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                 showAgenda 
-                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
               )}
             >
-              <Calendar size={17} className={showAgenda ? "text-blue-400" : "text-slate-400"} />
-              <span>Agenda Médica</span>
+              <Calendar size={17} className={showAgenda ? "text-white" : "text-slate-500"} />
+              {!isSidebarCollapsed && <span>Agenda Médica</span>}
             </button>
 
             <button
               onClick={() => navigateToTab('mensagens')}
+              title={isSidebarCollapsed ? "Mensagens & WhatsApp" : undefined}
               className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                 showMessageHistory 
-                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
               )}
             >
-              <MessageSquare size={17} className={showMessageHistory ? "text-blue-400" : "text-slate-400"} />
-              <span>Mensagens & WhatsApp</span>
+              <MessageSquare size={17} className={showMessageHistory ? "text-white" : "text-slate-500"} />
+              {!isSidebarCollapsed && <span>Mensagens & WhatsApp</span>}
             </button>
 
             <button
               onClick={() => navigateToTab('historico')}
+              title={isSidebarCollapsed ? "Histórico de Prontuários" : undefined}
               className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                 showHistory 
-                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
               )}
             >
-              <History size={17} className={showHistory ? "text-blue-400" : "text-slate-400"} />
-              <span>Histórico de Prontuários</span>
+              <History size={17} className={showHistory ? "text-white" : "text-slate-500"} />
+              {!isSidebarCollapsed && <span>Histórico de Prontuários</span>}
             </button>
 
             {/* Módulos Exclusivos do Administrador */}
             {user?.role === 'admin' && (
               <>
+                {!isSidebarCollapsed && (
+                  <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                    Gestão da Clínica
+                  </div>
+                )}
+
                 <button
                   onClick={() => navigateToTab('financeiro')}
+                  title={isSidebarCollapsed ? "Financeiro & Caixa" : undefined}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                    "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                    isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                     showFinancial 
-                      ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                      : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
                   )}
                 >
-                  <DollarSign size={17} className={showFinancial ? "text-emerald-400" : "text-slate-400"} />
-                  <span>Financeiro & Caixa</span>
+                  <DollarSign size={17} className={showFinancial ? "text-white" : "text-slate-500"} />
+                  {!isSidebarCollapsed && <span>Financeiro & Caixa</span>}
                 </button>
 
                 <button
                   onClick={() => navigateToTab('equipe')}
+                  title={isSidebarCollapsed ? "Equipe Médica" : undefined}
                   className={cn(
-                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
+                    "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                    isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                     showManageTeam 
-                      ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
-                      : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                      : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
                   )}
                 >
-                  <Users size={17} className={showManageTeam ? "text-blue-400" : "text-slate-400"} />
-                  <span>Equipe Médica</span>
+                  <Users size={17} className={showManageTeam ? "text-white" : "text-slate-500"} />
+                  {!isSidebarCollapsed && <span>Equipe Médica</span>}
                 </button>
 
                 <button
                   onClick={() => setShowClinicSettings(true)}
-                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition-all"
+                  title={isSidebarCollapsed ? "Configurações & WhatsApp" : undefined}
+                  className={cn(
+                    "w-full flex items-center rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 transition-all",
+                    isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+                  )}
                 >
-                  <Settings size={17} className="text-slate-400" />
-                  <span>Configurações da Clínica & WhatsApp</span>
+                  <Settings size={17} className="text-slate-500" />
+                  {!isSidebarCollapsed && <span>Configurações & WhatsApp</span>}
                 </button>
               </>
             )}
 
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                Suporte
+              </div>
+            )}
+
             <button
               onClick={() => setShowSystemOverview(true)}
-              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition-all"
+              title={isSidebarCollapsed ? "Manual & Sobre o Sistema" : undefined}
+              className={cn(
+                "w-full flex items-center rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+              )}
             >
-              <HelpCircle size={17} className="text-slate-400" />
-              <span>Ajuda, Manual & Sobre o Sistema</span>
+              <HelpCircle size={17} className="text-slate-500" />
+              {!isSidebarCollapsed && <span>Manual & Sobre o Sistema</span>}
             </button>
           </nav>
 
           {/* Painel de Status Offline & PWA */}
-          <div className="p-3 bg-slate-800/80 rounded-2xl border border-slate-700/60 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-bold">
-              <span className="text-slate-300 flex items-center gap-1.5">
-                <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400")} />
-                {isOnline ? "Conectado (Nuvem)" : "Modo Offline (Local)"}
-              </span>
-              {offlinePendingCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">
-                  {offlinePendingCount} no PC
+          {!isSidebarCollapsed ? (
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold">
+                <span className="text-slate-700 flex items-center gap-1.5">
+                  <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-amber-500")} />
+                  {isOnline ? "Conectado (Nuvem)" : "Modo Offline (Local)"}
                 </span>
-              )}
-            </div>
+                {offlinePendingCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                    {offlinePendingCount} no PC
+                  </span>
+                )}
+              </div>
 
-            {offlinePendingCount > 0 && (
-              <button
-                onClick={async () => {
-                  if (!isOnline) {
-                    toast.error("Conecte-se ao Wi-Fi para sincronizar os prontuários com a nuvem.");
-                    return;
-                  }
-                  setIsSyncingOffline(true);
-                  const toastId = toast.loading("Sincronizando com a nuvem...");
-                  const { syncedCount, errorsCount } = await syncOfflineRecordsWithCloud(supabase);
-                  setIsSyncingOffline(false);
-                  toast.dismiss(toastId);
-                  if (syncedCount > 0) {
-                    toast.success(`${syncedCount} prontuários sincronizados com a nuvem!`);
-                    setOfflinePendingCount(getOfflineRecords().filter(r => r.is_offline_pending).length);
-                    fetchHistory();
-                  } else if (errorsCount > 0) {
-                    toast.error(`Falha ao enviar ${errorsCount} prontuários.`);
-                  }
-                }}
-                disabled={isSyncingOffline || !isOnline}
-                className="w-full py-1.5 px-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all border border-amber-500/30"
-              >
-                <RefreshCw size={12} className={isSyncingOffline ? "animate-spin" : ""} />
-                Sincronizar {offlinePendingCount} Pendentes
-              </button>
-            )}
-
-            {installPromptEvent && (
-              <button
-                onClick={() => {
-                  installPromptEvent.prompt();
-                  installPromptEvent.userChoice.then((choice: any) => {
-                    if (choice.outcome === 'accepted') {
-                      toast.success("App instalado com sucesso no seu computador!");
-                      setInstallPromptEvent(null);
-                    }
-                  });
-                }}
-                className="w-full py-1.5 px-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all border border-blue-500/30"
-              >
-                <Download size={12} />
-                Instalar App no Computador
-              </button>
-            )}
-
-            {/* Botão de Atualizar / Recarregar Sistema */}
-            <button
-              onClick={() => handleReloadApp(false)}
-              disabled={isReloading}
-              className="w-full py-2 px-2.5 bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 transition-all border border-slate-600/40 shadow-xs"
-              title="Recarregar tela e buscar novas atualizações sem perder dados"
-            >
-              <RefreshCw size={12} className={isReloading ? "animate-spin text-blue-400" : "text-blue-400"} />
-              <span>{isReloading ? "Atualizando..." : "Recarregar / Atualizar App"}</span>
-            </button>
-
-            {user?.role === 'admin' && (
-              <div className="flex gap-1.5 pt-1">
+              {offlinePendingCount > 0 && (
                 <button
-                  onClick={() => {
-                    const recs = getOfflineRecords();
-                    const fullHistory = history.length > 0 ? history : recs;
-                    if (fullHistory.length === 0) {
-                      toast.error("Nenhum prontuário encontrado para backup.");
+                  onClick={async () => {
+                    if (!isOnline) {
+                      toast.error("Conecte-se ao Wi-Fi para sincronizar os prontuários com a nuvem.");
                       return;
                     }
-                    exportLocalDataJSON(fullHistory);
-                    toast.success("Backup do banco de dados salvo em Downloads!");
+                    setIsSyncingOffline(true);
+                    const toastId = toast.loading("Sincronizando com a nuvem...");
+                    const { syncedCount, errorsCount } = await syncOfflineRecordsWithCloud(supabase);
+                    setIsSyncingOffline(false);
+                    toast.dismiss(toastId);
+                    if (syncedCount > 0) {
+                      toast.success(`${syncedCount} prontuários sincronizados com a nuvem!`);
+                      setOfflinePendingCount(getOfflineRecords().filter(r => r.is_offline_pending).length);
+                      fetchHistory();
+                    } else if (errorsCount > 0) {
+                      toast.error(`Falha ao enviar ${errorsCount} prontuários.`);
+                    }
                   }}
-                  className="flex-1 py-1.5 px-2 bg-slate-700/80 hover:bg-slate-600 text-slate-200 hover:text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-600/40"
-                  title="Salvar cópia de segurança em arquivo JSON (Exclusivo Administrador)"
+                  disabled={isSyncingOffline || !isOnline}
+                  className="w-full py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all border border-amber-200"
                 >
-                  <Save size={11} className="text-blue-400" />
-                  Backup JSON (Admin)
+                  <RefreshCw size={12} className={isSyncingOffline ? "animate-spin" : ""} />
+                  Sincronizar {offlinePendingCount} Pendentes
                 </button>
-              </div>
-            )}
-          </div>
+              )}
+
+              {installPromptEvent && (
+                <button
+                  onClick={() => {
+                    installPromptEvent.prompt();
+                    installPromptEvent.userChoice.then((choice: any) => {
+                      if (choice.outcome === 'accepted') {
+                        toast.success("App instalado com sucesso no seu computador!");
+                        setInstallPromptEvent(null);
+                      }
+                    });
+                  }}
+                  className="w-full py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all border border-blue-200"
+                >
+                  <Download size={12} />
+                  Instalar App no Computador
+                </button>
+              )}
+
+              {/* Botão de Atualizar / Recarregar Sistema */}
+              <button
+                onClick={() => handleReloadApp(false)}
+                disabled={isReloading}
+                className="w-full py-2 px-2.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 transition-all border border-slate-200 shadow-xs"
+                title="Recarregar tela e buscar novas atualizações sem perder dados"
+              >
+                <RefreshCw size={12} className={isReloading ? "animate-spin text-blue-600" : "text-blue-600"} />
+                <span>{isReloading ? "Atualizando..." : "Recarregar / Atualizar App"}</span>
+              </button>
+
+              {user?.role === 'admin' && (
+                <div className="flex gap-1.5 pt-1">
+                  <button
+                    onClick={() => {
+                      const recs = getOfflineRecords();
+                      const fullHistory = history.length > 0 ? history : recs;
+                      if (fullHistory.length === 0) {
+                        toast.error("Nenhum prontuário encontrado para backup.");
+                        return;
+                      }
+                      exportLocalDataJSON(fullHistory);
+                      toast.success("Backup do banco de dados salvo em Downloads!");
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-200"
+                    title="Salvar cópia de segurança em arquivo JSON (Exclusivo Administrador)"
+                  >
+                    <Save size={11} className="text-blue-600" />
+                    Backup JSON (Admin)
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => handleReloadApp(false)}
+                disabled={isReloading}
+                className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl transition-all border border-slate-200"
+                title="Recarregar tela e atualizar"
+              >
+                <RefreshCw size={16} className={isReloading ? "animate-spin text-blue-600" : "text-blue-600"} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* User Profile & Logout */}
-        <div className="pt-4 border-t border-slate-800 space-y-3 mt-6">
-          <div className="px-3 py-2 bg-slate-800/60 rounded-2xl flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-              {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'M'}
+        <div className="pt-3 border-t border-slate-100 space-y-2 mt-3">
+          {!isSidebarCollapsed ? (
+            <div className="px-3 py-2 bg-slate-50 rounded-2xl border border-slate-200/70 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-xs">
+                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'M'}
+              </div>
+              <div className="overflow-hidden min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-800 truncate">{user?.full_name || user?.email}</p>
+                <p className="text-[10px] text-blue-600 font-semibold uppercase">{user?.role || 'Médico'}</p>
+              </div>
             </div>
-            <div className="overflow-hidden">
-              <p className="text-xs font-bold text-white truncate">{user?.full_name || user?.email}</p>
-              <p className="text-[10px] text-blue-400 font-semibold uppercase">{user?.role || 'Médico'}</p>
+          ) : (
+            <div className="flex justify-center" title={`${user?.full_name || user?.email} (${user?.role || 'Médico'})`}>
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-xs">
+                {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'M'}
+              </div>
             </div>
-          </div>
+          )}
 
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl font-bold text-xs transition-colors"
+            title={isSidebarCollapsed ? "Sair do Sistema" : undefined}
+            className={cn(
+              "w-full flex items-center bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold text-xs transition-colors border border-red-100",
+              isSidebarCollapsed ? "justify-center p-2.5" : "justify-center gap-2 px-4 py-2"
+            )}
           >
-            <LogOut size={16} />
-            <span>Sair do Sistema</span>
+            <LogOut size={15} />
+            {!isSidebarCollapsed && <span>Sair do Sistema</span>}
           </button>
         </div>
       </aside>

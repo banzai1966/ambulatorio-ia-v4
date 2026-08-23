@@ -11,8 +11,8 @@ interface Props {
 }
 
 const STATUS_COLORS: Record<DermatomeStatus, { bg: string; text: string; border: string; fill: string; stroke: string }> = {
-  normal: { bg: 'bg-emerald-500', text: 'text-emerald-700', border: 'border-emerald-300', fill: '#10b981', stroke: '#047857' },
-  hipoestesia: { bg: 'bg-blue-600', text: 'text-blue-700', border: 'border-blue-400', fill: '#2563eb', stroke: '#1d4ed8' },
+  normal: { bg: 'bg-emerald-100/70', text: 'text-emerald-900', border: 'border-emerald-200', fill: '#6ee7b7', stroke: '#059669' },
+  hipoestesia: { bg: 'bg-blue-600', text: 'text-blue-700', border: 'border-blue-400', fill: '#3b82f6', stroke: '#1d4ed8' },
   parestesia: { bg: 'bg-amber-500', text: 'text-amber-700', border: 'border-amber-300', fill: '#f59e0b', stroke: '#b45309' },
   hiperestesia: { bg: 'bg-purple-600', text: 'text-purple-700', border: 'border-purple-300', fill: '#9333ea', stroke: '#6b21a8' },
   dor: { bg: 'bg-rose-600', text: 'text-rose-700', border: 'border-rose-300', fill: '#e11d48', stroke: '#9f1239' },

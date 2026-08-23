@@ -213,14 +213,14 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
       <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
         
         {/* Cabeçalho */}
-        <div className="p-5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white flex items-center justify-between">
+        <div className="p-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20">
-              <MessageSquare className="w-6 h-6 text-emerald-100" />
+              <MessageSquare className="w-6 h-6 text-blue-100" />
             </div>
             <div>
               <h2 className="text-lg font-bold tracking-tight">Conexão WhatsApp da Clínica</h2>
-              <p className="text-xs text-emerald-100">Pareamento fácil via QR Code do seu celular</p>
+              <p className="text-xs text-blue-100">Pareamento fácil via QR Code do seu celular</p>
             </div>
           </div>
           <button
@@ -238,7 +238,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
           <div className="flex items-center justify-between p-4 rounded-2xl border bg-slate-50">
             <div className="flex items-center gap-3">
               {status === 'connected' ? (
-                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center">
                   <Wifi className="w-5 h-5" />
                 </div>
               ) : status === 'connecting' ? (
@@ -255,7 +255,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
                 <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">Status do Serviço</span>
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-bold ${
-                    status === 'connected' ? 'text-emerald-600' :
+                    status === 'connected' ? 'text-blue-600' :
                     status === 'connecting' ? 'text-amber-600' : 'text-slate-700'
                   }`}>
                     {status === 'connected' && '🟢 Conectado & Operacional'}
@@ -285,16 +285,16 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
 
           {/* ESTADO 1: CONECTADO */}
           {status === 'connected' && (
-            <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-5 text-center space-y-4">
-              <div className="w-14 h-14 bg-emerald-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
+            <div className="bg-blue-50/60 border border-blue-200 rounded-2xl p-5 text-center space-y-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-emerald-900">WhatsApp Vinculado com Sucesso!</h3>
-                <p className="text-xs text-emerald-700 mt-1 max-w-sm mx-auto">
+                <h3 className="text-base font-bold text-blue-900">WhatsApp Vinculado com Sucesso!</h3>
+                <p className="text-xs text-blue-700 mt-1 max-w-sm mx-auto">
                   Sua clínica já está conectada e pronta para enviar lembretes de agendamento, confirmações e anamneses pré-consulta automaticamente.
                 </p>
-                <div className="mt-3 p-3 bg-white/80 border border-emerald-200 rounded-xl text-left text-xs text-slate-600">
+                <div className="mt-3 p-3 bg-white/80 border border-blue-200 rounded-xl text-left text-xs text-slate-600">
                   <p className="font-bold text-slate-800 mb-1">ℹ️ Por que o QR Code não aparece?</p>
                   <p>O QR Code só é exibido quando a instância está <strong>desconectada</strong>. Como o WhatsApp desta instância já está pareado e ativo, não é necessário ler o QR Code novamente.</p>
                   <p className="mt-1 text-slate-500">Se você deseja conectar <strong>outro número de celular</strong>, clique no botão vermelho abaixo para desconectar a sessão atual.</p>
@@ -345,10 +345,10 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
           {/* ESTADO 2: AGUARDANDO LEITURA / GERANDO QR CODE */}
           {(status === 'connecting' || qrCodeBase64) && (
             <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="p-4 bg-white border-2 border-dashed border-emerald-300 rounded-3xl shadow-md flex flex-col items-center relative">
+              <div className="p-4 bg-white border-2 border-dashed border-blue-300 rounded-3xl shadow-md flex flex-col items-center relative">
                 {isLoadingQr ? (
                   <div className="w-56 h-56 flex flex-col items-center justify-center gap-2 bg-slate-50 rounded-2xl">
-                    <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                     <span className="text-xs font-bold text-slate-600">Gerando QR Code...</span>
                   </div>
                 ) : qrCodeBase64 ? (
@@ -368,7 +368,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
               {/* Instruções de Conexão */}
               <div className="w-full bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-2">
                 <span className="font-bold text-slate-900 block flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-emerald-600" /> Passo a Passo para Conectar:
+                  <Smartphone className="w-4 h-4 text-blue-600" /> Passo a Passo para Conectar:
                 </span>
                 <ol className="list-decimal list-inside space-y-1 text-slate-600 pl-1">
                   <li>Abra o <strong>WhatsApp</strong> no celular do consultório.</li>
@@ -383,7 +383,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
                   type="button"
                   onClick={generateQrCode}
                   disabled={isLoadingQr}
-                  className="text-xs text-emerald-700 font-bold hover:underline flex items-center gap-1.5 py-1"
+                  className="text-xs text-blue-700 font-bold hover:underline flex items-center gap-1.5 py-1"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isLoadingQr ? 'animate-spin' : ''}`} /> Atualizar QR Code
                 </button>
@@ -394,8 +394,8 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
           {/* ESTADO 3: DESCONECTADO (BOTÃO INICIAL) */}
           {status === 'disconnected' && !qrCodeBase64 && (
             <div className="text-center space-y-5 py-4">
-              <div className="w-16 h-16 bg-slate-100 text-slate-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
-                <QrCode className="w-9 h-9 text-emerald-600" />
+              <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto shadow-inner border border-blue-100">
+                <QrCode className="w-9 h-9 text-blue-600" />
               </div>
 
               <div className="space-y-1">
@@ -410,7 +410,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
                   type="button"
                   onClick={generateQrCode}
                   disabled={isLoadingQr}
-                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm flex items-center justify-center gap-2 transition-all"
+                  className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/20 text-sm flex items-center justify-center gap-2 transition-all"
                 >
                   {isLoadingQr ? (
                     <>
@@ -428,7 +428,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
 
           {/* Garantia de Segurança */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
             <span>Conexão direta encriptada ponta a ponta via Evolution API oficial.</span>
           </div>
         </div>

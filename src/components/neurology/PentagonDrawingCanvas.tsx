@@ -164,7 +164,7 @@ export default function PentagonDrawingCanvas({ initialImage, onSave }: Props) {
     <div className="border border-slate-300 rounded-2xl p-3 bg-slate-50 space-y-2 max-w-md">
       <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
         <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-          <PenTool size={14} className="text-purple-600" />
+          <PenTool size={14} className="text-blue-600" />
           Desenho dos Pentágonos (MEEM)
         </span>
 
@@ -228,7 +228,7 @@ export default function PentagonDrawingCanvas({ initialImage, onSave }: Props) {
             setShowTemplate(!showTemplate);
             clearCanvas();
           }}
-          className="text-purple-700 font-bold hover:underline"
+          className="text-blue-600 font-bold hover:underline"
         >
           {showTemplate ? 'Ocultar Modelo' : 'Mostrar Modelo'}
         </button>

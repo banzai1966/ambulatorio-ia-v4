@@ -125,18 +125,18 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
     <div className="space-y-6">
       
       {/* CARD DE CONEXÃO WHATSAPP */}
-      <div className="p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200 rounded-3xl space-y-4">
+      <div className="p-5 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 border border-blue-200/80 rounded-3xl space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-sm">
+            <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl shadow-sm">
               <MessageSquare size={22} />
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 WhatsApp da Clínica
                 {whatsappStatus === 'connected' ? (
-                  <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold flex items-center gap-1 border border-emerald-300">
-                    <CheckCircle2 size={12} /> Conectado
+                  <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-[10px] font-bold flex items-center gap-1 border border-blue-300">
+                    <CheckCircle2 size={12} className="text-blue-600" /> Conectado
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold border border-amber-300">
@@ -145,7 +145,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
                 )}
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Instância ativa: <strong className="font-mono text-emerald-700">{info.evolution_instance || 'ambulatorio'}</strong>
+                Instância ativa: <strong className="font-mono text-blue-700">{info.evolution_instance || 'ambulatorio'}</strong>
               </p>
             </div>
           </div>
@@ -154,7 +154,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={() => setIsQrModalOpen(true)}
-              className="flex-1 sm:flex-none px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 shrink-0"
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-500/10 flex items-center justify-center gap-2 shrink-0"
             >
               <QrCode size={16} />
               Conectar / Ver QR Code
@@ -163,21 +163,21 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Botão de Toggle para Configuração Avançada da API (URL, Instância e API Key) */}
-        <div className="border-t border-emerald-200/70 pt-3">
+        <div className="border-t border-blue-200/60 pt-3">
           <button
             type="button"
             onClick={() => setShowAdvancedWhatsapp(!showAdvancedWhatsapp)}
-            className="text-xs text-emerald-800 font-bold flex items-center justify-between w-full hover:text-emerald-950 transition-colors"
+            className="text-xs text-blue-800 font-bold flex items-center justify-between w-full hover:text-blue-950 transition-colors"
           >
             <span className="flex items-center gap-1.5">
-              <Server size={14} className="text-emerald-600" />
+              <Server size={14} className="text-blue-600" />
               Configurações da Evolution API (URL, Nome da Instância e API Key)
             </span>
             {showAdvancedWhatsapp ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
 
           {showAdvancedWhatsapp && (
-            <div className="mt-3.5 space-y-3 bg-white/90 p-4 rounded-2xl border border-emerald-200 animate-in fade-in duration-150">
+            <div className="mt-3.5 space-y-3 bg-white/95 p-4 rounded-2xl border border-blue-200 animate-in fade-in duration-150">
               <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
                 <p className="font-bold flex items-center gap-1 mb-1">
                   <HelpCircle size={13} className="text-blue-600" /> Onde encontrar esses dados na Evolution API?
@@ -199,7 +199,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
                     type="text"
                     value={info.evolution_url || ''}
                     onChange={(e) => setInfo({ ...info, evolution_url: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-mono"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none text-xs font-mono"
                     placeholder="https://api.makprojetosmake.com.br"
                   />
                 </div>
@@ -214,7 +214,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
                       type="text"
                       value={info.evolution_instance || ''}
                       onChange={(e) => setInfo({ ...info, evolution_instance: e.target.value.trim() })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-mono font-bold text-slate-800"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none text-xs font-mono font-bold text-slate-800"
                       placeholder="drcarlos"
                     />
                   </div>
@@ -246,7 +246,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
                         type={showApiKey ? "text" : "password"}
                         value={info.evolution_apikey || ''}
                         onChange={(e) => setInfo({ ...info, evolution_apikey: e.target.value.trim() })}
-                        className="w-full pr-8 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-mono"
+                        className="w-full pr-8 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none text-xs font-mono"
                         placeholder="E6247913DB92-48B4..."
                       />
                       <button
@@ -268,7 +268,7 @@ export default function ClinicSettings({ onClose }: { onClose: () => void }) {
                     disabled={testingConnection}
                     className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
                   >
-                    {testingConnection ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} className="text-emerald-600" />}
+                    {testingConnection ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} className="text-blue-600" />}
                     Testar Conexão desta Instância
                   </button>
                 </div>

@@ -57,7 +57,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
           onClick={() => setIsExpanded(!isExpanded)}
           className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
         >
-          <div className="p-2 bg-purple-100 rounded-xl text-purple-700">
+          <div className="p-2 bg-blue-50 border border-blue-200/60 rounded-xl text-blue-700">
             <Brain size={22} />
           </div>
           <div>
@@ -72,7 +72,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
           <button
             type="button"
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-xs active:scale-95 transition-all"
           >
             <PenTool size={15} />
             Anotação Livre na Prancha
@@ -111,7 +111,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
           {/* Força Muscular Table */}
           <div>
             <h3 className="font-bold text-slate-800 mb-2 text-sm flex items-center gap-2">
-              <Activity size={16} className="text-purple-600" />
+              <Activity size={16} className="text-blue-600" />
               Força Muscular, Tônus e Trofismo
             </h3>
             <table className="w-full text-center border-collapse border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
@@ -137,7 +137,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                             type="text" 
                             value={(data?.forca_muscular as any)?.[k]?.[col] || ''}
                             onChange={(e) => updateField(`forca_muscular.${k}.${col}`, e.target.value)}
-                            className="w-full h-full p-1.5 outline-none text-center bg-transparent text-xs focus:bg-purple-50/50"
+                            className="w-full h-full p-1.5 outline-none text-center bg-transparent text-xs focus:bg-blue-50/50"
                           />
                         </td>
                       ))}
@@ -193,7 +193,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                                 value={val}
                                 title={val || 'Clique para preencher'}
                                 onChange={(e) => updateField(`sensibilidade.${k}.${col}`, e.target.value)}
-                                className="w-full h-full p-1 outline-none text-center bg-transparent text-[11px] font-medium focus:bg-purple-50/50"
+                                className="w-full h-full p-1 outline-none text-center bg-transparent text-[11px] font-medium focus:bg-blue-50/50"
                               />
                             </td>
                           );
@@ -210,17 +210,17 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
               <h3 className="font-bold text-slate-800 mb-2 text-xs">Coordenação Motora</h3>
               <div className="border border-slate-300 rounded-xl p-3 text-xs space-y-2 bg-slate-50">
                 <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-800">
-                  <input type="checkbox" checked={!!data?.coordenacao?.status} onChange={(e) => updateField('coordenacao.status', e.target.checked ? 'normal' : null)} className="w-4 h-4 border-slate-300 rounded text-purple-600 focus:ring-purple-600" />
+                  <input type="checkbox" checked={!!data?.coordenacao?.status} onChange={(e) => updateField('coordenacao.status', e.target.checked ? 'normal' : null)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-600" />
                   Coordenação Normal
                 </label>
                 <div className="flex items-center gap-3 pl-1 pt-1 border-t border-slate-200">
                   <span className="text-slate-700 font-medium">Lado Alterado:</span>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-bold"><input type="checkbox" checked={data?.coordenacao?.lado === 'D'} onChange={(e) => updateField('coordenacao.lado', e.target.checked ? 'D' : null)} className="w-4 h-4 rounded text-purple-600"/> D</label>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-bold"><input type="checkbox" checked={data?.coordenacao?.lado === 'E'} onChange={(e) => updateField('coordenacao.lado', e.target.checked ? 'E' : null)} className="w-4 h-4 rounded text-purple-600"/> E</label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-bold"><input type="checkbox" checked={data?.coordenacao?.lado === 'D'} onChange={(e) => updateField('coordenacao.lado', e.target.checked ? 'D' : null)} className="w-4 h-4 rounded text-blue-600"/> D</label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-bold"><input type="checkbox" checked={data?.coordenacao?.lado === 'E'} onChange={(e) => updateField('coordenacao.lado', e.target.checked ? 'E' : null)} className="w-4 h-4 rounded text-blue-600"/> E</label>
                 </div>
                 {['index_nariz', 'romberg', 'calcanhar_joelho', 'diadococinesia'].map(k => (
                   <label key={k} className="flex items-center gap-2 cursor-pointer text-slate-700 hover:text-slate-900">
-                    <input type="checkbox" checked={!!(data?.coordenacao as any)?.[k]} onChange={(e) => updateField(`coordenacao.${k}`, e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-purple-600 focus:ring-purple-600" />
+                    <input type="checkbox" checked={!!(data?.coordenacao as any)?.[k]} onChange={(e) => updateField(`coordenacao.${k}`, e.target.checked)} className="w-4 h-4 border-slate-300 rounded text-blue-600 focus:ring-blue-600" />
                     {k.replace('_', '-').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('-')}
                   </label>
                 ))}
@@ -231,7 +231,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
           {/* Nervos Cranianos */}
           <div className="border border-slate-300 rounded-2xl p-4 text-xs bg-slate-50/50 space-y-3">
             <h3 className="font-bold text-slate-800 text-xs flex items-center gap-2">
-              <Eye size={16} className="text-purple-600" />
+              <Eye size={16} className="text-blue-600" />
               Nervos Cranianos (I a XII), Pupilas & Campo Visual
             </h3>
             <div className="flex justify-between items-center px-2 mb-4 relative overflow-x-auto pb-2">
@@ -244,7 +244,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                      type="text" 
                      value={(data?.nervos_cranianos as any)?.[n.toLowerCase()] || ''}
                      onChange={(e) => updateField(`nervos_cranianos.${n.toLowerCase()}`, e.target.value)}
-                     className="w-10 outline-none text-center text-slate-700 bg-transparent focus:border-purple-600 text-xs py-0.5"
+                     className="w-10 outline-none text-center text-slate-700 bg-transparent focus:border-blue-600 text-xs py-0.5"
                    />
                  </div>
                ))}
@@ -263,8 +263,8 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
 
                <div className="flex items-center gap-3">
                  <span className="font-bold text-slate-800">Fundo de Olho:</span>
-                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700"><input type="checkbox" checked={data?.nervos_cranianos?.fundo_olho === 'normal'} onChange={(e) => updateField('nervos_cranianos.fundo_olho', e.target.checked ? 'normal' : null)} className="w-4 h-4 rounded text-purple-600"/> Normal</label>
-                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700"><input type="checkbox" checked={data?.nervos_cranianos?.fundo_olho === 'alterado'} onChange={(e) => updateField('nervos_cranianos.fundo_olho', e.target.checked ? 'alterado' : null)} className="w-4 h-4 rounded text-purple-600"/> Alterado</label>
+                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700"><input type="checkbox" checked={data?.nervos_cranianos?.fundo_olho === 'normal'} onChange={(e) => updateField('nervos_cranianos.fundo_olho', e.target.checked ? 'normal' : null)} className="w-4 h-4 rounded text-blue-600"/> Normal</label>
+                 <label className="flex items-center gap-1.5 cursor-pointer text-slate-700"><input type="checkbox" checked={data?.nervos_cranianos?.fundo_olho === 'alterado'} onChange={(e) => updateField('nervos_cranianos.fundo_olho', e.target.checked ? 'alterado' : null)} className="w-4 h-4 rounded text-blue-600"/> Alterado</label>
                </div>
 
                <div className="w-[1px] h-6 bg-slate-200" />
@@ -280,7 +280,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr,400px] gap-6 items-start pb-2 border border-slate-200 rounded-2xl p-4 bg-slate-50/50">
             <div>
               <h3 className="font-bold text-slate-800 mb-3 text-xs flex items-center gap-2">
-                <Brain size={16} className="text-purple-600" />
+                <Brain size={16} className="text-blue-600" />
                 Avaliação Cognitiva (MEEM - Mini-Exame do Estado Mental)
               </h3>
               <table className="w-full text-center border-collapse border border-slate-300 rounded-xl overflow-hidden bg-white shadow-2xs">
@@ -305,7 +305,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                             type="text" 
                             value={(data?.cognitivo as any)?.[col] || ''}
                             onChange={(e) => updateField(`cognitivo.${col}`, e.target.value)}
-                            className="w-full h-full p-1 outline-none text-center bg-transparent text-xs font-bold text-purple-900"
+                            className="w-full h-full p-1 outline-none text-center bg-transparent text-xs font-bold text-blue-900"
                           />
                         </td>
                      ))}
@@ -324,7 +324,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                         value={opt}
                         checked={data?.fluencia_verbal === opt}
                         onChange={(e) => updateField('fluencia_verbal', e.target.value)}
-                        className="w-3.5 h-3.5 border-slate-300 text-purple-600 focus:ring-purple-600" 
+                        className="w-3.5 h-3.5 border-slate-300 text-blue-600 focus:ring-blue-600" 
                       />
                       {opt}s
                     </label>
@@ -333,7 +333,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
 
                 <div className="flex items-center gap-1.5">
                    <span className="font-bold text-slate-800 text-xs">Score Total:</span>
-                   <input type="text" value={data?.cognitivo?.total_score || ''} onChange={(e) => updateField('cognitivo.total_score', e.target.value)} className="w-12 border-b-2 border-purple-600 outline-none text-center text-purple-900 font-extrabold bg-transparent text-sm" />
+                   <input type="text" value={data?.cognitivo?.total_score || ''} onChange={(e) => updateField('cognitivo.total_score', e.target.value)} className="w-12 border-b-2 border-blue-600 outline-none text-center text-blue-900 font-extrabold bg-transparent text-sm" />
                    <span className="font-bold text-slate-800 text-xs">/30</span>
                 </div>
               </div>

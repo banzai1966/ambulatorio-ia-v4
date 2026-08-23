@@ -3,25 +3,28 @@ import { motion } from 'motion/react';
 import { 
   Users, 
   Calendar, 
-  Clock, 
   TrendingUp, 
   Activity, 
   AlertCircle, 
   ArrowRight, 
   Plus,
   MessageSquare,
-  CheckCircle2
+  Sparkles,
+  ArrowUpRight,
+  ShieldCheck,
+  Stethoscope,
+  ChevronRight,
+  Zap
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { 
-  BarChart, 
-  Bar, 
+  AreaChart, 
+  Area, 
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer 
 } from 'recharts';
 
 interface DashboardProps {
@@ -30,125 +33,6 @@ interface DashboardProps {
   onOpenMessages: () => void;
   onOpenHistory: () => void;
 }
-
-const themes = {
-  light: {
-    bg: "p-0 rounded-none bg-transparent border-none shadow-none",
-    textTitle: "text-slate-800",
-    textSubtitle: "text-slate-500",
-    cardBg: "bg-white",
-    cardBorder: "border-slate-100",
-    cardHoverShadow: "hover:shadow-md",
-    textPrimary: "text-slate-800",
-    textSecondary: "text-slate-500",
-    textMuted: "text-slate-400",
-    iconBg: "bg-slate-50 border border-slate-100",
-    btnSecondary: "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-800 border-slate-100",
-    graphContainer: "bg-white border-slate-100",
-    gridStroke: "#f1f5f9",
-    tickColor: "#94a3b8",
-    barColorActive: "#3b82f6",
-    barColorInactive: "#e2e8f0",
-    tooltipConfig: {
-      cursor: { fill: '#f8fafc' },
-      contentStyle: { 
-        borderRadius: '16px', 
-        border: 'none', 
-        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-        padding: '12px',
-        backgroundColor: '#ffffff',
-        color: '#1e293b'
-      }
-    }
-  },
-  charcoal: {
-    bg: "p-6 md:p-8 rounded-[32px] bg-slate-950/80 border border-slate-900 shadow-2xl backdrop-blur-md",
-    textTitle: "text-slate-100",
-    textSubtitle: "text-slate-400",
-    cardBg: "bg-slate-900/90 backdrop-blur-md",
-    cardBorder: "border-slate-800/80",
-    cardHoverShadow: "hover:shadow-xl hover:shadow-slate-950/30",
-    textPrimary: "text-slate-100",
-    textSecondary: "text-slate-400",
-    textMuted: "text-slate-550",
-    iconBg: "bg-slate-800/80 border border-slate-700/85",
-    btnSecondary: "bg-slate-805 text-slate-300 hover:bg-slate-700 hover:text-white border-slate-750",
-    graphContainer: "bg-slate-900/95 border-slate-800/80",
-    gridStroke: "#1e293b",
-    tickColor: "#64748b",
-    barColorActive: "#38bdf8",
-    barColorInactive: "#334155",
-    tooltipConfig: {
-      cursor: { fill: '#0f172a' },
-      contentStyle: { 
-        borderRadius: '16px', 
-        border: '1px solid #334155', 
-        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)', 
-        padding: '12px', 
-        backgroundColor: '#0f172a', 
-        color: '#f8fafc'
-      }
-    }
-  },
-  navy: {
-    bg: "p-6 md:p-8 rounded-[32px] bg-[#020617]/95 border border-blue-950/50 shadow-2xl shadow-blue-950/20 backdrop-blur-md",
-    textTitle: "text-blue-50",
-    textSubtitle: "text-blue-300/80",
-    cardBg: "bg-slate-900 border border-blue-900/50",
-    cardBorder: "border-blue-900/40",
-    cardHoverShadow: "hover:shadow-xl hover:shadow-blue-950/30",
-    textPrimary: "text-blue-100",
-    textSecondary: "text-blue-300",
-    textMuted: "text-blue-400",
-    iconBg: "bg-blue-950/80 border border-blue-900/50",
-    btnSecondary: "bg-blue-950 text-blue-200 hover:bg-blue-900 hover:text-white border-blue-900/40",
-    graphContainer: "bg-slate-900 border-blue-900/55",
-    gridStroke: "#172554",
-    tickColor: "#475569",
-    barColorActive: "#60a5fa",
-    barColorInactive: "#1e293b",
-    tooltipConfig: {
-      cursor: { fill: '#172554' },
-      contentStyle: { 
-        borderRadius: '16px', 
-        border: '1px solid #1e3a8a', 
-        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)', 
-        padding: '12px', 
-        backgroundColor: '#090d16', 
-        color: '#f8fafc'
-      }
-    }
-  },
-  ocean: {
-    bg: "p-6 md:p-8 rounded-[32px] bg-[#020d14]/95 border border-cyan-950/50 shadow-2xl shadow-cyan-950/20 backdrop-blur-md",
-    textTitle: "text-emerald-50",
-    textSubtitle: "text-cyan-200/80",
-    cardBg: "bg-[#0b171f]/90 backdrop-blur-md border border-cyan-950/80",
-    cardBorder: "border-cyan-900/40",
-    cardHoverShadow: "hover:shadow-xl hover:shadow-emerald-950/20",
-    textPrimary: "text-cyan-100",
-    textSecondary: "text-cyan-300",
-    textMuted: "text-cyan-500",
-    iconBg: "bg-[#071118]/80 border border-cyan-900/50",
-    btnSecondary: "bg-[#071118] text-cyan-200 hover:bg-[#0f2433] hover:text-white border-cyan-900/40",
-    graphContainer: "bg-[#0b171f]/90 border-cyan-950/85",
-    gridStroke: "#0e3043",
-    tickColor: "#155e75",
-    barColorActive: "#22d3ee",
-    barColorInactive: "#152a36",
-    tooltipConfig: {
-      cursor: { fill: '#0c1d28' },
-      contentStyle: { 
-        borderRadius: '16px', 
-        border: '1px solid #164e63', 
-        boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)', 
-        padding: '12px', 
-        backgroundColor: '#0b171f', 
-        color: '#ecfeff'
-      }
-    }
-  }
-};
 
 export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMessages, onOpenHistory }: DashboardProps) {
   const [stats, setStats] = useState({
@@ -160,17 +44,6 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
   const [recentPatients, setRecentPatients] = useState<any[]>([]);
   const [chartData, setChartData] = useState<{ name: string; pacientes: number }[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [theme, setTheme] = useState<'light' | 'charcoal' | 'navy' | 'ocean'>(() => {
-    return (localStorage.getItem('dashboard-theme') as any) || 'light';
-  });
-
-  const handleThemeChange = (newTheme: 'light' | 'charcoal' | 'navy' | 'ocean') => {
-    setTheme(newTheme);
-    localStorage.setItem('dashboard-theme', newTheme);
-  };
-
-  const t = themes[theme] || themes.light;
 
   useEffect(() => {
     fetchDashboardData();
@@ -191,8 +64,6 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
         const pad = (n: string) => n.padStart(2, '0');
         const localDayStr = `${year}-${pad(month)}-${pad(day)}`;
         
-        // Convert to start of day in UTC (using -3h offset for America/Sao_Paulo)
-        // Since America/Sao_Paulo is UTC-3, 00:00:00 local time is 03:00:00 UTC.
         const startOfLocalDayUTC = new Date(`${localDayStr}T03:00:00.000Z`);
         return {
           todayDate: localDayStr,
@@ -219,7 +90,6 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
       const counts: Record<string, number> = {};
       const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
       
-      // Inicializar com 0 respeitando o fuso horário
       for (let i = 6; i >= 0; i--) {
         const d = new Date(`${todayDate}T00:00:00Z`);
         d.setUTCDate(d.getUTCDate() - i);
@@ -271,22 +141,17 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
         }
       };
 
-      // 1. Novos Pacientes Hoje (Prontuários criados hoje)
       const newPatients = await tryCount('prontuarios', [{ column: 'created_at', value: todayISO, op: 'gte' }]);
 
-      // 2. Agendamentos Confirmados para hoje
       const confirmed = await tryCount('agendamentos', [
         { column: 'status', value: ['scheduled', 'Agendado'], op: 'in' },
         { column: 'data_consulta', value: todayDate, op: 'eq' }
       ]);
 
-      // 3. Pacientes que precisam de retorno (Status Alerta ou Urgente)
       const followUp = await tryCount('prontuarios', [{ column: 'paciente_status', value: ['Alerta', 'Urgente'], op: 'in' }]);
 
-      // 4. Mensagens não lidas ou totais hoje
       const messages = await tryCount('mensagens', [{ column: 'created_at', value: todayISO, op: 'gte' }]);
 
-      // 5. Pacientes Recentes
       const tryFetchRecent = async (columns: string): Promise<any[]> => {
         const { data, error } = await supabase
           .from('prontuarios')
@@ -312,7 +177,6 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
         const recent = await tryFetchRecent('id, paciente_nome_completo, paciente_status, created_at, especialidade, user_id, medico_id');
 
         if (recent) {
-          // Fallback manual para nomes de médicos se o join falhar
           const recentWithNames = await Promise.all(recent.map(async (patient: any) => {
             let medicoNome = patient.profiles?.full_name;
             const doctorId = patient.medico_id || patient.user_id;
@@ -347,282 +211,335 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
     }
   }
 
+  const currentDateFormatted = new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  }).format(new Date());
+
   return (
-    <div className={`transition-all duration-300 ${t.bg}`}>
-      <div className="space-y-8 pb-4">
-        {/* Welcome Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className={`text-3xl font-bold ${t.textTitle} tracking-tight transition-colors`}>Visão Geral de Gestão</h1>
-            <p className={`${t.textSubtitle} font-medium transition-colors`}>Bem-vindo ao seu centro de comando clínico.</p>
+    <div className="space-y-7 pb-6 max-w-7xl mx-auto">
+      {/* Top Header estilo CRM Moderno (Dribbble Ref) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full capitalize">
+              {currentDateFormatted}
+            </span>
           </div>
-          
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Seletor de Tema do Dashboard */}
-            <div className={`flex items-center gap-1 p-1 ${t.cardBg} border ${t.cardBorder} rounded-2xl shadow-sm transition-all`}>
-              <span className={`text-[9px] font-bold uppercase tracking-wider pl-2 pr-1.5 ${t.textSecondary}`}>
-                Visual:
-              </span>
-              <button
-                onClick={() => handleThemeChange('light')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                  theme === 'light' 
-                    ? 'bg-clinical-blue text-white shadow-sm' 
-                    : `${t.textSecondary} hover:bg-slate-100 dark:hover:bg-slate-800`
-                }`}
-              >
-                Claro
-              </button>
-              <button
-                onClick={() => handleThemeChange('charcoal')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                  theme === 'charcoal' 
-                    ? 'bg-slate-700 text-white shadow-sm' 
-                    : `${t.textSecondary} hover:bg-slate-800/80`
-                }`}
-              >
-                Grafite
-              </button>
-              <button
-                onClick={() => handleThemeChange('navy')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                  theme === 'navy' 
-                    ? 'bg-blue-600 text-white shadow-sm' 
-                    : `${t.textSecondary} hover:bg-slate-800/80`
-                }`}
-              >
-                Naval
-              </button>
-              <button
-                onClick={() => handleThemeChange('ocean')}
-                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
-                  theme === 'ocean' 
-                    ? 'bg-cyan-600 text-white shadow-sm' 
-                    : `${t.textSecondary} hover:bg-slate-850`
-                }`}
-              >
-                Oceano
-              </button>
-            </div>
-
-            <button 
-              onClick={onStartConsultation}
-              className="flex items-center gap-2 px-5 py-2.5 bg-clinical-blue text-white rounded-2xl font-bold shadow-lg shadow-clinical-blue/20 hover:scale-105 active:scale-95 transition-all"
-            >
-              <Plus size={18} />
-              Novo Atendimento
-            </button>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Visão Geral de Gestão
+          </h1>
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">
+            Acompanhe a atividade clínica, agendamentos e prontuários em tempo real.
+          </p>
         </div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard 
-            title="Novos Pacientes" 
-            value={stats.newPatientsToday} 
-            subtitle="Hoje" 
-            icon={<Users className="text-blue-500" />} 
-            color="bg-blue-50"
-            trend="+12%"
-            t={t}
-          />
-          <StatCard 
-            title="Agendamentos" 
-            value={stats.confirmedAppointments} 
-            subtitle="Confirmados Hoje" 
-            icon={<Calendar className="text-emerald-500" />} 
-            color="bg-emerald-50"
-            trend="Estável"
-            t={t}
-          />
-          <StatCard 
-            title="Precisam Retorno" 
-            value={stats.needsFollowUp} 
-            subtitle="Status Alerta/Urgente" 
-            icon={<AlertCircle className="text-amber-500" />} 
-            color="bg-amber-50"
-            trend="Atenção"
-            t={t}
-          />
-          <StatCard 
-            title="Mensagens" 
-            value={stats.totalMessages} 
-            subtitle="Recebidas Hoje" 
-            icon={<MessageSquare className="text-purple-500" />} 
-            color="bg-purple-50"
-            trend="+5"
-            t={t}
-          />
+        
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={onStartConsultation}
+            className="flex items-center gap-2.5 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-bold text-sm shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 active:scale-98 transition-all"
+          >
+            <Plus size={18} className="stroke-[2.5]" />
+            Novo Atendimento
+          </button>
         </div>
+      </div>
 
-        <div className="grid lg:grid-cols-12 gap-8">
-          {/* Chart Section */}
-          <div className={`lg:col-span-8 ${t.cardBg} p-8 rounded-[32px] border ${t.cardBorder} shadow-sm transition-all`}>
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h3 className={`text-lg font-bold ${t.textPrimary}`}>Volume de Atendimentos</h3>
-                <p className={`text-xs ${t.textMuted} font-medium uppercase tracking-widest`}>Últimos 7 dias</p>
+      {/* KPI Cards com Visual Arredondado & Suave (Estilo Dribbble) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        <StatCard 
+          title="Novos Pacientes" 
+          value={stats.newPatientsToday} 
+          subtitle="Cadastrados hoje" 
+          icon={<Users size={20} className="text-blue-600" />} 
+          iconBg="bg-blue-50"
+          trend="+12%"
+          trendType="up"
+        />
+        <StatCard 
+          title="Agendamentos" 
+          value={stats.confirmedAppointments} 
+          subtitle="Confirmados hoje" 
+          icon={<Calendar size={20} className="text-emerald-600" />} 
+          iconBg="bg-emerald-50"
+          trend="Em dia"
+          trendType="neutral"
+        />
+        <StatCard 
+          title="Precisam Retorno" 
+          value={stats.needsFollowUp} 
+          subtitle="Status Alerta/Urgente" 
+          icon={<AlertCircle size={20} className="text-amber-600" />} 
+          iconBg="bg-amber-50"
+          trend="Atenção"
+          trendType="alert"
+        />
+        <StatCard 
+          title="Mensagens & WhatsApp" 
+          value={stats.totalMessages} 
+          subtitle="Recebidas hoje" 
+          icon={<MessageSquare size={20} className="text-indigo-600" />} 
+          iconBg="bg-indigo-50"
+          trend="+5 ativas"
+          trendType="up"
+        />
+      </div>
+
+      {/* Seção Principal: Gráfico de Linha/Área Suave + Atendimentos Recentes */}
+      <div className="grid lg:grid-cols-12 gap-6 items-start">
+        {/* Gráfico de Evolução (Área Fluída com Gradiente estilo Dribbble) */}
+        <div className="lg:col-span-8 bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">Volume de Atendimentos</h3>
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
               </div>
-              <div className={`flex items-center gap-2 px-3 py-1 ${t.iconBg} rounded-lg border ${t.cardBorder} transition-all`}>
-                <TrendingUp size={14} className="text-emerald-500" />
-                <span className={`text-xs font-bold ${t.textSecondary}`}>+15% vs semana anterior</span>
-              </div>
+              <p className="text-xs text-slate-400 font-medium">Fluxo de pacientes atendidos nos últimos 7 dias</p>
             </div>
             
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={t.gridStroke} />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: t.tickColor, fontSize: 12, fontWeight: 500 }}
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: t.tickColor, fontSize: 12, fontWeight: 500 }}
-                  />
-                  <Tooltip 
-                    cursor={t.tooltipConfig.cursor}
-                    contentStyle={t.tooltipConfig.contentStyle}
-                  />
-                  <Bar dataKey="pacientes" radius={[6, 6, 0, 0]}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index === 4 ? t.barColorActive : t.barColorInactive} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100/80">
+              <TrendingUp size={14} className="text-emerald-600" />
+              <span className="text-xs font-bold text-emerald-700">+15% vs semana anterior</span>
             </div>
           </div>
+          
+          <div className="h-[280px] w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorPacientes" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.25}/>
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
+                  dy={10}
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }}
+                  allowDecimals={false}
+                />
+                <Tooltip 
+                  cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }}
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-slate-900 text-white px-3.5 py-2 rounded-2xl shadow-xl border border-slate-800 text-xs">
+                          <p className="font-semibold text-slate-300 mb-0.5">{label}</p>
+                          <p className="font-bold text-indigo-300 text-sm">
+                            {payload[0].value} {payload[0].value === 1 ? 'paciente' : 'pacientes'}
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="pacientes" 
+                  stroke="#4f46e5" 
+                  strokeWidth={3} 
+                  fillOpacity={1} 
+                  fill="url(#colorPacientes)" 
+                  activeDot={{ r: 6, fill: '#4f46e5', stroke: '#ffffff', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
 
-          {/* Recent Activity / Follow up */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className={`${t.cardBg} p-8 rounded-[32px] border ${t.cardBorder} shadow-sm h-full transition-all`}>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className={`text-lg font-bold ${t.textPrimary}`}>Atendimentos Recentes</h3>
-                <button 
-                  onClick={onOpenHistory}
-                  className="text-xs font-bold text-clinical-blue hover:underline"
-                >
-                  Ver tudo
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                {recentPatients.length > 0 ? (
-                  recentPatients.map((patient, i) => (
-                    <div key={patient.id} className={`flex items-center gap-4 p-3 rounded-2xl hover:bg-slate-50/10 dark:hover:bg-slate-800/40 transition-colors group cursor-pointer`}>
-                      <div className={`w-10 h-10 ${t.iconBg} rounded-xl flex items-center justify-center ${t.textMuted} group-hover:bg-clinical-blue/10 group-hover:text-clinical-blue transition-colors`}>
-                        <Activity size={20} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold ${t.textPrimary} truncate`}>{patient.paciente_nome_completo || 'Paciente'}</p>
-                        <p className={`text-[10px] ${t.textMuted} font-medium uppercase tracking-wider`}>
-                          {patient.created_at ? new Date(patient.created_at).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Sem data'} • {patient.especialidade || 'Geral'} • {patient.medico_nome || 'Médico'}
-                        </p>
-                      </div>
-                      <div className={`w-2 h-2 rounded-full ${
-                        patient.paciente_status === 'Urgente' ? 'bg-red-500' : 
-                        patient.paciente_status === 'Alerta' ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`} />
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <p className={`text-sm ${t.textMuted}`}>Nenhum atendimento recente.</p>
-                  </div>
-                )}
-              </div>
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-400">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 inline-block" />
+              Atendimentos Registrados
+            </span>
+            <span className="font-medium">Total na semana: {chartData.reduce((acc, curr) => acc + curr.pacientes, 0)}</span>
+          </div>
+        </div>
 
+        {/* Atendimentos Recentes com Visual Refinado */}
+        <div className="lg:col-span-4 bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs flex flex-col justify-between space-y-5">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Atendimentos Recentes</h3>
+                <p className="text-xs text-slate-400">Últimos pacientes atendidos</p>
+              </div>
               <button 
-                onClick={onOpenAgenda}
-                className={`w-full mt-8 py-4 ${t.btnSecondary} rounded-2xl text-sm font-bold flex items-center justify-center gap-2 transition-colors border`}
+                type="button"
+                onClick={onOpenHistory}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
               >
-                <Calendar size={18} />
-                Ver Agenda Completa
-                <ArrowRight size={16} />
+                Ver todos
+                <ChevronRight size={14} />
               </button>
             </div>
+            
+            <div className="space-y-2.5">
+              {recentPatients.length > 0 ? (
+                recentPatients.map((patient) => {
+                  const isUrg = patient.paciente_status === 'Urgente';
+                  const isAlert = patient.paciente_status === 'Alerta';
+                  
+                  return (
+                    <div 
+                      key={patient.id} 
+                      onClick={onOpenHistory}
+                      className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/70 hover:bg-slate-100/80 border border-slate-100 transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center text-slate-600 group-hover:text-blue-600 group-hover:border-blue-200 shadow-xs transition-colors shrink-0">
+                          <Activity size={17} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+                            {patient.paciente_nome_completo || 'Paciente'}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium truncate">
+                            {patient.created_at ? new Date(patient.created_at).toLocaleDateString('pt-BR', {timeZone: 'America/Sao_Paulo'}) : 'Hoje'} • {patient.especialidade || 'Geral'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <span className={`w-2 h-2 rounded-full ${
+                          isUrg ? 'bg-red-500 animate-pulse' : 
+                          isAlert ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`} />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-8 px-4 border border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                  <p className="text-xs text-slate-400">Nenhum atendimento registrado ainda.</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Quick Actions / Shortcuts */}
-        <div className="grid md:grid-cols-3 gap-6">
-          <QuickAction 
-            title="Histórico de Mensagens" 
-            description="Acompanhe as conversas do WhatsApp" 
-            icon={<MessageSquare size={24} />} 
-            onClick={onOpenMessages}
-            color="text-purple-500"
-            t={t}
-          />
-          <QuickAction 
-            title="Agenda do Dia" 
-            description="Confira seus próximos pacientes" 
-            icon={<Calendar size={24} />} 
+          <button 
+            type="button"
             onClick={onOpenAgenda}
-            color="text-emerald-500"
-            t={t}
-          />
-          <QuickAction 
-            title="Base de Conhecimento" 
-            description="Dicas e guia de uso do sistema" 
-            icon={<CheckCircle2 size={24} />} 
-            onClick={() => {}}
-            color="text-clinical-blue"
-            t={t}
-          />
+            className="w-full py-3 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 border border-slate-200/80 transition-all"
+          >
+            <Calendar size={15} className="text-slate-500" />
+            <span>Acessar Agenda Completa</span>
+            <ArrowRight size={14} className="text-slate-400" />
+          </button>
         </div>
+      </div>
+
+      {/* Atalhos Rápidos com Cantos Arredondados & Cores Suaves */}
+      <div className="grid sm:grid-cols-3 gap-4 sm:gap-5">
+        <QuickActionCard 
+          title="WhatsApp & Mensagens" 
+          description="Acompanhe confirmações automáticas e conversas" 
+          icon={<MessageSquare size={20} className="text-indigo-600" />} 
+          iconBg="bg-indigo-50"
+          onClick={onOpenMessages}
+        />
+        <QuickActionCard 
+          title="Agenda do Consultório" 
+          description="Organize horários e novos agendamentos" 
+          icon={<Calendar size={20} className="text-emerald-600" />} 
+          iconBg="bg-emerald-50"
+          onClick={onOpenAgenda}
+        />
+        <QuickActionCard 
+          title="Histórico de Prontuários" 
+          description="Consulte relatórios, evoluções SOAP e prescrições" 
+          icon={<Stethoscope size={20} className="text-blue-600" />} 
+          iconBg="bg-blue-50"
+          onClick={onOpenHistory}
+        />
       </div>
     </div>
   );
 }
 
-function StatCard({ title, value, subtitle, icon, color, trend, t }: any) {
+function StatCard({ title, value, subtitle, icon, iconBg, trend, trendType }: {
+  title: string;
+  value: number | string;
+  subtitle: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  trend: string;
+  trendType: 'up' | 'neutral' | 'alert';
+}) {
   return (
     <motion.div 
-      whileHover={{ y: -5 }}
-      className={`${t.cardBg} p-6 rounded-[32px] border ${t.cardBorder} ${t.cardHoverShadow} transition-all duration-200`}
+      whileHover={{ y: -3 }}
+      className="bg-white p-5 rounded-3xl border border-slate-100 shadow-xs hover:shadow-md transition-all duration-200 space-y-3"
     >
-      <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 ${t.iconBg} rounded-2xl flex items-center justify-center transition-all`}>
+      <div className="flex items-center justify-between">
+        <div className={`w-11 h-11 ${iconBg} rounded-2xl flex items-center justify-center shadow-xs`}>
           {icon}
         </div>
-        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${
-          trend === 'Atenção' ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400' : 
-          trend === 'Estável' ? `${t.iconBg} ${t.textSecondary}` : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+          trendType === 'alert' 
+            ? 'bg-amber-50 text-amber-700 border border-amber-200/60' 
+            : trendType === 'neutral'
+            ? 'bg-slate-100 text-slate-600'
+            : 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
         }`}>
           {trend}
         </span>
       </div>
-      <div className="space-y-1">
-        <h4 className={`text-xs font-bold ${t.textMuted} uppercase tracking-widest`}>{title}</h4>
+      
+      <div>
+        <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+          {title}
+        </span>
         <div className="flex items-baseline gap-2">
-          <span className={`text-3xl font-bold ${t.textPrimary}`}>{value}</span>
-          <span className={`text-[10px] font-medium ${t.textMuted}`}>{subtitle}</span>
+          <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            {value}
+          </span>
+          <span className="text-[11px] text-slate-400 font-medium">
+            {subtitle}
+          </span>
         </div>
       </div>
     </motion.div>
   );
 }
 
-function QuickAction({ title, description, icon, onClick, color, t }: any) {
+function QuickActionCard({ title, description, icon, iconBg, onClick }: {
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  onClick: () => void;
+}) {
   return (
     <button 
+      type="button"
       onClick={onClick}
-      className={`flex items-center gap-4 p-6 ${t.cardBg} rounded-[32px] border ${t.cardBorder} border-slate-100 ${t.cardHoverShadow} transition-all text-left group w-full`}
+      className="flex items-center gap-4 p-5 bg-white hover:bg-slate-50/80 rounded-3xl border border-slate-100 shadow-xs hover:shadow-md transition-all text-left group w-full"
     >
-      <div className={`w-14 h-14 ${t.iconBg} rounded-2xl flex items-center justify-center ${color} group-hover:scale-110 transition-transform shrink-0`}>
+      <div className={`w-12 h-12 ${iconBg} rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0 shadow-xs`}>
         {icon}
       </div>
-      <div>
-        <h4 className={`font-bold ${t.textPrimary}`}>{title}</h4>
-        <p className={`text-xs ${t.textSecondary}`}>{description}</p>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors">
+          {title}
+        </h4>
+        <p className="text-xs text-slate-400 mt-0.5 leading-relaxed line-clamp-2">
+          {description}
+        </p>
       </div>
+      <ArrowUpRight size={16} className="text-slate-300 group-hover:text-blue-600 transition-colors shrink-0" />
     </button>
   );
 }

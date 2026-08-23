@@ -372,8 +372,8 @@ export default function PrescriptionAnvisaModal({
                 onClick={() => setRecipeType('bulario')}
                 className={`p-3 rounded-2xl border text-xs font-bold text-left transition-all flex flex-col justify-between ${
                   recipeType === 'bulario'
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-md ring-2 ring-emerald-500/20'
-                    : 'bg-emerald-50/50 text-emerald-900 border-emerald-200 hover:bg-emerald-100/50'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center justify-between w-full mb-1">
@@ -389,7 +389,7 @@ export default function PrescriptionAnvisaModal({
           {recipeType === 'branca' && (
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs text-slate-700 space-y-1">
               <div className="font-bold flex items-center gap-1.5 text-slate-900">
-                <Check className="w-4 h-4 text-emerald-600" />
+                <Check className="w-4 h-4 text-blue-600" />
                 Receita Branca de Controle Especial (C1, C5 e Antimicrobianos)
               </div>
               <p className="text-[11px] text-slate-600">
@@ -607,7 +607,7 @@ export default function PrescriptionAnvisaModal({
         {/* Modal Footer */}
         <div className="p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <QrCode className="w-4 h-4 text-emerald-600" />
+            <QrCode className="w-4 h-4 text-slate-600" />
             <span>Validação Digital MP 2.200-2/2001</span>
           </div>
 
@@ -623,7 +623,7 @@ export default function PrescriptionAnvisaModal({
             <button
               onClick={handleSendWhatsApp}
               disabled={prescriptionItems.length === 0 || isSendingWhatsApp}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs transition-all shadow-md active:scale-95 flex items-center gap-2 disabled:opacity-50"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs transition-all shadow-xs active:scale-95 flex items-center gap-2 disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
               {isSendingWhatsApp ? "Enviando no WhatsApp..." : "Enviar via WhatsApp sem Papel"}

@@ -333,7 +333,7 @@ export default function InteractiveNeurologicalSheetModal({ isOpen, onClose, sav
         {/* Header Bar */}
         <div className="px-6 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-xl text-purple-700">
+            <div className="p-2 bg-blue-50 border border-blue-200/60 rounded-xl text-blue-700">
               <PenTool size={20} />
             </div>
             <div>
@@ -367,7 +367,7 @@ export default function InteractiveNeurologicalSheetModal({ isOpen, onClose, sav
                   onClick={() => setPenWidth(w)}
                   className={cn(
                     "px-2 py-0.5 rounded text-xs font-bold transition-colors",
-                    penWidth === w ? "bg-purple-600 text-white" : "text-slate-600 hover:bg-slate-100"
+                    penWidth === w ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100"
                   )}
                 >
                   {w}px
