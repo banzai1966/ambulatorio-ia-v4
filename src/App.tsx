@@ -2894,20 +2894,20 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Lateral Navigation Sidebar (Prontuário Azul) */}
-      <aside className="w-full md:w-64 bg-slate-900 text-white shrink-0 border-r border-slate-800 flex flex-col justify-between p-4 shadow-xl z-40">
+      {/* Lateral Navigation Sidebar (Prontuário Moderno) */}
+      <aside className="w-full md:w-64 bg-[#0c121e] text-slate-300 shrink-0 border-r border-slate-800/80 flex flex-col justify-between p-4 shadow-xl z-40">
         <div className="space-y-6">
           {/* Logo Brand */}
           <div 
-            className="flex items-center gap-3 p-2 cursor-pointer rounded-2xl hover:bg-slate-800/80 transition-all"
+            className="flex items-center gap-3 p-2.5 cursor-pointer rounded-2xl hover:bg-slate-800/60 transition-all group"
             onClick={() => navigateToTab('dashboard')}
           >
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/30 shrink-0">
-              <Stethoscope size={22} />
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-500/20 shrink-0 group-hover:scale-105 transition-transform">
+              <Stethoscope size={20} />
             </div>
             <div>
               <h1 className="font-extrabold text-base tracking-tight text-white leading-none">Ambulatório IA</h1>
-              <p className="text-[9px] uppercase tracking-wider text-blue-400 font-bold mt-1">Prontuário Azul v4.5</p>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mt-1">Prontuário Médico Inteligente</p>
             </div>
           </div>
 
@@ -2916,65 +2916,65 @@ export default function App() {
             <button
               onClick={() => navigateToTab('dashboard')}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                 showDashboard 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
               )}
             >
-              <Activity size={18} />
+              <Activity size={17} className={showDashboard ? "text-blue-400" : "text-slate-400"} />
               <span>Dashboard Geral</span>
             </button>
 
             <button
               onClick={() => navigateToTab('atendimento')}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                 (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial)
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
               )}
             >
-              <Mic size={18} />
+              <Mic size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-blue-400" : "text-slate-400"} />
               <span>Atendimento Clínico</span>
             </button>
 
             <button
               onClick={() => navigateToTab('agenda')}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                 showAgenda 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
               )}
             >
-              <Calendar size={18} />
+              <Calendar size={17} className={showAgenda ? "text-blue-400" : "text-slate-400"} />
               <span>Agenda Médica</span>
             </button>
 
             <button
               onClick={() => navigateToTab('mensagens')}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                 showMessageHistory 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
               )}
             >
-              <MessageSquare size={18} />
+              <MessageSquare size={17} className={showMessageHistory ? "text-blue-400" : "text-slate-400"} />
               <span>Mensagens & WhatsApp</span>
             </button>
 
             <button
               onClick={() => navigateToTab('historico')}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                 showHistory 
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
               )}
             >
-              <History size={18} />
+              <History size={17} className={showHistory ? "text-blue-400" : "text-slate-400"} />
               <span>Histórico de Prontuários</span>
             </button>
 
@@ -2984,34 +2984,34 @@ export default function App() {
                 <button
                   onClick={() => navigateToTab('financeiro')}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                     showFinancial 
-                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25" 
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                      : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                   )}
                 >
-                  <DollarSign size={18} />
+                  <DollarSign size={17} className={showFinancial ? "text-emerald-400" : "text-slate-400"} />
                   <span>Financeiro & Caixa</span>
                 </button>
 
                 <button
                   onClick={() => navigateToTab('equipe')}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs transition-all",
+                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all",
                     showManageTeam 
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25" 
-                      : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                      ? "bg-slate-800/90 text-white border border-slate-700/70 shadow-xs" 
+                      : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
                   )}
                 >
-                  <Users size={18} />
+                  <Users size={17} className={showManageTeam ? "text-blue-400" : "text-slate-400"} />
                   <span>Equipe Médica</span>
                 </button>
 
                 <button
                   onClick={() => setShowClinicSettings(true)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition-all"
                 >
-                  <Settings size={18} />
+                  <Settings size={17} className="text-slate-400" />
                   <span>Configurações da Clínica & WhatsApp</span>
                 </button>
               </>
@@ -3019,9 +3019,9 @@ export default function App() {
 
             <button
               onClick={() => setShowSystemOverview(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-all"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition-all"
             >
-              <HelpCircle size={18} />
+              <HelpCircle size={17} className="text-slate-400" />
               <span>Ajuda, Manual & Sobre o Sistema</span>
             </button>
           </nav>
@@ -3194,7 +3194,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8">
+      <main className="flex-1 w-full max-w-[1680px] mx-auto p-3 sm:p-5 lg:p-6 transition-all">
         {user && user.status === 'pending' ? (
           <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
             <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4">

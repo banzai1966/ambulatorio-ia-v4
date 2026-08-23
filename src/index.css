@@ -39,15 +39,15 @@
 }
 
 .pv-tab-active {
-  @apply bg-blue-600 text-white shadow-md shadow-blue-600/20 font-semibold;
+  @apply bg-slate-900 text-white shadow-xs font-semibold;
 }
 
 .pv-tab-active-blue {
-  @apply bg-blue-600 text-white shadow-md shadow-blue-600/20 font-semibold;
+  @apply bg-slate-900 text-white shadow-xs font-semibold;
 }
 
 .pv-tab-inactive {
-  @apply bg-slate-100 text-slate-600 hover:bg-slate-200/80 font-medium transition-colors;
+  @apply bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 font-medium transition-all;
 }
 
 .clinical-grid {
