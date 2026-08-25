@@ -29,7 +29,8 @@ import {
   Calendar,
   DollarSign,
   Users,
-  UserCheck
+  UserCheck,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -40,19 +41,25 @@ interface ManualClinicoModalProps {
 }
 
 export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = 'dr_carlos' }: ManualClinicoModalProps) {
-  const selectedManual = defaultProfile;
+  const [selectedManual, setSelectedManual] = useState<'dr_carlos' | 'dra_lucy'>(defaultProfile);
   const isLucy = selectedManual === 'dra_lucy';
   
   const [activeSection, setActiveSection] = useState<string>(
     defaultProfile === 'dra_lucy' ? 'lucy_visao_geral' : 'carlos_visao_geral'
   );
 
-  // Sincroniza a seção inicial de acordo com o perfil do manual aberto
+  // Sincroniza o perfil quando abrir o modal
   useEffect(() => {
     if (isOpen) {
+      setSelectedManual(defaultProfile);
       setActiveSection(defaultProfile === 'dra_lucy' ? 'lucy_visao_geral' : 'carlos_visao_geral');
     }
   }, [isOpen, defaultProfile]);
+
+  const handleSwitchManual = (profile: 'dr_carlos' | 'dra_lucy') => {
+    setSelectedManual(profile);
+    setActiveSection(profile === 'dra_lucy' ? 'lucy_visao_geral' : 'carlos_visao_geral');
+  };
 
   return (
     <AnimatePresence>
@@ -95,16 +102,18 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     {isLucy ? <Sparkles size={26} /> : <Brain size={26} />}
                   </div>
                   <div>
-                    <div className={cn(
-                      "inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-extrabold border mb-1",
-                      isLucy 
-                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30" 
-                        : "bg-blue-500/20 text-blue-300 border-blue-400/30"
-                    )}>
-                      <BookOpen size={11} /> 
-                      {isLucy 
-                        ? "Manual Clínico Exclusivo • Dra. Lucy" 
-                        : "Manual Clínico Exclusivo • Dr. Carlos"}
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className={cn(
+                        "inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-extrabold border",
+                        isLucy 
+                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30" 
+                          : "bg-blue-500/20 text-blue-300 border-blue-400/30"
+                      )}>
+                        <BookOpen size={11} /> 
+                        {isLucy 
+                          ? "Manual Clínico Exclusivo • Dra. Lucy Morata" 
+                          : "Manual Clínico Exclusivo • Dr. Carlos Morato"}
+                      </span>
                     </div>
                     <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                       {isLucy 
@@ -231,6 +240,22 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
+
+                    <button
+                      onClick={() => setActiveSection('carlos_agenda_rotina')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'carlos_agenda_rotina'
+                          ? "bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Calendar size={15} className="text-blue-600 shrink-0" />
+                        7. Agenda, Fila & WhatsApp
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
                   </>
                 )}
 
@@ -329,6 +354,22 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                       <span className="flex items-center gap-2">
                         <Flame size={15} className="text-rose-600 shrink-0" />
                         6. Presets Clínicos Rápidos
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('lucy_agenda_rotina')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'lucy_agenda_rotina'
+                          ? "bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Calendar size={15} className="text-emerald-600 shrink-0" />
+                        7. Agenda, Fila & Recibos
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -619,6 +660,54 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                           <li>A prescrição separa com clareza a posologia de medicamentos convencionais, fórmulas manipuladas e nutracêuticos integrativos.</li>
                           <li>Com 1 clique, você pode enviar o arquivo PDF gerado diretamente para o WhatsApp do paciente, sem necessidade de baixar manualmente no computador.</li>
                         </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedManual === 'dr_carlos' && activeSection === 'carlos_agenda_rotina' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-blue-100 text-blue-700 rounded-2xl">
+                          <Calendar size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Rotina de Atendimento & Agenda</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">7. Agenda do Dr. Carlos, Fila de Espera & WhatsApp</h3>
+                          <p className="text-xs text-slate-500">Como funciona o fluxo do agendamento à consulta e contato com o paciente.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Calendar size={15} className="text-blue-600" /> Grade de Horários & Consultório
+                            </strong>
+                            <p className="text-xs text-slate-600">
+                              Na aba <strong>"Agenda Médica"</strong>, o Dr. Carlos pode visualizar seus pacientes do dia, horários confirmados, encaixes e tempo médio de cada consulta neurológica.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Activity size={15} className="text-emerald-600" /> Fila de Espera & Chamada
+                            </strong>
+                            <p className="text-xs text-slate-600">
+                              Ao chegar na clínica, a recepção coloca o paciente na fila como <em>"Aguardando Médico"</em>. Quando o Dr. Carlos abre o prontuário no consultório, o status muda automaticamente para <em>"Em Atendimento"</em>.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-2">
+                          <strong className="text-blue-950 font-bold text-xs flex items-center gap-1.5">
+                            <MessageSquare size={16} className="text-blue-600" /> Disparo de WhatsApp & Pré-Anamnese
+                          </strong>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            O sistema pode enviar lembretes automáticos com as instruções prévias da consulta (trazer exames de imagem anteriores, ressonâncias e lista de medicações em uso). Ao terminar a consulta, o receituário em PDF pode ser enviado com 1 clique.
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -935,6 +1024,54 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                               </p>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedManual === 'dra_lucy' && activeSection === 'lucy_agenda_rotina' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl">
+                          <Calendar size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Rotina do Consultório Odontológico</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">7. Agenda da Dra. Lucy, Fila Cirúrgica & Recibos</h3>
+                          <p className="text-xs text-slate-500">Como funciona o fluxo do agendamento, atendimento cirúrgico e emissão de orçamentos.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Calendar size={15} className="text-emerald-600" /> Grade de Horários & Cirurgias
+                            </strong>
+                            <p className="text-xs text-slate-600">
+                              Na aba <strong>"Agenda Médica"</strong>, a Dra. Lucy pode filtrar exclusivamente seus pacientes odontológicos, diferenciando avaliações iniciais, cirurgias de implante de zircônia e sessões de ozonioterapia.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Sparkles size={15} className="text-blue-600" /> Fila em Tempo Real
+                            </strong>
+                            <p className="text-xs text-slate-600">
+                              Quando o paciente chega ao consultório e é marcado na recepção, a Dra. Lucy vê o alerta na tela. Ao iniciar o procedimento, o prontuário sincroniza em tempo real.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 space-y-2">
+                          <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                            <FileText size={16} className="text-emerald-600" /> Orçamentos, Orientações Pós-Op & WhatsApp
+                          </strong>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            Após o planejamento do odontograma (ex: remoção de amálgama ou implante cerâmico), o sistema gera o plano de tratamento detalhado com valores e orientações pré/pós-operatórias, que podem ser enviados diretamente para o WhatsApp do paciente.
+                          </p>
                         </div>
                       </div>
                     </div>

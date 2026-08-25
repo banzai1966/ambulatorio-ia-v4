@@ -42,7 +42,7 @@ interface SystemOverviewModalProps {
 }
 
 export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemOverviewModalProps) {
-  const [activeTab, setActiveTab] = useState<'menus' | 'fluxo' | 'financeiro-equipe' | 'especialidades' | 'faq' | 'config'>('menus');
+  const [activeTab, setActiveTab] = useState<'menus' | 'fluxo' | 'financeiro-equipe' | 'especialidades' | 'whatsapp' | 'faq' | 'config'>('menus');
 
   return (
     <AnimatePresence>
@@ -71,17 +71,17 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
 
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/30 shrink-0 border border-blue-400/30">
-                  <Stethoscope size={30} />
+                  <BookOpen size={30} />
                 </div>
                 <div>
                   <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-bold border border-blue-400/30 mb-1">
-                    <BookOpen size={12} /> Guia Completo do Sistema • V3.2
+                    <ShieldCheck size={12} /> Manual de Instruções Oficial • Versão 3.2
                   </div>
                   <h2 className="text-xl sm:text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                    Manual Oficial do Ambulatório IA
+                    Manual de Instruções do Sistema
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-300 font-medium">
-                    Guia detalhado de todos os menus da barra lateral, financeiro, equipe médica e rotina clínica
+                    Guia operacional completo para Médicos, Administradores e Equipe de Atendimento
                   </p>
                 </div>
               </div>
@@ -96,17 +96,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       : 'bg-white/10 text-slate-300 hover:bg-white/20'
                   }`}
                 >
-                  <Activity size={14} /> 1. Todos os Menus do Painel
-                </button>
-                <button
-                  onClick={() => setActiveTab('financeiro-equipe')}
-                  className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-                    activeTab === 'financeiro-equipe' 
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
-                      : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                  }`}
-                >
-                  <DollarSign size={14} /> 2. Financeiro & Equipe Médica
+                  <Activity size={14} /> 1. Menus da Barra Lateral
                 </button>
                 <button
                   onClick={() => setActiveTab('fluxo')}
@@ -116,7 +106,17 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       : 'bg-white/10 text-slate-300 hover:bg-white/20'
                   }`}
                 >
-                  <Zap size={14} /> 3. Passo a Passo da Consulta
+                  <Zap size={14} /> 2. Fluxo da Consulta & Agenda
+                </button>
+                <button
+                  onClick={() => setActiveTab('financeiro-equipe')}
+                  className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                    activeTab === 'financeiro-equipe' 
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                      : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  }`}
+                >
+                  <DollarSign size={14} /> 3. Financeiro & Prontuários
                 </button>
                 <button
                   onClick={() => setActiveTab('especialidades')}
@@ -126,7 +126,17 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       : 'bg-white/10 text-slate-300 hover:bg-white/20'
                   }`}
                 >
-                  <Brain size={14} /> 4. Exames & Negatoscópio
+                  <Brain size={14} /> 4. Odonto, Neuro & Radiologia
+                </button>
+                <button
+                  onClick={() => setActiveTab('whatsapp')}
+                  className={`px-3.5 py-2 rounded-xl transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                    activeTab === 'whatsapp' 
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
+                      : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  }`}
+                >
+                  <MessageSquare size={14} /> 5. WhatsApp & Automações
                 </button>
                 <button
                   onClick={() => setActiveTab('faq')}
@@ -136,7 +146,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       : 'bg-white/10 text-slate-300 hover:bg-white/20'
                   }`}
                 >
-                  <HelpCircle size={14} /> 5. Dúvidas Frequentes (FAQ)
+                  <HelpCircle size={14} /> 6. Dúvidas & Treinamento
                 </button>
                 <button
                   onClick={() => setActiveTab('config')}
@@ -146,7 +156,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       : 'bg-white/10 text-slate-300 hover:bg-white/20'
                   }`}
                 >
-                  <Settings size={14} /> 6. Configurar Médico
+                  <Settings size={14} /> 7. Configurações & CRM
                 </button>
               </div>
             </div>
@@ -159,12 +169,12 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                 <div className="space-y-6">
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
-                        <Activity size={20} />
+                      <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+                        <Activity size={22} />
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-slate-800">Guia de Cada Menu da Barra Lateral</h3>
-                        <p className="text-xs text-slate-500">Entenda a função exata de cada botão que aparece no menu à esquerda</p>
+                        <p className="text-xs text-slate-500">Conheça exatamente a finalidade e o que você encontra em cada seção do sistema</p>
                       </div>
                     </div>
 
@@ -176,7 +186,8 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                           1. Dashboard Geral
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Visão panorâmica em tempo real da clínica: total de pacientes do dia, gráficos de especialidades atendidas, alertas de segurança do copiloto e fila de espera dos consultórios.
+                          <strong>O que é:</strong> Painel de comando com visão panorâmica do ambulatório.<br />
+                          <strong>O que você faz:</strong> Acompanha o total de pacientes do dia, gráficos de especialidades atendidas (Odonto, Neuro, Integrativa), fila de espera ativa e avisos do copiloto de segurança.
                         </p>
                       </div>
 
@@ -184,10 +195,11 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
                           <span className="p-1.5 bg-blue-600 text-white rounded-lg"><Mic size={14} /></span>
-                          2. Atendimento Clínico (Sala do Médico)
+                          2. Atendimento Clínico (Consultório)
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Área principal do médico. Permite gravar a consulta por voz (IA), preencher queixas, hipótese diagnóstica, conduta, receituário Anvisa timbrado e laudo de raios-X.
+                          <strong>O que é:</strong> O coração clínico do médico e dentista durante a consulta.<br />
+                          <strong>O que você faz:</strong> Grava a consulta por voz (IA transcreve no padrão SOAP), preenche odontograma anatômico 3D ou exame neurológico Wexler/dermátomos, emite receituários Anvisa e laudos radiológicos.
                         </p>
                       </div>
 
@@ -195,10 +207,11 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
                           <span className="p-1.5 bg-blue-600 text-white rounded-lg"><Calendar size={14} /></span>
-                          3. Agenda Médica & Recepção
+                          3. Agenda Médica & Horários
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Grade de horários da clínica com busca rápida de CEP, envio de confirmação automática no WhatsApp (com link de selfie/anamnese) e baixa de pagamento no caixa.
+                          <strong>O que é:</strong> Grade de agendamentos organizada por profissional (Dra. Lucy e Dr. Carlos).<br />
+                          <strong>O que você faz:</strong> Cadastra novos pacientes com busca rápida de CEP por 8 dígitos, define horários de cirurgias ou retornos e dispara confirmações automáticas com link de pré-anamnese.
                         </p>
                       </div>
 
@@ -209,7 +222,8 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                           4. Mensagens & WhatsApp
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Central de disparos e histórico de conversas: confirmações de agendamento, envios de receitas digitais em PDF e recibos de pagamento enviados aos pacientes.
+                          <strong>O que é:</strong> Central de comunicação e disparos automáticos para os pacientes.<br />
+                          <strong>O que você faz:</strong> Envia confirmações de consulta com ficha de pré-anamnese rápida, envia receitas médicas em PDF com QR Code oficial e emite comprovantes de pagamento timbrados.
                         </p>
                       </div>
 
@@ -220,7 +234,8 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                           5. Histórico de Prontuários (Dossiê)
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Busca avançada por Nome, CPF ou Data de Nascimento. Abre a linha do tempo do paciente com todas as consultas passadas, fotos, exames e evolução clínica.
+                          <strong>O que é:</strong> Arquivo clínico perpétuo e seguro da clínica.<br />
+                          <strong>O que você faz:</strong> Busca qualquer paciente instantaneamente por Nome, CPF ou Data de Nascimento. Abre a linha do tempo cronológica com todas as consultas anteriores, fotos e laudos de tomografia.
                         </p>
                       </div>
 
@@ -228,10 +243,11 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 space-y-2">
                         <div className="font-bold text-emerald-950 text-sm flex items-center gap-2">
                           <span className="p-1.5 bg-emerald-600 text-white rounded-lg"><DollarSign size={14} /></span>
-                          6. Financeiro & Caixa (Admin)
+                          6. Financeiro & Caixa
                         </div>
                         <p className="text-xs text-emerald-900 leading-relaxed">
-                          Controle de fluxo de caixa da clínica: faturamento diário, divisão por formas de pagamento (Pix, Cartão, Dinheiro, Convênio), repasses médicos e despesas da clínica.
+                          <strong>O que é:</strong> Controle de fluxo de caixa, receitas e despesas operacionais.<br />
+                          <strong>O que você faz:</strong> Lança entradas por Pix, Cartão, Dinheiro ou Convênio, gera recibos timbrados com CRO/CRM do profissional atendente, acompanha saldo líquido e controla custos de insumos.
                         </p>
                       </div>
 
@@ -239,10 +255,11 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       <div className="p-4 bg-purple-50/80 rounded-2xl border border-purple-200 space-y-2">
                         <div className="font-bold text-purple-950 text-sm flex items-center gap-2">
                           <span className="p-1.5 bg-purple-600 text-white rounded-lg"><Users size={14} /></span>
-                          7. Equipe Médica & Profissionais (Admin)
+                          7. Equipe Médica & Acessos
                         </div>
                         <p className="text-xs text-purple-900 leading-relaxed">
-                          Gestão de acesso da clínica: cadastro de médicos, secretárias e administradores. Aprovação de novos usuários, definição de CRM, especialidades e comissões.
+                          <strong>O que é:</strong> Gerenciamento dos profissionais e secretárias da clínica.<br />
+                          <strong>O que você faz:</strong> Cadastra novos usuários, define papéis de acesso (Administrador, Médico, Dentista, Recepcionista), aprova cadastros pendentes e configura números de CRM/CRO.
                         </p>
                       </div>
 
@@ -250,10 +267,11 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
                           <span className="p-1.5 bg-slate-700 text-white rounded-lg"><Settings size={14} /></span>
-                          8. Configurações da Clínica & WhatsApp
+                          8. Configurações & WhatsApp API
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Configuração do nome da clínica, logotipo do receituário, dados de contato e pareamento do WhatsApp oficial (Evolution API / QR Code).
+                          <strong>O que é:</strong> Configuração geral da clínica e integrações de tecnologia.<br />
+                          <strong>O que você faz:</strong> Personaliza o nome da clínica, logotipo, endereço dos impressos e conecta o WhatsApp oficial via Evolution API com leitura de QR Code.
                         </p>
                       </div>
                     </div>
@@ -263,18 +281,18 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                   <div className="bg-blue-50/70 p-6 rounded-3xl border border-blue-200 space-y-3">
                     <div className="flex items-center gap-3 text-blue-900">
                       <Laptop size={22} className="text-blue-600" />
-                      <h3 className="text-lg font-bold">Como Instalar no Computador, Celular ou iPad</h3>
+                      <h3 className="text-lg font-bold">Como Instalar no Computador, Tablet ou Celular (PWA)</h3>
                     </div>
                     <p className="text-xs text-blue-950 leading-relaxed">
-                      O sistema roda como um aplicativo nativo e super leve (PWA), sem necessidade de arquivos pesados de instalação:
+                      O sistema foi construído com tecnologia PWA de ponta: não precisa baixar arquivos pesados e roda com desempenho nativo:
                     </p>
                     <div className="grid md:grid-cols-2 gap-4 pt-1">
                       <div className="bg-white p-4 rounded-2xl border border-blue-100 space-y-1.5 shadow-2xs">
                         <h4 className="font-bold text-slate-800 text-xs flex items-center gap-2">
-                          <Laptop size={16} className="text-blue-600" /> No Computador (Windows ou Mac)
+                          <Laptop size={16} className="text-blue-600" /> No Computador (Chrome, Edge ou Mac)
                         </h4>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          No Google Chrome ou Edge, clique no ícone de <strong>Monitor com uma seta para baixo</strong> ou no botão <strong>"+"</strong> no lado direito da barra de endereço e clique em <strong>"Instalar"</strong>. Um ícone aparecerá na sua Área de Trabalho.
+                          Na barra de endereços do Google Chrome ou Edge, clique no ícone de <strong>Monitor com uma seta para baixo</strong> ou no botão <strong>"+"</strong> e clique em <strong>"Instalar"</strong>. O ícone do Ambulatório IA aparecerá na sua Área de Trabalho.
                         </p>
                       </div>
 
@@ -283,8 +301,8 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                           <Smartphone size={16} className="text-purple-600" /> No Celular ou iPad / Tablet
                         </h4>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          <strong>No Android (Chrome):</strong> Toque nos 3 pontinhos e escolha <em>"Instalar aplicativo"</em>.<br />
-                          <strong>No iPhone / iPad (Safari):</strong> Toque em Compartilhar e escolha <em>"Adicionar à Tela de Início"</em>.
+                          <strong>No Android (Google Chrome):</strong> Toque nos 3 pontinhos no topo e selecione <em>"Instalar aplicativo"</em>.<br />
+                          <strong>No iPhone / iPad (Safari):</strong> Toque no botão Compartilhar e selecione <em>"Adicionar à Tela de Início"</em>.
                         </p>
                       </div>
                     </div>
@@ -292,60 +310,166 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                 </div>
               )}
 
-              {/* ABA 2: FINANCEIRO, HISTÓRICO DE PACIENTES & EQUIPE */}
+              {/* ABA 2: FLUXO COMPLETO DA CONSULTA & AGENDA */}
+              {activeTab === 'fluxo' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                        <Zap size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800">Fluxo Ponta a Ponta: Do Agendamento ao Término da Consulta</h3>
+                        <p className="text-xs text-slate-500">O passo a passo exato de como a secretária e o profissional clínico trabalham integrados</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3.5 pt-1">
+                      {/* Passo 1 */}
+                      <div className="flex items-start gap-3.5 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5">1</span>
+                        <div className="text-xs space-y-1">
+                          <strong className="text-slate-900 text-sm">Criar o Agendamento com Preenchimento Automático de CEP:</strong>
+                          <p className="text-slate-600 leading-relaxed">
+                            Na aba <strong>"Agenda Médica"</strong>, clique em <strong>"+ Novo Agendamento"</strong>. Ao digitar os 8 dígitos do CEP do paciente, o endereço completo (Rua, Bairro e Cidade) é preenchido na hora. Escolha o profissional (Dra. Lucy ou Dr. Carlos), data, horário e tipo de procedimento.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Passo 2 */}
+                      <div className="flex items-start gap-3.5 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                        <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5">2</span>
+                        <div className="text-xs space-y-1">
+                          <strong className="text-slate-900 text-sm">Envio Automático de Confirmação & Pré-Anamnese no WhatsApp:</strong>
+                          <p className="text-slate-600 leading-relaxed">
+                            Clique no ícone de <strong>WhatsApp</strong> na linha do paciente agendado. O sistema dispara a mensagem oficial com data, horário, endereço da clínica e instruções prévias. Na recepção, a foto do paciente pode ser capturada na hora com a webcam do balcão para identificação no prontuário.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Passo 3 */}
+                      <div className="flex items-start gap-3.5 p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200">
+                        <span className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5">3</span>
+                        <div className="text-xs space-y-1">
+                          <strong className="text-emerald-950 text-sm">Chegada do Paciente, Recepção & Baixa no Caixa:</strong>
+                          <p className="text-slate-600 leading-relaxed">
+                            Quando o paciente chega à clínica, a secretária clica em <strong>"Check-in / Receber"</strong>. Seleciona a forma de pagamento (Pix, Cartão, Dinheiro ou Convênio) e confirma. O status atualiza para <strong>"🟢 Pago / Aguardando Atendimento"</strong> e o paciente entra na fila de espera do médico.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Passo 4 */}
+                      <div className="flex items-start gap-3.5 p-4 bg-blue-50/70 rounded-2xl border border-blue-200">
+                        <span className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5">4</span>
+                        <div className="text-xs space-y-1">
+                          <strong className="text-blue-950 text-sm">Atendimento no Consultório & Escuta por Voz com Inteligência Artificial:</strong>
+                          <p className="text-slate-600 leading-relaxed">
+                            Na aba <strong>"Atendimento Clínico"</strong>, o profissional abre o paciente que está na fila. Basta clicar no botão do <strong>Microfone</strong> e conversar normalmente com o paciente. A IA médica transcreve e organiza a conversa em tempo real dividindo em: <em>Subjetivo (Queixa Principal), Objetivo (Exame Físico/Odontograma), Avaliação (Hipótese Diagnóstica) e Plano (Conduta e Prescrição)</em>.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Passo 5 */}
+                      <div className="flex items-start gap-3.5 p-4 bg-purple-50/70 rounded-2xl border border-purple-200">
+                        <span className="w-7 h-7 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5">5</span>
+                        <div className="text-xs space-y-1">
+                          <strong className="text-purple-950 text-sm">Prescrição Timbrada Anvisa & Envio do PDF para o WhatsApp:</strong>
+                          <p className="text-slate-600 leading-relaxed">
+                            Ao finalizar o atendimento, clique em <strong>"Evoluir Prontuário"</strong> para salvar na nuvem e em <strong>"Gerar Receituário Anvisa"</strong>. O documento sai timbrado com os dados do médico (CRM/CRO), QR Code de autenticação e pode ser impresso ou enviado diretamente para o WhatsApp do paciente com 1 clique.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 3: FINANCEIRO, EQUIPE & HISTÓRICO DE PRONTUÁRIOS */}
               {activeTab === 'financeiro-equipe' && (
                 <div className="space-y-6">
                   {/* Módulo Financeiro em Detalhes */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
-                        <DollarSign size={20} />
+                      <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                        <DollarSign size={22} />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">1. Módulo Financeiro & Controle de Caixa</h3>
-                        <p className="text-xs text-slate-500">Como funciona o controle de faturamento, baixas e divisão de pagamento</p>
+                        <h3 className="text-lg font-bold text-slate-800">1. Gestão Financeira & Controle de Caixa</h3>
+                        <p className="text-xs text-slate-500">Como registrar receitas, despesas, emitir recibos e acompanhar faturamento</p>
                       </div>
                     </div>
 
-                    <div className="grid sm:grid-cols-3 gap-3 pt-1">
+                    <div className="grid sm:grid-cols-3 gap-3.5 pt-1">
                       <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1.5">
                         <div className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
-                          <CreditCard size={14} className="text-emerald-700" /> Baixa Rápida no Caixa
+                          <CreditCard size={15} className="text-emerald-700" /> Registro de Receitas & Formas
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          A secretária recebe por Pix, Cartão de Crédito/Débito, Dinheiro ou Convênio e dá baixa com 1 clique. O paciente fica marcado como 🟢 Pago e o valor entra no fluxo.
+                          Ao clicar em <strong>"+ Novo Lançamento"</strong>, informe o paciente, valor, data e método: <em>Pix, Cartão de Crédito/Débito, Dinheiro ou Convênio</em>. O valor soma automaticamente no caixa do dia.
                         </p>
                       </div>
 
                       <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1.5">
                         <div className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-emerald-700" /> Relatórios & Repasses
+                          <TrendingUp size={15} className="text-emerald-700" /> Controle de Despesas & Insumos
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Gráficos do total arrecadado no dia, semana e mês, com divisão automática por forma de pagamento e cálculo de repasse por profissional.
+                          Registre custos com anestésicos, implantes de zircônia, kits cirúrgicos ou contas da clínica. O painel calcula o <strong>Saldo Líquido Real</strong> em tempo real.
                         </p>
                       </div>
 
                       <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1.5">
                         <div className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
-                          <FileText size={14} className="text-emerald-700" /> Recibo no WhatsApp
+                          <FileText size={15} className="text-emerald-700" /> Emissão de Recibo Timbrado
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Ao dar baixa, o sistema gera e dispara automaticamente uma mensagem de recibo timbrado com valor e forma de pagamento para o WhatsApp do paciente.
+                          Ao confirmar a receita, o sistema gera o recibo com cabeçalho oficial do consultório da <strong>Dra. Lucy (CRO/SP 98.412)</strong> ou do <strong>Dr. Carlos (CRM/SP 145.892)</strong> pronto para impressão ou WhatsApp.
                         </p>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Histórico Completo de Pacientes (Dossiê) */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+                        <History size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800">2. Histórico de Prontuários & Dossiê Clínico Perpétuo</h3>
+                        <p className="text-xs text-slate-500">Como localizar qualquer paciente e consultar a evolução completa ao longo do tempo</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
+                      <p>
+                        No menu <strong>"Histórico de Prontuários"</strong>, você pesquisa qualquer paciente com filtros instantâneos:
+                      </p>
+                      <div className="grid sm:grid-cols-3 gap-2.5 font-bold text-slate-800">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">🔤 Busca por Nome</div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">🔢 Busca por CPF</div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">📅 Data de Nascimento</div>
+                      </div>
+                      <p>
+                        Ao abrir o paciente, você tem acesso ao <strong>Dossiê Completo</strong>:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1.5 pl-1">
+                        <li><strong>Linha do Tempo:</strong> Todas as consultas anteriores organizadas por data e especialidade.</li>
+                        <li><strong>Comparativo de Odontograma / Neurologia:</strong> Visualize como o paciente chegou e como evoluiu.</li>
+                        <li><strong>Galeria de Anexos:</strong> Fotos de antes e depois, tomografias CBCT, radiografias panorâmicas e exames laboratoriais.</li>
+                      </ul>
                     </div>
                   </div>
 
                   {/* Gestão da Equipe Médica */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-purple-100 text-purple-700 rounded-xl">
-                        <Users size={20} />
+                      <div className="p-2.5 bg-purple-100 text-purple-700 rounded-xl">
+                        <Users size={22} />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">2. Gestão de Equipe Médica & Secretárias</h3>
-                        <p className="text-xs text-slate-500">Controle multiusuário de profissionais e níveis de permissão</p>
+                        <h3 className="text-lg font-bold text-slate-800">3. Gestão da Equipe Médica & Perfis de Acesso</h3>
+                        <p className="text-xs text-slate-500">Segurança de dados e níveis de permissão para administradores, médicos e recepção</p>
                       </div>
                     </div>
 
@@ -355,7 +479,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                         <div className="text-xs space-y-1">
                           <strong className="text-slate-900 text-sm">Controle de Perfis (Admin, Médico, Secretária):</strong>
                           <p className="text-slate-600 leading-relaxed">
-                            O administrador tem visão de todos os caixas e configurações. Médicos visualizam suas agendas e prontuários próprios. Secretárias têm acesso à recepção, busca de CEP e marcação de consultas.
+                            O administrador mestre (<strong>Marco Duarte</strong>) e os doutores têm visão completa. Médicos acessam suas consultas e laudos. Secretárias gerenciam a recepção, agendamentos e emissão de comprovantes de pagamento.
                           </p>
                         </div>
                       </div>
@@ -365,159 +489,27 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                         <div className="text-xs space-y-1">
                           <strong className="text-slate-900 text-sm">Aprovação de Novos Cadastros:</strong>
                           <p className="text-slate-600 leading-relaxed">
-                            Quando um novo médico ou funcionário cria conta, um alerta vermelho aparece no menu da Equipe para o administrador aprovar o acesso com 1 clique antes de liberar o sistema.
+                            Caso um novo colaborador crie login, ele fica retido até que um administrador aprove seu acesso na aba <strong>"Equipe Médica"</strong>.
                           </p>
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Histórico Completo de Pacientes (Dossiê) */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
-                        <History size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-800">3. Histórico de Prontuários & Dossiê Clínico</h3>
-                        <p className="text-xs text-slate-500">Como localizar atendimentos passados, exames e linha do tempo de evolução</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-xs text-slate-600 leading-relaxed">
-                      <p>
-                        Acessando o menu <strong>"Histórico de Prontuários"</strong>, o profissional pode buscar qualquer paciente por:
-                      </p>
-                      <div className="grid sm:grid-cols-3 gap-2 py-1 font-semibold text-slate-800">
-                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center">🔤 Nome Completo</div>
-                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center">🔢 CPF do Paciente</div>
-                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-center">📅 Data de Nascimento</div>
-                      </div>
-                      <p>
-                        Ao abrir o paciente, o sistema exibe o <strong>Dossiê Completo</strong>: todas as consultas anteriores, fotos comparativas de antes e depois, raios-X laudados e relatórios de exames emitidos.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ABA 3: PASSO A PASSO DA CONSULTA E RECEPÇÃO */}
-              {activeTab === 'fluxo' && (
-                <div className="space-y-6">
-                  {/* Fluxograma da Recepção */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
-                        <Calendar size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-800">1. Fluxo da Recepção & Agenda Inteligente</h3>
-                        <p className="text-xs text-slate-500">Como a secretária cadastra, envia lembrete no WhatsApp e dá baixa no pagamento</p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3 pt-1">
-                      <div className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/70">
-                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">1</span>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-slate-800 text-sm">Criar o Agendamento com Busca de CEP:</strong>
-                          <p className="text-slate-600 leading-relaxed">
-                            Na aba <strong>"Agenda Médica"</strong>, clique em <strong>"+ Novo Agendamento"</strong>. Ao preencher os 8 dígitos do CEP, a rua, bairro e cidade são inseridos automaticamente. Escolha o médico, data, hora e convênio/valor.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/70">
-                        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">2</span>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-slate-800 text-sm">Disparo de Confirmação no WhatsApp:</strong>
-                          <p className="text-slate-600 leading-relaxed">
-                            Ao clicar no botão do <strong>WhatsApp</strong> na linha do agendamento, o sistema envia a mensagem oficial com a data, hora, nome do médico e o link da <strong>Ficha Pré-Cadastro com Selfie</strong> para o paciente preencher antes de sair de casa.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 p-3.5 bg-emerald-50/70 rounded-2xl border border-emerald-200/70">
-                        <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">3</span>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-emerald-950 text-sm">Baixa Rápida no Caixa (Sem Gateway):</strong>
-                          <p className="text-slate-600 leading-relaxed">
-                            Na chegada do paciente, clique no botão <strong>"Receber"</strong>. Escolha como ele pagou: <strong>[PIX]</strong>, <strong>[Crédito]</strong>, <strong>[Débito]</strong>, <strong>[Dinheiro]</strong> ou <strong>[Convênio]</strong> e clique em <em>"Confirmar & Enviar Recibo WhatsApp"</em>. O status muda para <strong>"🟢 Pago"</strong> na hora e o recibo é enviado ao paciente.
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Fluxograma do Médico na Sala */}
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
-                        <Stethoscope size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-800">2. Como o Médico Atende na Sala (Passo a Passo)</h3>
-                        <p className="text-xs text-slate-500">Rotina simplificada de atendimento clínico por voz</p>
-                      </div>
-                    </div>
-
-                    <div className="grid sm:grid-cols-2 gap-3 pt-1">
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                        <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
-                          <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px]">A</span>
-                          Selecione o Paciente & Especialidade
-                        </div>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          Na aba <strong>"Atendimento Clínico"</strong>, clique no paciente na lista de espera ou digite o nome/CPF. Escolha a especialidade (Geral, Neuro, Integrativa, Pediatria, etc.).
-                        </p>
-                      </div>
-
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                        <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
-                          <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px]">B</span>
-                          Ligue o Microfone (IA)
-                        </div>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          Clique no <strong>Microfone</strong> e converse normalmente com o paciente ou dite o resumo clínico. Ao clicar em <strong>"Parar"</strong>, a IA preenche queixa, diagnóstico e conduta na hora.
-                        </p>
-                      </div>
-
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                        <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
-                          <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px]">C</span>
-                          Salvar Prontuário (Nuvem)
-                        </div>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          Clique em <strong>"Evoluir / Salvar Prontuário"</strong>. O atendimento fica registrado com data, hora e histórico anterior preservado de forma segura na nuvem.
-                        </p>
-                      </div>
-
-                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                        <div className="flex items-center gap-2 font-bold text-slate-800 text-xs">
-                          <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[11px]">D</span>
-                          Emitir Receituário Anvisa / PDF
-                        </div>
-                        <p className="text-xs text-slate-600 leading-relaxed">
-                          Clique em <strong>"Gerar Receituário Anvisa"</strong> para imprimir em A4 ou enviar no WhatsApp com QR Code oficial de verificação para farmácias.
-                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ABA 4: EXAMES ESPECIALIZADOS & NEGATOSCÓPIO */}
+              {/* ABA 4: ODONTOLOGIA BIOLÓGICA, NEUROLOGIA & RADIOLOGIA */}
               {activeTab === 'especialidades' && (
                 <div className="space-y-6">
                   {/* Negatoscópio Digital */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
-                        <Image size={20} />
+                      <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                        <Image size={22} />
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-slate-800">Negatoscópio Digital & Laudo de Imagens</h3>
-                        <p className="text-xs text-slate-500">Recursos de alta precisão para avaliação de Raio-X, Tomografias e Fotos Clínicas</p>
+                        <p className="text-xs text-slate-500">Recursos de alta precisão para avaliação de Raio-X, Tomografias CBCT e Fotos Clínicas</p>
                       </div>
                     </div>
 
@@ -526,114 +518,156 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                         <div className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                           🔍 Super Zoom 400%
                         </div>
-                        <p className="text-xs text-slate-600">Aproxime imagens de radiologia para identificar microfraturas e detalhes ósseos.</p>
+                        <p className="text-xs text-slate-600">Aproxime imagens de radiologia para identificar microfraturas, cavitações NICO e detalhes ósseos.</p>
                       </div>
                       <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                         <div className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                           🌓 Contraste Radiológico
                         </div>
-                        <p className="text-xs text-slate-600">Inverte os tons de preto e branco para leitura nítida de chapas radiográficas na tela.</p>
+                        <p className="text-xs text-slate-600">Inverte os tons de preto e branco para leitura nítida de chapas radiográficas na tela do computador.</p>
                       </div>
                       <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                         <div className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                           ✏️ Estúdio de Anotações
                         </div>
-                        <p className="text-xs text-slate-600">Desenhe setas, círculos e anote lesões diretamente sobre o exame antes de salvar.</p>
+                        <p className="text-xs text-slate-600">Desenhe setas, círculos e anote lesões diretamente sobre o exame antes de salvar no prontuário.</p>
                       </div>
                       <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
                         <div className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
                           🔒 Vínculo Seguro
                         </div>
-                        <p className="text-xs text-slate-600">Cada imagem fica selada ao CPF do paciente, sem risco de troca de prontuários.</p>
+                        <p className="text-xs text-slate-600">Cada imagem fica selada ao CPF do paciente com garantia de integridade médica.</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Exame Neurológico & Integrativo */}
+                  {/* Odonto Biológica vs Neurologia */}
                   <div className="grid md:grid-cols-2 gap-4">
-                    <div className="bg-purple-50/70 p-5 rounded-3xl border border-purple-200 space-y-2">
-                      <h4 className="font-bold text-purple-900 text-sm flex items-center gap-2">
-                        <Brain size={18} className="text-purple-600" />
-                        Módulo Neurológico Interativo
+                    <div className="bg-emerald-50/70 p-5 rounded-3xl border border-emerald-200 space-y-2.5">
+                      <h4 className="font-bold text-emerald-950 text-sm flex items-center gap-2">
+                        <Sparkles size={18} className="text-emerald-700" />
+                        Módulo Dra. Lucy (Odontologia Biológica)
                       </h4>
-                      <ul className="text-xs text-purple-950 space-y-1.5 list-disc list-inside leading-relaxed">
-                        <li><strong>Diagrama de Dermátomos:</strong> Mapa anatômico clicável de C2 a S5 com marcação de hipoestesia e dor.</li>
-                        <li><strong>Reflexos de Wexler:</strong> Escala de 0 a 4+ para reflexos bicipital, tricipital, patelar e aquileu.</li>
-                        <li><strong>Lousa MEEM:</strong> Área digital para o paciente desenhar e copiar os pentágonos cognitivos na tela.</li>
+                      <ul className="text-xs text-emerald-950 space-y-1.5 list-disc list-inside leading-relaxed">
+                        <li><strong>Odontograma FDI (11 a 48):</strong> Clique direto nos dentes para indicar amálgama, implante de zircônia, NICO/FDOK e canal.</li>
+                        <li><strong>Protocolo SMART IAOMT:</strong> Checklist de paramentação segura para remoção de metais pesados.</li>
+                        <li><strong>Meridianos Dente-Órgão:</strong> Correlação automática de cada dente com órgãos e vértebras do corpo.</li>
+                        <li><strong>Presets Cirúrgicos:</strong> Protocolos de Terapia Neural e Ozonioterapia pré/pós-operatórios.</li>
                       </ul>
                     </div>
 
-                    <div className="bg-teal-50/70 p-5 rounded-3xl border border-teal-200 space-y-2">
-                      <h4 className="font-bold text-teal-900 text-sm flex items-center gap-2">
-                        <Stethoscope size={18} className="text-teal-600" />
-                        Medicina Integrativa & Odonto Biológica
+                    <div className="bg-blue-50/70 p-5 rounded-3xl border border-blue-200 space-y-2.5">
+                      <h4 className="font-bold text-blue-950 text-sm flex items-center gap-2">
+                        <Brain size={18} className="text-blue-700" />
+                        Módulo Dr. Carlos (Neurologia & Integrativa)
                       </h4>
-                      <ul className="text-xs text-teal-950 space-y-1.5 list-disc list-inside leading-relaxed">
-                        <li><strong>Checklist Integrativo:</strong> 40+ suplementos e minerais (Coenzima Q10, DHEA, Vitamina D3, K2, Lugol).</li>
-                        <li><strong>Focos Crônicos & Patógenos:</strong> Mapeamento de cândida, borrelia, zóster e imunologia.</li>
-                        <li><strong>Radar Metabólico:</strong> Gráficos visuais de sono, estresse, nutrição e energia vital.</li>
+                      <ul className="text-xs text-blue-950 space-y-1.5 list-disc list-inside leading-relaxed">
+                        <li><strong>Diagrama de Dermátomos C2-S5:</strong> Marcação anatômica de hipoestesia, dor e parestesia.</li>
+                        <li><strong>Reflexos de Wexler:</strong> Boneco interativo com notas de 0 a 4+ em 8 pontos anatômicos.</li>
+                        <li><strong>Checklist Integrativo:</strong> Mapeamento de 40+ suplementos, minerais e patógenos crônicos.</li>
+                        <li><strong>Lousa Cognitiva MEEM:</strong> Aplicação do mini-exame do estado mental na tela.</li>
                       </ul>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* ABA 5: PERGUNTAS FREQUENTES (FAQ) */}
+              {/* ABA 5: WHATSAPP & INTEGRAÇÕES */}
+              {activeTab === 'whatsapp' && (
+                <div className="space-y-6">
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                        <MessageSquare size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800">Automação de WhatsApp Oficial (Evolution API)</h3>
+                        <p className="text-xs text-slate-500">Como conectar o WhatsApp da clínica e disparar mensagens automáticas</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3.5 text-xs text-slate-600 leading-relaxed pt-1">
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                        <strong className="text-slate-900 font-bold text-sm flex items-center gap-2">
+                          📲 1. Como Conectar o WhatsApp da Clínica:
+                        </strong>
+                        <p>
+                          Acesse o menu <strong>"Configurações & WhatsApp"</strong>. Digite o nome da instância desejada e clique em <em>"Gerar QR Code"</em>. Abra o WhatsApp no celular da clínica, vá em <em>Aparelhos Conectados &gt; Conectar um Aparelho</em> e aponte a câmera para a tela do computador.
+                        </p>
+                      </div>
+
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                        <strong className="text-slate-900 font-bold text-sm flex items-center gap-2">
+                          📋 2. O Que o Sistema Dispara Automaticamente:
+                        </strong>
+                        <ul className="list-disc list-inside space-y-1.5 pl-1 text-slate-700">
+                          <li><strong>Confirmação de Consulta:</strong> Mensagem cordial com data, hora, endereço e o link da pré-anamnese.</li>
+                          <li><strong>Receituários & Atestados em PDF:</strong> Envio imediato do documento oficial com link seguro para o paciente abrir na farmácia.</li>
+                          <li><strong>Comprovante de Pagamento / Recibo:</strong> Recibo timbrado com os dados do consultório enviado na hora em que o caixa é baixado.</li>
+                          <li><strong>Orientações Pós-Operatórias:</strong> Orientações de cuidados após cirurgias odontológicas ou procedimentos neurológicos.</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 6: PERGUNTAS FREQUENTES (FAQ) & TREINAMENTO */}
               {activeTab === 'faq' && (
                 <div className="space-y-4">
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1.5 shadow-2xs">
                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-600" />
-                      1. O médico precisa fazer backup todo dia ou salvar arquivos no computador?
+                      1. O médico ou secretária precisam fazer backup manual todo dia?
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      <strong>Não!</strong> Toda vez que o médico clica em <strong>"Evoluir / Salvar Prontuário"</strong>, o sistema grava tudo automaticamente no banco de dados na nuvem criptografada. O botão <em>"Backup JSON"</em> no menu é apenas um recurso extra caso você queira guardar uma cópia física no seu pendrive pessoal.
+                      <strong>Não!</strong> Toda vez que qualquer atendimento ou agendamento é salvo, o sistema grava automaticamente na nuvem criptografada. O botão <em>"Backup JSON (Admin)"</em> na barra lateral é apenas uma garantia extra caso o administrador queira salvar um arquivo no pendrive pessoal.
                     </p>
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1.5 shadow-2xs">
                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-600" />
-                      2. A secretária e o médico podem usar ao mesmo tempo em computadores diferentes?
+                      2. A secretária na recepção e os médicos no consultório podem usar ao mesmo tempo?
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      <strong>Sim!</strong> O sistema é 100% sincronizado em tempo real. Quando a secretária dá baixa no pagamento na recepção, o status atualiza instantaneamente para "Pago" na sala do médico.
+                      <strong>Sim!</strong> O sistema é multiusuário e sincroniza em tempo real. Quando a secretária dá check-in em um paciente na recepção, ele surge na fila da sala do médico na mesma hora.
                     </p>
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1.5 shadow-2xs">
                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-600" />
-                      3. Como funciona a baixa no caixa se a clínica não tem gateway conectado?
+                      3. E se a internet da clínica cair durante o atendimento?
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      O sistema funciona como o <strong>Livro-Caixa e Gestor Oficial da Clínica</strong>. A cobrança passa na maquininha de cartão física da clínica ou no Pix da conta da clínica, e a secretária apenas clica em <em>[Pix]</em> ou <em>[Cartão]</em> no sistema para dar baixa, liberar o check-in do médico e gerar o relatório contábil.
+                      O sistema conta com <strong>Modo Offline (PWA)</strong>. O atendimento continua sendo registrado localmente no navegador e, assim que a conexão retornar, tudo é sincronizado automaticamente com a nuvem.
                     </p>
                   </div>
 
                   <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-1.5 shadow-2xs">
                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-600" />
-                      4. Como encontrar atendimentos e receitas de meses atrás?
+                      4. Como emitir recibos separados para a Dra. Lucy e para o Dr. Carlos?
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Basta acessar a aba <strong>"Histórico de Prontuários"</strong> e digitar o Nome, CPF ou Data de Nascimento do paciente. Abre-se o <strong>Dossiê Completo</strong> com todas as consultas, comparativo de evolução e imagens arquivadas.
+                      O sistema detecta automaticamente o profissional selecionado no atendimento/receita e aplica o cabeçalho correspondente: CRO da Dra. Lucy para procedimentos odontológicos ou CRM do Dr. Carlos para procedimentos neurológicos.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* ABA 6: CONFIGURAÇÕES DO MÉDICO */}
+              {/* ABA 7: CONFIGURAÇÕES DO MÉDICO & CRM */}
               {activeTab === 'config' && (
                 <div className="space-y-4">
                   <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
-                        <Settings size={20} />
+                      <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+                        <Settings size={22} />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">Dados do Médico & Timbre de Receituário</h3>
-                        <p className="text-xs text-slate-500">Configure seu Nome Completo, CRM, Especialidade e Assinatura Digital para sair em todos os PDFs</p>
+                        <h3 className="text-lg font-bold text-slate-800">Dados do Profissional & Timbre de Receituário</h3>
+                        <p className="text-xs text-slate-500">Configure seu Nome Completo, CRM/CRO, Especialidade e Assinatura Digital para sair em todos os documentos impressos e em PDF</p>
                       </div>
                     </div>
                     <DoctorSettings userId={userId} />
@@ -645,13 +679,13 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
             {/* Footer do Modal */}
             <div className="p-4 sm:p-5 bg-white border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="text-xs text-slate-500 font-medium">
-                💡 Dica: Você pode reabrir este manual a qualquer momento no menu <strong>"Sobre o Sistema"</strong>.
+                💡 Dica: Você pode reabrir este manual a qualquer momento clicando em <strong>"Manual de Instruções"</strong> no menu lateral.
               </div>
               <button
                 onClick={onClose}
                 className="px-6 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
               >
-                Fechar Manual & Começar
+                Fechar Manual
               </button>
             </div>
           </motion.div>

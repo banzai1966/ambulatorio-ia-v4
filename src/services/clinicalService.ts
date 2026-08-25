@@ -119,7 +119,7 @@ export async function processClinicalInput(
        
       MODELO JSON OBRIGATÓRIO DE RETORNO:
       {
-        "paciente_nome_completo": "Nome do paciente",
+        "paciente_nome_completo": "",
         "paciente_cpf": "",
         "paciente_data_nascimento": "",
         "especialidade": "Odontologia Biológica | Neurologia | Integrativa | Clínica Geral",
@@ -186,7 +186,7 @@ export async function processClinicalInput(
       }
 
       REGRAS:
-      1. Siga exatamente a estrutura raiz acima. NUNCA omita a chave paciente_nome_completo ou prescricao.
+      1. Siga exatamente a estrutura raiz acima. NUNCA invente ou alucine nomes de pacientes, CPFs ou datas de nascimento! Se o relato NÃO disser explicitamente o nome da pessoa, deixe "paciente_nome_completo": "" (string vazia). NUNCA coloque nomes como "Richard", "João", "Maria" ou fictícios se não foram ditos.
       2. Mapeamento Corporal: Array com {x,y,label,side}. Lados: 'anterior' ou 'posterior' (ex: lombar/cervical/costas é posterior). Use labels curtíssimos (MÁXIMO 2 PALAVRAS).
          GUIA DE COORDENADAS (X: 0 a 100, Y: 0 a 100):
          - Eixo X (Horizontal): Centro = 50. Ombros = 32 ou 68. Joelhos = 40 ou 60. Pés = 38 ou 62.

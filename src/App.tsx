@@ -47,7 +47,8 @@ import {
   ChevronLeft,
   PanelLeftClose,
   PanelLeft,
-  Camera
+  Camera,
+  BookOpen
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
@@ -75,7 +76,7 @@ import PatientDossierView from './components/PatientDossierView';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
 import { SPECIALTIES } from './constants/specialties';
-import { getActiveClinicConfig } from './constants/clinicProfiles';
+import { getActiveClinicConfig, resolveDoctorKey } from './constants/clinicProfiles';
 import { 
   getOfflineRecords, 
   saveRecordLocally, 
@@ -3133,34 +3134,8 @@ export default function App() {
               </div>
             )}
 
-            {/* Manual Dr. Carlos (Apenas para o Dr. Carlos ou Administrador Mestre Marco Duarte) */}
-            {(user?.email === 'marco.agduarte22@gmail.com' || 
-              user?.id === 'master-admin-marco' || 
-              user?.email?.toLowerCase().includes('carlos') || 
-              user?.full_name?.toLowerCase().includes('carlos') ||
-              user?.full_name?.toLowerCase().includes('morato')) && (
-              <button
-                onClick={() => {
-                  setManualDefaultProfile('dr_carlos');
-                  setShowManualClinico(true);
-                }}
-                title={isSidebarCollapsed ? "Manual Dr. Carlos (Medicina, Neurologia & Integrativa)" : undefined}
-                className={cn(
-                  "w-full flex items-center rounded-2xl text-xs font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100/90 border border-blue-200/70 transition-all shadow-2xs cursor-pointer",
-                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-                )}
-              >
-                <Brain size={17} className="text-blue-600 shrink-0" />
-                {!isSidebarCollapsed && <span className="truncate">Manual Dr. Carlos (Neuro)</span>}
-              </button>
-            )}
-
-            {/* Manual Dra. Lucy (Apenas para a Dra. Lucy ou Administrador Mestre Marco Duarte) */}
-            {(user?.email === 'marco.agduarte22@gmail.com' || 
-              user?.id === 'master-admin-marco' || 
-              user?.email?.toLowerCase().includes('lucy') || 
-              user?.full_name?.toLowerCase().includes('lucy') || 
-              user?.full_name?.toLowerCase().includes('morata')) && (
+            {/* Manual da Dra. Lucy (Exibido para Dra. Lucy ou Master Admin Marco) */}
+            {(resolveDoctorKey(user) === 'dra_lucy' || user?.email === 'marco.agduarte22@gmail.com' || user?.id === 'master-admin-marco') && (
               <button
                 onClick={() => {
                   setManualDefaultProfile('dra_lucy');
@@ -3168,7 +3143,7 @@ export default function App() {
                 }}
                 title={isSidebarCollapsed ? "Manual Dra. Lucy (Odontologia Biológica & Cirurgia)" : undefined}
                 className={cn(
-                  "w-full flex items-center rounded-2xl text-xs font-bold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200/70 transition-all shadow-2xs cursor-pointer",
+                  "w-full flex items-center rounded-2xl text-xs font-bold text-emerald-800 bg-emerald-100/90 hover:bg-emerald-200/90 border border-emerald-300/80 ring-1 ring-emerald-500/20 transition-all shadow-2xs cursor-pointer",
                   isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
                 )}
               >
@@ -3177,16 +3152,35 @@ export default function App() {
               </button>
             )}
 
+            {/* Manual do Dr. Carlos (Exibido para Dr. Carlos ou Master Admin Marco) */}
+            {(resolveDoctorKey(user) === 'dr_carlos' || user?.email === 'marco.agduarte22@gmail.com' || user?.id === 'master-admin-marco') && (
+              <button
+                onClick={() => {
+                  setManualDefaultProfile('dr_carlos');
+                  setShowManualClinico(true);
+                }}
+                title={isSidebarCollapsed ? "Manual Dr. Carlos (Medicina, Neurologia & Integrativa)" : undefined}
+                className={cn(
+                  "w-full flex items-center rounded-2xl text-xs font-bold text-blue-800 bg-blue-100/90 hover:bg-blue-200/90 border border-blue-300/80 ring-1 ring-blue-500/20 transition-all shadow-2xs cursor-pointer",
+                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+                )}
+              >
+                <Brain size={17} className="text-blue-600 shrink-0" />
+                {!isSidebarCollapsed && <span className="truncate">Manual Dr. Carlos (Neuro)</span>}
+              </button>
+            )}
+
+            {/* Manual Geral de Instruções do Sistema (Acessível para Todos: Médicos, Gestores e Equipe) */}
             <button
               onClick={() => setShowSystemOverview(true)}
-              title={isSidebarCollapsed ? "Manual Geral (Recepção, Caixa & Equipe)" : undefined}
+              title={isSidebarCollapsed ? "Manual Geral de Instruções do Sistema (Guia Completo da Clínica)" : undefined}
               className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 transition-all cursor-pointer",
+                "w-full flex items-center rounded-2xl text-xs font-bold text-slate-700 bg-slate-100/80 hover:bg-slate-200/90 hover:text-slate-900 border border-slate-200/90 transition-all shadow-2xs cursor-pointer",
                 isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
               )}
             >
-              <HelpCircle size={17} className="text-slate-500 shrink-0" />
-              {!isSidebarCollapsed && <span className="truncate">Manual Geral (Recepção)</span>}
+              <BookOpen size={17} className="text-blue-700 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Manual de Instruções</span>}
             </button>
           </nav>
 
