@@ -338,22 +338,41 @@ export default function PatientDossierView({
     return list;
   }, [teamProfiles]);
 
-  const isUserAdmin = useMemo(() => {
-    return currentUser?.role === 'admin' || 
-           currentUser?.email === 'marco.agduarte22@gmail.com' || 
-           currentUser?.email?.includes('admin') || 
-           currentUser?.id === 'master-admin-marco';
+  const isMasterAdmin = useMemo(() => {
+    const email = (currentUser?.email || '').toLowerCase().trim();
+    const id = currentUser?.id || '';
+    return email === 'marco.agduarte22@gmail.com' || id === 'master-admin-marco';
   }, [currentUser]);
 
   // Identificação do profissional responsável ativo
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
-    // 1. Se o modo inicial for Odontologia Biológica
+    // 1. Se o usuário logado for um profissional específico (não master admin)
+    if (currentUser?.email || currentUser?.full_name) {
+      const email = (currentUser.email || '').toLowerCase().trim();
+      const name = (currentUser.full_name || '').toLowerCase().trim();
+
+      if (!isMasterAdmin) {
+        if (email.includes('lucy') || name.includes('lucy') || name.includes('morata')) {
+          return 'dra_lucy';
+        }
+        if (email.includes('carlos') || name.includes('carlos') || name.includes('morato')) {
+          return 'dr_carlos';
+        }
+        const match = allDoctorProfiles.find(d => 
+          (name && (d.full_name.toLowerCase().includes(name) || name.includes(d.full_name.toLowerCase()))) ||
+          (email && d.full_name.toLowerCase().includes(email.split('@')[0]))
+        );
+        if (match) return match.id;
+      }
+    }
+
+    // 2. Se o modo inicial for Odontologia Biológica
     if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.toLowerCase().includes('odonto') || currentRecord?.especialidade?.toLowerCase().includes('biol')) {
       const dentalDoc = allDoctorProfiles.find(d => d.default_mode === 'biological_dentistry' || d.id === 'dra_lucy');
       if (dentalDoc) return dentalDoc.id;
     }
 
-    // 2. Se for médico logado (não admin), fixa compulsoriamente no perfil dele
+    // 3. Se for médico logado (não admin), fixa compulsoriamente no perfil dele
     if (currentUser && currentUser.role === 'doctor') {
       const match = allDoctorProfiles.find(d => 
         (currentUser.full_name && (d.full_name.toLowerCase().includes(currentUser.full_name.toLowerCase()) || currentUser.full_name.toLowerCase().includes(d.full_name.toLowerCase()))) ||
@@ -362,7 +381,7 @@ export default function PatientDossierView({
       if (match) return match.id;
     }
 
-    // 3. Se o prontuário já tiver médico responsável registrado
+    // 4. Se o prontuário já tiver médico responsável registrado
     if (currentRecord?.profissional_responsavel) {
       const match = allDoctorProfiles.find(d => 
         d.full_name.toLowerCase().includes(currentRecord.profissional_responsavel.toLowerCase()) ||
@@ -371,13 +390,13 @@ export default function PatientDossierView({
       if (match) return match.id;
     }
 
-    // 4. Se a especialidade for Neurologia
+    // 5. Se a especialidade for Neurologia
     if (examMode === 'neurological' || currentRecord?.especialidade?.toLowerCase().includes('neuro')) {
       const neuroDoc = allDoctorProfiles.find(d => d.default_mode === 'neurological' || d.id === 'dr_carlos');
       if (neuroDoc) return neuroDoc.id;
     }
 
-    // 5. Se houver usuário logado
+    // 6. Se houver usuário logado
     if (currentUser?.full_name) {
       const match = allDoctorProfiles.find(d => 
         d.full_name.toLowerCase().includes(currentUser.full_name.toLowerCase()) ||
@@ -391,6 +410,25 @@ export default function PatientDossierView({
 
     return (examMode === 'biological_dentistry') ? 'dra_lucy' : (allDoctorProfiles[0]?.id || 'dra_lucy');
   });
+
+  // Garante sincronização imediata caso o usuário logado seja um médico específico
+  useEffect(() => {
+    if (currentUser && !isMasterAdmin) {
+      const email = (currentUser.email || '').toLowerCase().trim();
+      const name = (currentUser.full_name || '').toLowerCase().trim();
+      if (email.includes('lucy') || name.includes('lucy') || name.includes('morata')) {
+        if (selectedDoctorId !== 'dra_lucy') {
+          setSelectedDoctorId('dra_lucy');
+          setExamMode('biological_dentistry');
+        }
+      } else if (email.includes('carlos') || name.includes('carlos') || name.includes('morato')) {
+        if (selectedDoctorId !== 'dr_carlos') {
+          setSelectedDoctorId('dr_carlos');
+          setExamMode('neurological');
+        }
+      }
+    }
+  }, [currentUser, isMasterAdmin, selectedDoctorId, setExamMode]);
 
   // Sincroniza profissional quando o modo de exame alternar externamente
   useEffect(() => {
@@ -1247,7 +1285,7 @@ export default function PatientDossierView({
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                       Profissional Responsável:
                     </span>
-                    {isUserAdmin ? (
+                    {isMasterAdmin ? (
                       <div className="relative inline-block">
                         <select
                           id="select-active-doctor"
@@ -1283,8 +1321,8 @@ export default function PatientDossierView({
                 </div>
               </div>
 
-              {/* Botões Rápidos para troca entre os principais médicos (Exclusivo Administrador) */}
-              {isUserAdmin && (
+              {/* Botões Rápidos para troca entre os principais médicos (Exclusivo Administrador Mestre Marco Duarte) */}
+              {isMasterAdmin && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {allDoctorProfiles.slice(0, 3).map((doc) => (
                     <button

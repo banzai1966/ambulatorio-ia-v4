@@ -718,13 +718,19 @@ export default function App() {
 
         console.log("Perfil final:", profile);
           
-        // Se o e-mail for o seu ou outro e-mail de médico/administrador, garantimos aprovação e acesso
-        const isAdminEmail = authUser.email === 'marco.agduarte22@gmail.com' || authUser.email?.includes('admin') || authUser.email === 'demo@ambulatorio.ia';
+        // Marco Duarte é o Administrador Mestre exclusivo
+        const isMasterAdminEmail = authUser.email === 'marco.agduarte22@gmail.com' || authUser.id === 'master-admin-marco';
+        const isDoctorUser = authUser.email?.toLowerCase().includes('lucy') || 
+                             authUser.email?.toLowerCase().includes('carlos') || 
+                             profile?.full_name?.toLowerCase().includes('lucy') || 
+                             profile?.full_name?.toLowerCase().includes('carlos') || 
+                             profile?.full_name?.toLowerCase().includes('morata') || 
+                             profile?.full_name?.toLowerCase().includes('morato');
         
         if (profile) {
-          const role = isAdminEmail ? 'admin' : (profile.role || 'doctor');
+          const role = isMasterAdminEmail ? 'admin' : (isDoctorUser ? 'doctor' : (profile.role || 'doctor'));
           // Se for médico ou admin, o status padrão é aprovado para permitir trabalhar diretamente
-          const status = (isAdminEmail || profile.status === 'approved' || profile.role === 'doctor' || profile.role === 'admin') ? 'approved' : profile.status;
+          const status = (isMasterAdminEmail || profile.status === 'approved' || role === 'doctor' || role === 'admin') ? 'approved' : profile.status;
           
           console.log(`Usuário ${authUser.email} - Role: ${role}, Status: ${status}`);
           
@@ -742,7 +748,7 @@ export default function App() {
           if (role === 'admin') fetchPendingCount();
         } else {
           // Se não houver perfil ainda no banco
-          const role = isAdminEmail ? 'admin' : 'doctor';
+          const role = isMasterAdminEmail ? 'admin' : 'doctor';
           const status = 'approved';
           
           console.log("Criando novo perfil com role:", role);
@@ -3127,35 +3133,49 @@ export default function App() {
               </div>
             )}
 
-            <button
-              onClick={() => {
-                setManualDefaultProfile('dr_carlos');
-                setShowManualClinico(true);
-              }}
-              title={isSidebarCollapsed ? "Manual Dr. Carlos (Medicina, Neurologia & Integrativa)" : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100/90 border border-blue-200/70 transition-all shadow-2xs cursor-pointer",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-              )}
-            >
-              <Brain size={17} className="text-blue-600 shrink-0" />
-              {!isSidebarCollapsed && <span className="truncate">Manual Dr. Carlos (Neuro)</span>}
-            </button>
+            {/* Manual Dr. Carlos (Apenas para o Dr. Carlos ou Administrador Mestre Marco Duarte) */}
+            {(user?.email === 'marco.agduarte22@gmail.com' || 
+              user?.id === 'master-admin-marco' || 
+              user?.email?.toLowerCase().includes('carlos') || 
+              user?.full_name?.toLowerCase().includes('carlos') ||
+              user?.full_name?.toLowerCase().includes('morato')) && (
+              <button
+                onClick={() => {
+                  setManualDefaultProfile('dr_carlos');
+                  setShowManualClinico(true);
+                }}
+                title={isSidebarCollapsed ? "Manual Dr. Carlos (Medicina, Neurologia & Integrativa)" : undefined}
+                className={cn(
+                  "w-full flex items-center rounded-2xl text-xs font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100/90 border border-blue-200/70 transition-all shadow-2xs cursor-pointer",
+                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+                )}
+              >
+                <Brain size={17} className="text-blue-600 shrink-0" />
+                {!isSidebarCollapsed && <span className="truncate">Manual Dr. Carlos (Neuro)</span>}
+              </button>
+            )}
 
-            <button
-              onClick={() => {
-                setManualDefaultProfile('dra_lucy');
-                setShowManualClinico(true);
-              }}
-              title={isSidebarCollapsed ? "Manual Dra. Lucy (Odontologia Biológica & Cirurgia)" : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200/70 transition-all shadow-2xs cursor-pointer",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-              )}
-            >
-              <Sparkles size={17} className="text-emerald-600 shrink-0" />
-              {!isSidebarCollapsed && <span className="truncate">Manual Dra. Lucy (Odonto)</span>}
-            </button>
+            {/* Manual Dra. Lucy (Apenas para a Dra. Lucy ou Administrador Mestre Marco Duarte) */}
+            {(user?.email === 'marco.agduarte22@gmail.com' || 
+              user?.id === 'master-admin-marco' || 
+              user?.email?.toLowerCase().includes('lucy') || 
+              user?.full_name?.toLowerCase().includes('lucy') || 
+              user?.full_name?.toLowerCase().includes('morata')) && (
+              <button
+                onClick={() => {
+                  setManualDefaultProfile('dra_lucy');
+                  setShowManualClinico(true);
+                }}
+                title={isSidebarCollapsed ? "Manual Dra. Lucy (Odontologia Biológica & Cirurgia)" : undefined}
+                className={cn(
+                  "w-full flex items-center rounded-2xl text-xs font-bold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200/70 transition-all shadow-2xs cursor-pointer",
+                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+                )}
+              >
+                <Sparkles size={17} className="text-emerald-600 shrink-0" />
+                {!isSidebarCollapsed && <span className="truncate">Manual Dra. Lucy (Odonto)</span>}
+              </button>
+            )}
 
             <button
               onClick={() => setShowSystemOverview(true)}
