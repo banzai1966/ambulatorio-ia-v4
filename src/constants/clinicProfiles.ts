@@ -9,6 +9,8 @@ export interface ClinicProfileConfig {
   email: string;
   website: string;
   slogan: string;
+  prescription_footer?: string;
+  whatsapp_message_template?: string;
   evolution_url: string;
   evolution_instance: string;
   evolution_apikey: string;
@@ -17,15 +19,17 @@ export interface ClinicProfileConfig {
 export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
   dra_lucy: {
     id: 'dra_lucy',
-    professional_name: 'Dra. Lucy Morata',
+    professional_name: 'Dra. Luci Murata',
     council_badge: 'CRO/SP 98.412',
     specialty_label: 'Odontologia Biológica & Saúde Integrativa',
-    name: 'Consultório Dra. Lucy Morata - Odontologia Biológica',
+    name: 'Consultório Dra. Luci Murata - Odontologia Biológica',
     address: 'Av. Paulista, 1000 - Conjunto 1402 - Bela Vista - São Paulo/SP',
     phone: '(11) 98765-4321',
-    email: 'dra.lucy@ambulatorioia.com',
-    website: 'www.dralucymorata.com.br',
+    email: 'lucimurata@gmail.com',
+    website: 'www.dralucimurata.com.br',
     slogan: 'Odontologia Biológica, Cirurgia Zircônia & Saúde Integrativa',
+    prescription_footer: 'Receituário odontológico & integrativo emitido em conformidade com as normas do CFO/CRO. Válido em território nacional.',
+    whatsapp_message_template: 'Olá {paciente}, segue a sua receita / orientação odontológica emitida pela Dra. Luci Murata.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'luci',
     evolution_apikey: 'E6247913DB92-48B4-8B54-5C7449EA639B'
@@ -38,9 +42,11 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     name: 'Clínica Dr. Carlos Morato - Neurologia & Integrativa',
     address: 'Av. Paulista, 1000 - Conjunto 1401 - Bela Vista - São Paulo/SP',
     phone: '(11) 99876-5432',
-    email: 'dr.carlos@ambulatorioia.com',
+    email: 'carvalhomorato@gmail.com',
     website: 'www.drcarlosmorato.com.br',
     slogan: 'Neurologia Clínica e Medicina Integrativa',
+    prescription_footer: 'Receituário médico digital válido em território nacional nos termos da Lei 14.063/2020 e Portaria SVS/MS 344/98.',
+    whatsapp_message_template: 'Olá {paciente}, segue o seu receituário médico / pedido emitido pelo Dr. Carlos Morato em sua consulta.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'drcarlos',
     evolution_apikey: 'E6247913DB92-48B4-8B54-5C7449EA639B'
@@ -56,6 +62,8 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     email: 'marco.agduarte22@gmail.com',
     website: 'www.ambulatorioia.com',
     slogan: 'Gestão Integrada de Saúde, Neurologia e Odontologia Biológica',
+    prescription_footer: 'Documento clínico emitido via Ambulatório IA. Válido em território nacional.',
+    whatsapp_message_template: 'Olá {paciente}, segue seu documento clínico emitido pelo Ambulatório IA.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'ambulatorio',
     evolution_apikey: 'E6247913DB92-48B4-8B54-5C7449EA639B'
@@ -65,21 +73,51 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
 export function resolveDoctorKey(userOrEmail?: any, name?: string): 'dra_lucy' | 'dr_carlos' | 'marco_admin' {
   const email = (typeof userOrEmail === 'string' ? userOrEmail : (userOrEmail?.email || '')).toLowerCase().trim();
   const fullName = (typeof userOrEmail === 'object' ? (userOrEmail?.full_name || name || '') : (name || '')).toLowerCase().trim();
-  const id = (typeof userOrEmail === 'object' ? (userOrEmail?.id || '') : '');
+  const id = (typeof userOrEmail === 'object' ? (userOrEmail?.id || '') : '').toLowerCase().trim();
+  const specialty = (typeof userOrEmail === 'object' ? (userOrEmail?.especialidade || '') : '').toLowerCase().trim();
 
-  // Marco Duarte (Master Admin)
-  if (email === 'marco.agduarte22@gmail.com' || id === 'master-admin-marco' || (fullName.includes('marco') && fullName.includes('duarte'))) {
+  // 1. Marco Duarte (Master Admin)
+  if (
+    email === 'marco.agduarte22@gmail.com' || 
+    id === 'master-admin-marco' || 
+    id === 'marco-duarte-admin' ||
+    (fullName.includes('marco') && fullName.includes('duarte'))
+  ) {
     return 'marco_admin';
   }
 
-  // Dra. Lucy
-  if (email.includes('lucy') || email.includes('luci') || fullName.includes('lucy') || fullName.includes('luci') || fullName.includes('morata')) {
-    return 'dra_lucy';
+  // 2. Dr. Carlos Morato (Neurologia)
+  if (
+    email === 'carvalhomorato@gmail.com' ||
+    email.includes('morato') ||
+    email.includes('carlos') ||
+    fullName.includes('carlos') ||
+    fullName.includes('morato') ||
+    id.includes('carlos') ||
+    id.includes('morato') ||
+    specialty.includes('neuro')
+  ) {
+    return 'dr_carlos';
   }
 
-  // Dr. Carlos
-  if (email.includes('carlos') || fullName.includes('carlos') || fullName.includes('morato')) {
-    return 'dr_carlos';
+  // 3. Dra. Lucy / Luci Murata (Odontologia)
+  if (
+    email === 'lucimurata@gmail.com' ||
+    email === 'dra.lucy.morata@gmail.com' ||
+    email.includes('lucy') ||
+    email.includes('luci') ||
+    email.includes('murata') ||
+    email.includes('morata') ||
+    fullName.includes('lucy') ||
+    fullName.includes('luci') ||
+    fullName.includes('murata') ||
+    fullName.includes('morata') ||
+    id.includes('lucy') ||
+    id.includes('luci') ||
+    specialty.includes('odonto') ||
+    specialty.includes('dent')
+  ) {
+    return 'dra_lucy';
   }
 
   return 'dra_lucy'; // Padrão seguro

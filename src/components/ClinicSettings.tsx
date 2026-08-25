@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
-import { Save, Building2, MapPin, Phone, Mail, Globe, Loader2, QrCode, MessageSquare, CheckCircle2, Key, Link2, Server, HelpCircle, ChevronDown, ChevronUp, Eye, EyeOff, Sparkles, Brain, Stethoscope, Shield } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, Mail, Globe, Loader2, QrCode, MessageSquare, CheckCircle2, Key, Link2, Server, HelpCircle, ChevronDown, ChevronUp, Eye, EyeOff, Sparkles, Brain, Stethoscope, Shield, FileText } from 'lucide-react';
 import WhatsAppQRModal from './WhatsAppQRModal';
 import { 
   CLINIC_PROFILES_CONFIG, 
@@ -25,11 +25,11 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
   // Marco Duarte é o Administrador Mestre exclusivo
   const isMasterAdmin = useMemo(() => {
     const email = (currentUser?.email || '').toLowerCase().trim();
-    const id = currentUser?.id || '';
-    return email === 'marco.agduarte22@gmail.com' || id === 'master-admin-marco';
+    const id = (currentUser?.id || '').toLowerCase().trim();
+    return email === 'marco.agduarte22@gmail.com' || id === 'master-admin-marco' || id === 'marco-duarte-admin';
   }, [currentUser]);
 
-  // Perfil selecionado (Dra. Lucy, Dr. Carlos ou Marco Duarte)
+  // Perfil selecionado (Dra. Lucy/Luci, Dr. Carlos ou Marco Duarte)
   const initialDoctorKey = useMemo(() => {
     if (defaultDoctorKey && CLINIC_PROFILES_CONFIG[defaultDoctorKey]) {
       return defaultDoctorKey;
@@ -44,6 +44,12 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
   const [whatsappStatus, setWhatsappStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
   const [testingConnection, setTestingConnection] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+
+  // Sincroniza se o usuário mudar ou se a chave inicial mudar
+  useEffect(() => {
+    const key = isMasterAdmin ? (selectedDoctorKey || 'marco_admin') : resolveDoctorKey(currentUser);
+    setSelectedDoctorKey(key);
+  }, [currentUser, isMasterAdmin]);
 
   // Recarrega configuração sempre que o perfil selecionado mudar
   useEffect(() => {
@@ -274,7 +280,7 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                     )}
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Instância ativa: <strong className="font-mono text-blue-700 bg-blue-100/60 px-1.5 py-0.5 rounded-md">{info.evolution_instance || 'luci'}</strong>
+                    Instância ativa: <strong className="font-mono text-blue-700 bg-blue-100/60 px-1.5 py-0.5 rounded-md">{info.evolution_instance || (selectedDoctorKey === 'dr_carlos' ? 'drcarlos' : selectedDoctorKey === 'marco_admin' ? 'ambulatorio' : 'luci')}</strong>
                   </p>
                 </div>
               </div>
@@ -399,12 +405,67 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
         <div className="space-y-4 animate-in fade-in duration-150">
           <div className="p-4 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl text-xs text-indigo-900 leading-relaxed">
             <p className="font-bold flex items-center gap-1.5 text-indigo-950 mb-1">
-              <Building2 size={15} className="text-indigo-600" /> Cabeçalho Timbrado de Documentos ({info.professional_name})
+              <Building2 size={15} className="text-indigo-600" /> Cabeçalho Timbrado & Receituários ({info.professional_name})
             </p>
-            Estes dados são impressos no cabeçalho dos <strong>Receituários</strong>, <strong>Atestados</strong>, <strong>Pedidos de Exames</strong> e <strong>PDFs de Encaminhamento</strong> emitidos por este profissional.
+            Personalize a identificação do profissional, dados do consultório, termos de validade e a mensagem de envio do receituário por WhatsApp.
           </div>
 
-          <div className="grid gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+          {/* SEÇÃO 1: IDENTIFICAÇÃO DO PROFISSIONAL RESPONSÁVEL */}
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Stethoscope size={14} className="text-blue-600" />
+              1. Identificação do Profissional Responsável
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Nome do Profissional (Dr. / Dra.)
+                </label>
+                <input 
+                  type="text"
+                  value={info.professional_name || ''}
+                  onChange={(e) => setInfo({ ...info, professional_name: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
+                  placeholder="Ex: Dr. Carlos Morato"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Registro no Conselho (CRM/CRO e UF)
+                </label>
+                <input 
+                  type="text"
+                  value={info.council_badge || ''}
+                  onChange={(e) => setInfo({ ...info, council_badge: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
+                  placeholder="Ex: CRM/SP 145.892"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">
+                Especialidade / Título Clínico
+              </label>
+              <input 
+                type="text"
+                value={info.specialty_label || ''}
+                onChange={(e) => setInfo({ ...info, specialty_label: e.target.value })}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
+                placeholder="Ex: Neurologia & Medicina Integrativa"
+              />
+            </div>
+          </div>
+
+          {/* SEÇÃO 2: DADOS DO CONSULTÓRIO / CLÍNICA */}
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-slate-100">
+              <Building2 size={14} className="text-indigo-600" />
+              2. Dados do Consultório / Clínica (Cabeçalho)
+            </h4>
+
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
                 <Building2 size={15} className="text-slate-400" />
@@ -412,38 +473,38 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
               </label>
               <input 
                 type="text"
-                value={info.name}
+                value={info.name || ''}
                 onChange={(e) => setInfo({...info, name: e.target.value})}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
-                placeholder="Ex: Consultório Dra. Lucy Morata"
+                placeholder="Ex: Clínica Dr. Carlos Morato - Neurologia & Integrativa"
               />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
                 <Globe size={15} className="text-slate-400" />
-                Slogan ou Especialidades de Atendimento
+                Slogan ou Especialidades no Timbrado
               </label>
               <input 
                 type="text"
-                value={info.slogan}
+                value={info.slogan || ''}
                 onChange={(e) => setInfo({...info, slogan: e.target.value})}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
-                placeholder="Ex: Odontologia Biológica, Cirurgia Zircônia & Saúde Integrativa"
+                placeholder="Ex: Neurologia Clínica e Medicina Integrativa"
               />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
                 <MapPin size={15} className="text-slate-400" />
-                Endereço Completo do Consultório / Clínica
+                Endereço Completo do Consultório
               </label>
               <input 
                 type="text"
-                value={info.address}
+                value={info.address || ''}
                 onChange={(e) => setInfo({...info, address: e.target.value})}
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
-                placeholder="Ex: Av. Paulista, 1000 - Conjunto 1402 - Bela Vista - São Paulo/SP"
+                placeholder="Ex: Av. Paulista, 1000 - Conjunto 1401 - Bela Vista - São Paulo/SP"
               />
             </div>
 
@@ -455,10 +516,10 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                 </label>
                 <input 
                   type="text"
-                  value={info.phone}
+                  value={info.phone || ''}
                   onChange={(e) => setInfo({...info, phone: e.target.value})}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
-                  placeholder="(11) 98765-4321"
+                  placeholder="(11) 99876-5432"
                 />
               </div>
               <div className="space-y-1.5">
@@ -468,12 +529,48 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                 </label>
                 <input 
                   type="email"
-                  value={info.email}
+                  value={info.email || ''}
                   onChange={(e) => setInfo({...info, email: e.target.value})}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
-                  placeholder="dra.lucy@ambulatorioia.com"
+                  placeholder="carvalhomorato@gmail.com"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* SEÇÃO 3: RODAPÉ DO RECEITUÁRIO & ENVIO POR WHATSAPP */}
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-slate-100">
+              <FileText size={14} className="text-emerald-600" />
+              3. Termos do Receituário & Envio WhatsApp
+            </h4>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>Texto de Rodapé do Receituário (Validade Digital & Termos)</span>
+                <span className="text-[10px] text-slate-400 font-normal">Impresso no PDF</span>
+              </label>
+              <textarea 
+                rows={2}
+                value={info.prescription_footer || ''}
+                onChange={(e) => setInfo({...info, prescription_footer: e.target.value})}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
+                placeholder="Ex: Receituário médico digital válido em território nacional nos termos da Lei 14.063/2020 e Portaria SVS/MS 344/98."
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span>Mensagem Padrão ao Enviar Receita via WhatsApp</span>
+                <span className="text-[10px] text-slate-400 font-normal">Tag {'{paciente}'} será substituída</span>
+              </label>
+              <textarea 
+                rows={2}
+                value={info.whatsapp_message_template || ''}
+                onChange={(e) => setInfo({...info, whatsapp_message_template: e.target.value})}
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
+                placeholder="Ex: Olá {paciente}, segue o seu receituário médico / pedido emitido em sua consulta."
+              />
             </div>
           </div>
         </div>

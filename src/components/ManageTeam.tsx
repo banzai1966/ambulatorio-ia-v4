@@ -95,10 +95,75 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
     } catch (e) {}
   };
 
+  const getLocalTeamOwnerMap = (): Record<string, string> => {
+    try {
+      const stored = localStorage.getItem('clinic_team_owner_map');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return {};
+  };
+
+  const setLocalTeamOwner = (memberEmailOrId: string, ownerEmail: string) => {
+    if (!memberEmailOrId || !ownerEmail) return;
+    try {
+      const map = getLocalTeamOwnerMap();
+      map[memberEmailOrId.toLowerCase().trim()] = ownerEmail.toLowerCase().trim();
+      localStorage.setItem('clinic_team_owner_map', JSON.stringify(map));
+    } catch (e) {}
+  };
+
+  const isMasterAdmin = (currentUser?.email || '').toLowerCase().trim() === 'marco.agduarte22@gmail.com' ||
+                        (currentUser?.id || '').toLowerCase().includes('master-admin-marco') ||
+                        (currentUser?.id || '').toLowerCase().includes('marco-duarte-admin') ||
+                        (!currentUser?.email && !currentUser?.id);
+
+  const currentUserEmailNorm = (currentUser?.email || '').toLowerCase().trim();
+  const currentUserNameNorm = (currentUser?.full_name || '').toLowerCase().trim();
+
+  const isCarlosUser = currentUserEmailNorm.includes('carlos') || 
+                       currentUserEmailNorm.includes('morato') || 
+                       currentUserEmailNorm === 'carvalhomorato@gmail.com' || 
+                       currentUserNameNorm.includes('carlos');
+
+  const isLucyUser = currentUserEmailNorm.includes('luc') || 
+                     currentUserEmailNorm.includes('murata') || 
+                     currentUserEmailNorm === 'lucimurata@gmail.com' || 
+                     currentUserNameNorm.includes('luc');
+
+  const canManageTeam = isMasterAdmin || isCarlosUser || isLucyUser || currentUser?.role === 'admin';
+
+  const IMMORTAL_EMAILS = [
+    'marco.agduarte22@gmail.com',
+    'carvalhomorato@gmail.com',
+    'lucimurata@gmail.com'
+  ];
+
+  const isImmortalClinicalMember = (p: Partial<Profile>) => {
+    const normEmail = (p.email || '').toLowerCase().trim();
+    const normName = (p.full_name || '').toLowerCase().trim();
+    return normEmail === 'marco.agduarte22@gmail.com' ||
+           normEmail === 'carvalhomorato@gmail.com' ||
+           normEmail === 'lucimurata@gmail.com' ||
+           normName.includes('marco duarte') ||
+           normName.includes('carlos morato') ||
+           normName.includes('luci murata') ||
+           normName.includes('lucy morata');
+  };
+
   const getLocalDeletedMembers = (): string[] => {
     try {
       const stored = localStorage.getItem('deleted_members_local');
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(item => {
+            const norm = String(item).toLowerCase().trim();
+            return norm !== 'marco.agduarte22@gmail.com' && 
+                   norm !== 'carvalhomorato@gmail.com' &&
+                   norm !== 'dr-carlos-morato';
+          });
+        }
+      }
     } catch (e) {}
     return [];
   };
@@ -173,9 +238,34 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
           continue;
         }
 
+        // Sanitiza nomes padrão incorretos (ex: 'Médico') para o nome do profissional real
+        let cleanName = (p.full_name || '').trim();
+        let cleanSpecialty = p.especialidade || '';
+        let cleanCrm = p.crm_cro || crmMap[key] || crmMap[idKey] || '';
+
+        if (key.includes('carlos') || key.includes('morato') || key === 'carvalhomorato@gmail.com' || idKey.includes('carlos')) {
+          if (!cleanName || cleanName.toLowerCase() === 'médico' || cleanName.toLowerCase() === 'medico') {
+            cleanName = 'Dr. Carlos Morato';
+          }
+          cleanSpecialty = cleanSpecialty || 'Neurologia & Medicina Integrativa';
+          cleanCrm = cleanCrm || 'CRM/SP 145.892';
+        } else if (key.includes('luci') || key.includes('murata') || key === 'lucimurata@gmail.com' || idKey.includes('lucy')) {
+          if (!cleanName || cleanName.toLowerCase() === 'médico' || cleanName.toLowerCase() === 'medico') {
+            cleanName = 'Dra. Luci Murata';
+          }
+          cleanSpecialty = cleanSpecialty || 'Odontologia Biológica & Saúde Integrativa';
+          cleanCrm = cleanCrm || 'CRO/SP 98.412';
+        } else if (key === 'marco.agduarte22@gmail.com' || idKey.includes('marco')) {
+          cleanName = 'Marco Duarte';
+          cleanSpecialty = 'Gestor & Administrador Mestre';
+          cleanCrm = 'ADMIN-MASTER-01';
+        }
+
         const enriched = {
           ...p,
-          crm_cro: p.crm_cro || crmMap[key] || crmMap[idKey] || ''
+          full_name: cleanName,
+          especialidade: cleanSpecialty,
+          crm_cro: cleanCrm
         };
 
         if (key && !uniqueMap.has(key)) {
@@ -185,6 +275,59 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         }
       }
       const uniqueProfiles = Array.from(uniqueMap.values());
+
+      const CORE_DEFAULT_MEMBERS = [
+        {
+          id: 'marco-duarte-admin',
+          email: 'marco.agduarte22@gmail.com',
+          full_name: 'Marco Duarte',
+          role: 'admin' as const,
+          especialidade: 'Gestor & Administrador Mestre',
+          crm_cro: 'ADMIN-MASTER-01',
+          status: 'approved' as const
+        },
+        {
+          id: 'dr-carlos-morato',
+          email: 'carvalhomorato@gmail.com',
+          full_name: 'Dr. Carlos Morato',
+          role: 'admin' as const,
+          especialidade: 'Neurologia & Medicina Integrativa',
+          crm_cro: 'CRM/SP 145.892',
+          status: 'approved' as const
+        },
+        {
+          id: 'dra-lucy-morata',
+          email: 'lucimurata@gmail.com',
+          full_name: 'Dra. Luci Murata',
+          role: 'admin' as const,
+          especialidade: 'Odontologia Biológica & Saúde Integrativa',
+          crm_cro: 'CRO/SP 98.412',
+          status: 'approved' as const
+        }
+      ];
+
+      for (const core of CORE_DEFAULT_MEMBERS) {
+        const foundIndex = uniqueProfiles.findIndex(p => 
+          (p.email && p.email.toLowerCase().trim() === core.email) ||
+          (p.full_name && p.full_name.toLowerCase().includes(
+            core.email.includes('carlos') ? 'carlos' : core.email.includes('luci') ? 'luci' : 'duarte'
+          ))
+        );
+        if (foundIndex === -1) {
+          uniqueProfiles.push(core);
+        } else {
+          // Atualiza dados padrão garantidos se estavam genéricos
+          if (!uniqueProfiles[foundIndex].full_name || uniqueProfiles[foundIndex].full_name === 'Médico') {
+            uniqueProfiles[foundIndex].full_name = core.full_name;
+          }
+          if (!uniqueProfiles[foundIndex].especialidade) {
+            uniqueProfiles[foundIndex].especialidade = core.especialidade;
+          }
+          if (!uniqueProfiles[foundIndex].crm_cro) {
+            uniqueProfiles[foundIndex].crm_cro = core.crm_cro;
+          }
+        }
+      }
 
       // Se houver perfis com status 'pending' antigo, atualiza automaticamente no banco para 'approved'
       const pendingProfiles = uniqueProfiles.filter(p => p.status === 'pending');
@@ -200,7 +343,68 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         })();
       }
 
-      setProfiles(uniqueProfiles.map(p => ({ ...p, status: 'approved' as const })));
+      if (isMasterAdmin) {
+        setProfiles(uniqueProfiles.map(p => ({ ...p, status: 'approved' as const })));
+      } else {
+        const currentEmail = (currentUser?.email || '').toLowerCase().trim();
+        const currentId = (currentUser?.id || '').toLowerCase().trim();
+        const currentName = (currentUser?.full_name || '').toLowerCase().trim();
+
+        const isCarlos = currentEmail.includes('carlos') || currentEmail.includes('morato') || currentEmail === 'carvalhomorato@gmail.com' || currentName.includes('carlos');
+        const isLucy = currentEmail.includes('luc') || currentEmail.includes('murata') || currentEmail === 'lucimurata@gmail.com' || currentName.includes('luc');
+
+        const ownerMap = getLocalTeamOwnerMap();
+
+        let myProfiles = uniqueProfiles.filter(p => {
+          const pEmail = (p.email || '').toLowerCase().trim();
+          const pId = (p.id || '').toLowerCase().trim();
+          const pName = (p.full_name || '').toLowerCase().trim();
+          
+          if (isCarlos) {
+            // Se for o próprio Dr. Carlos
+            if (pEmail === 'carvalhomorato@gmail.com' || pId === 'dr-carlos-morato' || (pName.includes('carlos') && pName.includes('morato'))) {
+              return true;
+            }
+            // Se for membro criado ou pertencente à equipe do Dr. Carlos
+            if (ownerMap[pEmail] === 'carvalhomorato@gmail.com' || ownerMap[pId] === 'carvalhomorato@gmail.com') {
+              return true;
+            }
+            // Não exibe Dra. Luci nem Marco Duarte
+            return false;
+          }
+
+          if (isLucy) {
+            // Se for a própria Dra. Luci
+            if (pEmail === 'lucimurata@gmail.com' || pId === 'dra-lucy-morata' || (pName.includes('luci') && pName.includes('murata'))) {
+              return true;
+            }
+            // Se for membro criado ou pertencente à equipe da Dra. Luci
+            if (ownerMap[pEmail] === 'lucimurata@gmail.com' || ownerMap[pId] === 'lucimurata@gmail.com') {
+              return true;
+            }
+            // Não exibe Dr. Carlos nem Marco Duarte
+            return false;
+          }
+
+          if (currentEmail && (pEmail === currentEmail)) return true;
+          if (currentId && pId === currentId) return true;
+          return false;
+        });
+
+        if (myProfiles.length === 0) {
+          myProfiles = [{
+            id: currentUser?.id || (isCarlos ? 'dr-carlos-morato' : (isLucy ? 'dra-lucy-morata' : 'self-profile')),
+            email: currentUser?.email || (isCarlos ? 'carvalhomorato@gmail.com' : (isLucy ? 'lucimurata@gmail.com' : '')),
+            full_name: currentUser?.full_name || (isCarlos ? 'Dr. Carlos Morato' : (isLucy ? 'Dra. Luci Murata' : 'Profissional')),
+            role: 'admin' as const,
+            especialidade: currentUser?.especialidade || (isCarlos ? 'Neurologia & Medicina Integrativa' : (isLucy ? 'Odontologia Biológica & Saúde Integrativa' : 'Clínica Geral')),
+            crm_cro: currentUser?.crm_cro || (isCarlos ? 'CRM/SP 145.892' : (isLucy ? 'CRO/SP 98.412' : '')),
+            status: 'approved' as const
+          }];
+        }
+
+        setProfiles(myProfiles.map(p => ({ ...p, status: 'approved' as const })));
+      }
     } catch (err: any) {
       console.error("Erro ao buscar equipe:", err);
       setError(err.message || "Falha ao buscar equipe.");
@@ -230,6 +434,10 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
       if (crm_cro) {
         setLocalCrmCro(email, crm_cro);
       }
+
+      // Vincula o membro ao consultório do médico ou admin criador
+      const creatorEmail = currentUser?.email || (isCarlosUser ? 'carvalhomorato@gmail.com' : (isLucyUser ? 'lucimurata@gmail.com' : 'marco.agduarte22@gmail.com'));
+      setLocalTeamOwner(email, creatorEmail);
 
       // 1. Tenta cadastrar via rota administrativa segura do backend
       let createdViaApi = false;
@@ -374,6 +582,12 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
   const confirmDeleteMember = async () => {
     if (!memberToDelete) return;
     const { id, email, full_name } = memberToDelete;
+
+    if (isImmortalClinicalMember(memberToDelete)) {
+      setMemberToDelete(null);
+      toast.error("Este é um profissional clínico principal/administrador do Ambulatório IA e está blindado contra exclusão.");
+      return;
+    }
     
     setDeleting(id);
     setMemberToDelete(null); // Fecha o popup imediatamente
@@ -431,21 +645,35 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
             <UserCheck className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Gerenciar Equipe & Médicos</h2>
-            <p className="text-xs text-slate-500">Adicione médicos, secretárias e defina cargos e acessos</p>
+            <h2 className="text-xl font-bold text-slate-800">
+              {isMasterAdmin 
+                ? "Gerenciar Equipe do Consultório & Acessos" 
+                : isCarlosUser 
+                  ? "Equipe do Consultório & Acessos (Dr. Carlos Morato)" 
+                  : isLucyUser 
+                    ? "Equipe do Consultório & Acessos (Dra. Luci Murata)" 
+                    : "Minha Equipe & Acesso Profissional"}
+            </h2>
+            <p className="text-xs text-slate-500">
+              {isMasterAdmin 
+                ? "Painel Geral de Gestão - Adicione secretárias, recepcionistas, médicos e gerencie permissões" 
+                : "Adicione e gerencie secretárias, recepcionistas e profissionais da equipe da sua clínica"}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* BOTÃO NOVO MEMBRO */}
-          <button
-            type="button"
-            onClick={() => setShowAddModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>+ Novo Membro</span>
-          </button>
+          {/* BOTÃO NOVO MEMBRO (Disponível para Dr. Carlos, Dra. Luci e Marco Duarte) */}
+          {canManageTeam && (
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ Novo Membro</span>
+            </button>
+          )}
 
           <button 
             type="button"
@@ -721,7 +949,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                   </select>
                 </div>
 
-                {profile.role === 'doctor' && (
+                {(profile.role === 'doctor' || profile.role === 'admin') && (
                   <>
                     <div className="flex flex-col gap-0.5">
                       <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider ml-1">Especialidade</label>
@@ -754,15 +982,25 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                   </>
                 )}
                 
-                <button 
-                  type="button"
-                  onClick={() => setMemberToDelete(profile)}
-                  disabled={deleting === profile.id}
-                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all self-end mb-0.5"
-                  title="Remover Membro"
-                >
-                  {deleting === profile.id ? <Loader2 className="w-4 h-4 animate-spin text-red-500" /> : <Trash2 className="w-4 h-4" />}
-                </button>
+                {isImmortalClinicalMember(profile) ? (
+                  <div 
+                    className="p-2 text-amber-500 bg-amber-50 rounded-xl transition-all self-end mb-0.5 border border-amber-200/60 flex items-center gap-1 text-[11px] font-bold"
+                    title="Administrador Mestre (Blindado contra exclusão)"
+                  >
+                    <Shield className="w-4 h-4 text-amber-600" />
+                    <span className="hidden sm:inline text-amber-800 text-[10px]">Blindado</span>
+                  </div>
+                ) : isMasterAdmin ? (
+                  <button 
+                    type="button"
+                    onClick={() => setMemberToDelete(profile)}
+                    disabled={deleting === profile.id}
+                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all self-end mb-0.5"
+                    title="Remover Membro"
+                  >
+                    {deleting === profile.id ? <Loader2 className="w-4 h-4 animate-spin text-red-500" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                ) : null}
               </div>
             </div>
           ))

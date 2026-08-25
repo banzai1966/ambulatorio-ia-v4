@@ -3,6 +3,7 @@ import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Downloa
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
+import { getActiveClinicConfig } from '../constants/clinicProfiles';
 
 interface AnvisaMedication {
   id: string;
@@ -153,32 +154,38 @@ export default function PrescriptionAnvisaModal({
   };
 
   const generatePDF = () => {
+    const clinicConfig = getActiveClinicConfig(doctorName);
     const doc = new jsPDF();
     
     // Cabeçalho Clínica
     doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, 210, 35, 'F');
+    doc.rect(0, 0, 210, 38, 'F');
     
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(18);
+    doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text(clinicName, 14, 18);
-    doc.setFontSize(10);
+    doc.text(clinicConfig.name || clinicName, 14, 16);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    doc.text("RECEITUÁRIO MÉDICO DIGITAL - VALIDADO VIA ANVISA & QR CODE", 14, 26);
+    doc.text(`${clinicConfig.slogan || 'Neurologia Clínica & Medicina Integrativa'} | ${clinicConfig.phone}`, 14, 23);
+    doc.text(clinicConfig.address || 'Av. Paulista, 1000 - São Paulo/SP', 14, 29);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("RECEITUÁRIO DIGITAL OFICIAL - VALIDADO VIA ANVISA & MP 2.200-2/2001", 14, 35);
 
     // Dados do Paciente e Médico
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 45);
-    if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 52);
-    doc.text(`MÉDICO RESPONSÁVEL: ${doctorName.toUpperCase()}`, 14, patientCpf ? 59 : 52);
-    doc.text(`DATA: ${new Date().toLocaleDateString('pt-BR')}`, 150, 45);
+    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 48);
+    if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 54);
+    doc.text(`PROFISSIONAL RESPONSÁVEL: ${(doctorName || clinicConfig.professional_name).toUpperCase()}`, 14, patientCpf ? 60 : 54);
+    doc.text(`REGISTRO: ${clinicConfig.council_badge} | ${clinicConfig.specialty_label}`, 14, patientCpf ? 66 : 60);
+    doc.text(`DATA: ${new Date().toLocaleDateString('pt-BR')}`, 150, 48);
 
     doc.setLineWidth(0.5);
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, 65, 196, 65);
+    doc.line(14, patientCpf ? 72 : 66, 196, patientCpf ? 72 : 66);
 
     // Tabela de Medicamentos
     const tableRows = prescriptionItems.map((item, index) => [
@@ -188,7 +195,7 @@ export default function PrescriptionAnvisaModal({
     ]);
 
     autoTable(doc, {
-      startY: 70,
+      startY: patientCpf ? 76 : 70,
       head: [['MEDICAMENTO / APRESENTAÇÃO', 'QTD', 'POSOLOGIA E ORIENTAÇÕES']],
       body: tableRows,
       headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -202,17 +209,19 @@ export default function PrescriptionAnvisaModal({
 
     // Nota de Validação e Assinatura
     const finalY = (doc as any).lastAutoTable.finalY || 150;
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setTextColor(100, 116, 139);
-    doc.text("Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 20);
+    doc.text(clinicConfig.prescription_footer || "Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 18);
     
     // Linha de assinatura
     doc.setDrawColor(148, 163, 184);
-    doc.line(120, finalY + 40, 196, finalY + 40);
+    doc.line(110, finalY + 36, 196, finalY + 36);
     doc.setFont("helvetica", "bold");
-    doc.text(doctorName, 120, finalY + 46);
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    doc.text(doctorName || clinicConfig.professional_name, 110, finalY + 42);
     doc.setFont("helvetica", "normal");
-    doc.text("CRM / Assinatura Digital Ativa", 120, finalY + 52);
+    doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, finalY + 47);
 
     return doc;
   };
@@ -234,11 +243,15 @@ export default function PrescriptionAnvisaModal({
     }
     setIsSendingWhatsApp(true);
     try {
+      const clinicConfig = getActiveClinicConfig(doctorName);
       const itemsText = prescriptionItems.map((item, idx) => 
         `*${idx + 1}. ${item.medication.nome}* (${item.selectedApresentacao})\n   └ 📌 *Posologia:* ${item.posologiaCustomizada}\n   └ 💊 *Qtd:* ${item.quantidade}`
       ).join('\n\n');
 
-      const messageText = `💊 *RECEITA MÉDICA DIGITAL - ${clinicName}*\n\n*Paciente:* ${patientName}\n*Médico:* ${doctorName}\n*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n===========================\n\n${itemsText}\n\n===========================\n\n🔍 *Consulte as bulas oficiais da ANVISA:* \n${prescriptionItems.map(i => `• ${i.medication.nome}: ${i.medication.bulaUrl}`).join('\n')}\n\n✅ *Receita digital com validação direta nas farmácias.*`;
+      const customGreeting = (clinicConfig.whatsapp_message_template || 'Olá {paciente}, segue o seu receituário emitido em sua consulta.')
+        .replace('{paciente}', patientName);
+
+      const messageText = `💊 *RECEITA MÉDICA DIGITAL - ${clinicConfig.name || clinicName}*\n\n${customGreeting}\n\n*Paciente:* ${patientName}\n*Médico:* ${doctorName || clinicConfig.professional_name} (${clinicConfig.council_badge})\n*Especialidade:* ${clinicConfig.specialty_label}\n*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n===========================\n\n${itemsText}\n\n===========================\n\n🔍 *Consulte as bulas oficiais da ANVISA:* \n${prescriptionItems.map(i => `• ${i.medication.nome}: ${i.medication.bulaUrl}`).join('\n')}\n\n✅ *${clinicConfig.prescription_footer || 'Receita digital com validação direta nas farmácias.'}*`;
 
       const res = await fetch('/api/send-message', {
         method: 'POST',

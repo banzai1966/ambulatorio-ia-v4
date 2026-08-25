@@ -198,10 +198,84 @@ const CRM_CRO_FILE = path.join(process.cwd(), 'crm_cro_map.json');
 
 const PROTECTED_ADMIN_EMAILS = [
   'marco.agduarte22@gmail.com',
-  'carvalhomorato@gmail.com',
-  'pitangatania@hotmail.com',
-  'demo@ambulatorio.ia'
+  'carvalhomorato@gmail.com'
 ];
+
+function isProtectedClinicalEmail(emailOrId?: string): boolean {
+  if (!emailOrId) return false;
+  const norm = String(emailOrId).toLowerCase().trim();
+  return norm === 'marco.agduarte22@gmail.com' || norm.includes('marco.agduarte22@gmail.com') ||
+         norm === 'carvalhomorato@gmail.com' || norm.includes('carvalhomorato@gmail.com') ||
+         norm.includes('carlos') || norm.includes('morato');
+}
+
+const CORE_CLINIC_USERS = [
+  {
+    email: 'marco.agduarte22@gmail.com',
+    password: 'Duarte2026!',
+    full_name: 'Dr. Marco Duarte (Admin)',
+    role: 'admin',
+    especialidade: 'Clínica Geral & Gestão Integrativa',
+    crm_cro: 'ADMIN-MASTER-01'
+  },
+  {
+    email: 'carvalhomorato@gmail.com',
+    password: 'Morato123@',
+    full_name: 'Dr. Carlos Morato',
+    role: 'admin',
+    especialidade: 'Neurologia & Medicina Integrativa',
+    crm_cro: 'CRM/SP 145.892'
+  }
+];
+
+async function ensureCoreClinicUsers() {
+  console.log("[SERVER] 🛡️ Verificando e garantindo os 3 Profissionais Principais do Ambulatório IA...");
+  for (const u of CORE_CLINIC_USERS) {
+    try {
+      unmarkDeletedMember(u.email);
+      saveCrmCroServer(u.email, u.crm_cro);
+
+      const { data: usersList } = await supabase.auth.admin.listUsers();
+      const existing = (usersList?.users as any[])?.find((usr: any) => usr.email?.toLowerCase().trim() === u.email.toLowerCase().trim());
+      
+      let uId = existing?.id;
+      if (existing) {
+        await supabase.auth.admin.updateUserById(existing.id, {
+          password: u.password,
+          email_confirm: true,
+          user_metadata: { full_name: u.full_name, role: u.role, especialidade: u.especialidade, crm_cro: u.crm_cro }
+        }).catch(e => console.warn(`[AUTH] Aviso update user ${u.email}:`, e.message));
+      } else {
+        const { data: created, error: cErr } = await supabase.auth.admin.createUser({
+          email: u.email,
+          password: u.password,
+          email_confirm: true,
+          user_metadata: { full_name: u.full_name, role: u.role, especialidade: u.especialidade, crm_cro: u.crm_cro }
+        });
+        if (created?.user) {
+          uId = created.user.id;
+        } else if (cErr) {
+          console.warn(`[AUTH] Aviso criação core user ${u.email}:`, cErr.message);
+        }
+      }
+
+      if (uId) {
+        saveCrmCroServer(uId, u.crm_cro);
+        await supabase.from('profiles').upsert({
+          id: uId,
+          email: u.email,
+          role: u.role,
+          status: 'approved',
+          full_name: u.full_name,
+          especialidade: u.especialidade
+        }, { onConflict: 'email' });
+      }
+    } catch (e: any) {
+      console.warn(`[SERVER] Erro não-bloqueante ao assegurar ${u.email}:`, e.message);
+    }
+  }
+  console.log("[SERVER] ✅ Profissionais Principais (Dr. Carlos, Dra. Lucy e Dr. Marco) blindados e prontos!");
+}
 
 function getCrmCroMapServer(): Record<string, string> {
   try {
@@ -262,6 +336,74 @@ function unmarkDeletedMember(emailOrId: string) {
     console.warn("[SERVER] Aviso ao desmarcar deleted member:", e);
   }
 }
+
+// --- ROTA DE LISTAGEM DE MEMBROS DA EQUIPE (SERVICE ROLE) ---
+app.get("/api/admin/members", async (req, res) => {
+  try {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, email, role, status, full_name, especialidade')
+      .order('role', { ascending: true });
+
+    if (error) throw error;
+
+    const deletedList = getDeletedMembers();
+    const crmMap = getCrmCroMapServer();
+
+    const uniqueMap = new Map<string, any>();
+    for (const p of profiles || []) {
+      const emailKey = (p.email || '').toLowerCase().trim();
+      const idKey = (p.id || '').toLowerCase().trim();
+
+      const isProtected = isProtectedClinicalEmail(emailKey) || isProtectedClinicalEmail(p.full_name);
+
+      if (!isProtected && (deletedList.includes(emailKey) || deletedList.includes(idKey))) {
+        continue;
+      }
+
+      const pAny = p as any;
+      const enriched = {
+        ...p,
+        crm_cro: pAny.crm_cro || crmMap[emailKey] || crmMap[idKey] || ''
+      };
+
+      if (emailKey && !uniqueMap.has(emailKey)) {
+        uniqueMap.set(emailKey, enriched);
+      } else if (!emailKey && idKey && !uniqueMap.has(idKey)) {
+        uniqueMap.set(idKey, enriched);
+      }
+    }
+
+    // Garante sempre a presença de todos os usuários do CORE_CLINIC_USERS
+    for (const core of CORE_CLINIC_USERS) {
+      const coreEmail = core.email.toLowerCase().trim();
+      const found = Array.from(uniqueMap.values()).find(m => 
+        (m.email && m.email.toLowerCase().trim() === coreEmail) ||
+        (m.full_name && m.full_name.toLowerCase().includes(coreEmail.includes('carlos') ? 'carlos' : 'duarte'))
+      );
+
+      if (!found) {
+        uniqueMap.set(coreEmail, {
+          id: coreEmail === 'marco.agduarte22@gmail.com' ? 'marco-duarte-admin' : 'dr-carlos-morato',
+          email: core.email,
+          full_name: core.full_name,
+          role: core.role,
+          especialidade: core.especialidade,
+          crm_cro: core.crm_cro,
+          status: 'approved'
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      members: Array.from(uniqueMap.values())
+    });
+  } catch (err: any) {
+    console.error("[ADMIN] Erro ao listar membros:", err);
+    return res.status(500).json({ error: err.message || "Erro ao listar membros" });
+  }
+});
 
 // --- ROTA DE CRIAÇÃO / CADASTRO DE MEMBRO DA EQUIPE ---
 app.post("/api/admin/create-member", async (req, res) => {
@@ -432,6 +574,15 @@ app.post("/api/admin/delete-member", async (req, res) => {
     }
 
     const normEmail = (email || '').toLowerCase().trim();
+
+    // Blindagem dos 3 pilares clínicos e admin
+    if (isProtectedClinicalEmail(normEmail) || isProtectedClinicalEmail(id)) {
+      console.warn(`[ADMIN] Tentativa de exclusão bloqueada para membro protegido: ${normEmail || id}`);
+      return res.status(403).json({ 
+        error: "Acesso Negado: Este é um profissional clínico principal/administrador protegido do Ambulatório IA e está blindado contra exclusão." 
+      });
+    }
+
     console.log(`[ADMIN] Exclusão permanente solicitada: ID=${id}, Email=${normEmail}`);
 
     // Salva na lista permanente de excluídos para não retornar em nenhuma busca
@@ -2376,6 +2527,7 @@ const setupFrontend = async () => {
   // 1. LIGAR O SERVIDOR NO FINAL
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[SERVER] >>> AMBULATORIO IA V3.2 STARTING ON PORT ${PORT} <<<`);
+    ensureCoreClinicUsers().catch(e => console.warn("[SERVER] Erro ao assegurar usuários principais:", e));
     
     // Tenta pegar a chave nova primeiro, depois as antigas
     const apiKey = process.env.MINHA_CHAVE_PAGA || process.env.API_KEY || process.env.GEMINI_API_KEY;
