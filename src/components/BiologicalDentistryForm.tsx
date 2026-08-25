@@ -12,11 +12,16 @@ import {
   CircleDot,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  Layers
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import InteractiveOdontogram, { OdontogramData, ToothRecord, TOOTH_METADATA } from './InteractiveOdontogram';
 
 export interface BiologicalDentistryData {
+  // Odontograma Interativo
+  odontograma?: OdontogramData;
+
   // Implantes Metal-Free Zircônia
   implante_zirconia_ativo?: boolean;
   implante_elementos?: string;
@@ -94,7 +99,14 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
   // Presets Rápidos
   const applyPresetZirconia = () => {
     update({
+      odontograma: {
+        teeth: {
+          11: { id: 11, status: 'zirconia_implant', cbctFindings: 'Planejamento de implante cerâmico Zircônia', biologicalPlan: 'Cirurgia guiada 3D + PRF' },
+          21: { id: 21, status: 'zirconia_implant', cbctFindings: 'Reabilitação metal-free anterior', biologicalPlan: 'Implante cerâmico Zircônia' }
+        }
+      },
       implante_zirconia_ativo: true,
+      implante_elementos: '11, 21',
       implante_tipo_sistema: 'Zircônia Monobloco / Cerâmica Pura',
       implante_estagio: 'Cirurgia Instalada / Osteointegração',
       implante_prf_ienxerto: true,
@@ -112,8 +124,17 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
 
   const applyPresetSMARTAmalgam = () => {
     update({
+      odontograma: {
+        teeth: {
+          16: { id: 16, status: 'amalgam', notes: 'Amálgama oclusal com microinfiltração', biologicalPlan: 'Troca Segura Protocolo SMART (IAOMT)' },
+          26: { id: 26, status: 'amalgam', notes: 'Amálgama classe II MOD', biologicalPlan: 'Troca Segura Protocolo SMART' },
+          37: { id: 37, status: 'amalgam', notes: 'Amálgama antigo metálico', biologicalPlan: 'Troca Segura Protocolo SMART' },
+          47: { id: 47, status: 'amalgam', notes: 'Amálgama antigo metálico', biologicalPlan: 'Troca Segura Protocolo SMART' }
+        }
+      },
       amalgama_ativo: true,
       presenca_amalgama: true,
+      amalgama_elementos: '16, 26, 37, 47',
       smart_dique_nitrilo: true,
       smart_oxigenio_nasal: true,
       smart_exaustor_vapor: true,
@@ -127,9 +148,15 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
 
   const applyPresetCavitationNico = () => {
     update({
+      odontograma: {
+        teeth: {
+          38: { id: 38, status: 'cavitation_nico', cbctFindings: 'Área hipodensa trabecular em região de 38 extraído (NICO/FDOK)', biologicalPlan: 'Curetagem biológica + Ozonioterapia + Terapia Neural', neuralTherapy: true },
+          48: { id: 48, status: 'cavitation_nico', cbctFindings: 'Foco osteonecrótico isquêmico detectado na tomografia CBCT', biologicalPlan: 'Insuflação cavitacional ozônio', neuralTherapy: true }
+        }
+      },
       focos_cavitacao_ativo: true,
       focos_grau_inflamatorio: 'Moderada / Foco Interferente',
-      focos_tomografia_cbct: 'Área hipodensa em região de siso extraído / NICO detectado em Tomografia Cone Beam',
+      focos_tomografia_cbct: 'Área hipodensa em região de siso extraído (38/48) / NICO detectado em Tomografia Cone Beam',
       terapia_neural_ativo: true,
       terapia_neural_locais: 'Infiltração de Procaína no polo interferente e ganglio estelar',
       ozonioterapia_ativo: true,
@@ -145,6 +172,21 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
     }
   };
 
+  // Handler ao selecionar/atualizar dentes no Odontograma
+  const handleOdontogramChange = (odontoData: OdontogramData) => {
+    const teeth = odontoData.teeth || {};
+    const amalgams = Object.values(teeth).filter(t => t.status === 'amalgam').map(t => t.id).join(', ');
+    const zirconias = Object.values(teeth).filter(t => t.status === 'zirconia_implant').map(t => t.id).join(', ');
+    const nicos = Object.values(teeth).filter(t => t.status === 'cavitation_nico').map(t => t.id).join(', ');
+
+    update({
+      odontograma: odontoData,
+      ...(amalgams ? { amalgama_ativo: true, amalgama_elementos: amalgams } : {}),
+      ...(zirconias ? { implante_zirconia_ativo: true, implante_elementos: zirconias } : {}),
+      ...(nicos ? { focos_cavitacao_ativo: true } : {})
+    });
+  };
+
   return (
     <div className="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 p-5 md:p-6 rounded-3xl border border-blue-100 space-y-6 shadow-xs animate-in fade-in duration-300">
       {/* Header do Módulo Dra. Lucy */}
@@ -155,11 +197,11 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
               <Sparkles size={12} /> Dra. Lucy
             </span>
             <h3 className="text-base font-extrabold text-slate-900">
-              Odontologia Biológica & Implantes Zircônia (Metal-Free)
+              Odontologia Biológica
             </h3>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Planejamento integrativo de implantes cerâmicos, remoção segura de amálgama (SMART), cavitações NICO e terapia neural.
+            Planejamento integrativo de implantes cerâmicos, remoção segura de amálgama (SMART), cavitações NICO, odontograma e terapia neural.
           </p>
         </div>
 
@@ -198,6 +240,14 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
             <RefreshCw size={14} />
           </button>
         </div>
+      </div>
+
+      {/* ODONTOGRAMA INTERATIVO CENTRAL (FDI 11 a 48) */}
+      <div>
+        <InteractiveOdontogram
+          data={data.odontograma || {}}
+          onChange={handleOdontogramChange}
+        />
       </div>
 
       {/* BLOCO 1: IMPLANTES METAL-FREE EM ZIRCÔNIA */}
@@ -291,28 +341,74 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
               />
             </div>
 
-            <div className="col-span-1 md:col-span-2 flex flex-wrap gap-2 pt-1">
-              <label
-                onClick={() => update({ implante_prf_ienxerto: !data.implante_prf_ienxerto })}
-                className={cn(
-                  "cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all select-none",
-                  data.implante_prf_ienxerto ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-slate-50 border-slate-200 text-slate-600"
-                )}
-              >
-                {data.implante_prf_ienxerto ? <CheckCircle2 size={14} className="text-blue-600" /> : <CircleDot size={14} className="text-slate-400" />}
-                Enxerto Ósseo + Fibrina PRF / i-PRF
-              </label>
+            <div className="col-span-1 md:col-span-2 space-y-3 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Activity size={14} className="text-rose-600" />
+                  Protocolos Cirúrgicos & Concentrados Sanguíneos (PRF / L-PRF)
+                </span>
+                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
+                  Cirurgia Biológica & Fibrina
+                </span>
+              </div>
 
-              <label
-                onClick={() => update({ implante_cirurgia_guiada: !data.implante_cirurgia_guiada })}
-                className={cn(
-                  "cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all select-none",
-                  data.implante_cirurgia_guiada ? "bg-blue-50 border-blue-300 text-blue-800" : "bg-slate-50 border-slate-200 text-slate-600"
-                )}
-              >
-                {data.implante_cirurgia_guiada ? <CheckCircle2 size={14} className="text-blue-600" /> : <CircleDot size={14} className="text-slate-400" />}
-                Cirurgia Guiada 3D Biocompatível
-              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                <label
+                  onClick={() => update({ implante_prf_ienxerto: !data.implante_prf_ienxerto })}
+                  className={cn(
+                    "cursor-pointer p-2.5 rounded-xl border text-xs font-semibold flex flex-col gap-1 transition-all select-none",
+                    data.implante_prf_ienxerto ? "bg-rose-50 border-rose-300 text-rose-900" : "bg-slate-50 border-slate-200 text-slate-600"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">L-PRF / Membranas</span>
+                    {data.implante_prf_ienxerto ? <CheckCircle2 size={14} className="text-rose-600" /> : <CircleDot size={14} className="text-slate-400" />}
+                  </div>
+                  <span className="text-[10px] font-normal text-slate-500">Plugs e membranas ricas em plaquetas e leucócitos</span>
+                </label>
+
+                <label
+                  onClick={() => update({ implante_iprf_sticky: !(data as any).implante_iprf_sticky })}
+                  className={cn(
+                    "cursor-pointer p-2.5 rounded-xl border text-xs font-semibold flex flex-col gap-1 transition-all select-none",
+                    (data as any).implante_iprf_sticky ? "bg-rose-50 border-rose-300 text-rose-900" : "bg-slate-50 border-slate-200 text-slate-600"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">i-PRF / Sticky Bone</span>
+                    {(data as any).implante_iprf_sticky ? <CheckCircle2 size={14} className="text-rose-600" /> : <CircleDot size={14} className="text-slate-400" />}
+                  </div>
+                  <span className="text-[10px] font-normal text-slate-500">Fibrina líquida injetável com enxerto mineralizado</span>
+                </label>
+
+                <label
+                  onClick={() => update({ implante_cirurgia_guiada: !data.implante_cirurgia_guiada })}
+                  className={cn(
+                    "cursor-pointer p-2.5 rounded-xl border text-xs font-semibold flex flex-col gap-1 transition-all select-none",
+                    data.implante_cirurgia_guiada ? "bg-blue-50 border-blue-300 text-blue-900" : "bg-slate-50 border-slate-200 text-slate-600"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">Cirurgia Guiada 3D</span>
+                    {data.implante_cirurgia_guiada ? <CheckCircle2 size={14} className="text-blue-600" /> : <CircleDot size={14} className="text-slate-400" />}
+                  </div>
+                  <span className="text-[10px] font-normal text-slate-500">Guia prototipado via Tomografia CBCT</span>
+                </label>
+
+                <label
+                  onClick={() => update({ implante_piezo: !(data as any).implante_piezo })}
+                  className={cn(
+                    "cursor-pointer p-2.5 rounded-xl border text-xs font-semibold flex flex-col gap-1 transition-all select-none",
+                    (data as any).implante_piezo ? "bg-amber-50 border-amber-300 text-amber-900" : "bg-slate-50 border-slate-200 text-slate-600"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">Piezoelétrico / Ósseo</span>
+                    {(data as any).implante_piezo ? <CheckCircle2 size={14} className="text-amber-600" /> : <CircleDot size={14} className="text-slate-400" />}
+                  </div>
+                  <span className="text-[10px] font-normal text-slate-500">Corte ultrassônico atérmico para preservação óssea</span>
+                </label>
+              </div>
             </div>
           </div>
         )}

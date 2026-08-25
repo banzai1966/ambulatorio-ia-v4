@@ -20,6 +20,8 @@ interface PreConsultationAnamneseModalProps {
   patientEstadoPrefill?: string;
   patientNumeroPrefill?: string;
   patientComplementoPrefill?: string;
+  isDental?: boolean;
+  specialty?: string;
   onAnamneseSubmitted?: (updatedData: any) => void;
 }
 
@@ -39,8 +41,12 @@ export default function PreConsultationAnamneseModal({
   patientEstadoPrefill = '',
   patientNumeroPrefill = '',
   patientComplementoPrefill = '',
+  isDental = false,
+  specialty = '',
   onAnamneseSubmitted
 }: PreConsultationAnamneseModalProps) {
+  const isDentalMode = isDental || specialty.toLowerCase().includes('odonto') || specialty.toLowerCase().includes('biolog');
+
   const [nome, setNome] = useState(patientNamePrefill);
   const [telefone, setTelefone] = useState(patientPhonePrefill);
   const [cpf, setCpf] = useState(patientCpfPrefill);
@@ -53,7 +59,7 @@ export default function PreConsultationAnamneseModal({
   const [numero, setNumero] = useState(patientNumeroPrefill);
   const [complemento, setComplemento] = useState(patientComplementoPrefill);
 
-  // Perguntas Clínicas / Alertas
+  // Perguntas Clínicas / Alertas Gerais
   const [isHipertenso, setIsHipertenso] = useState(false);
   const [isDiabetico, setIsDiabetico] = useState(false);
   const [alergias, setAlergias] = useState<string[]>([]);
@@ -63,6 +69,17 @@ export default function PreConsultationAnamneseModal({
   const [usaAnticoagulante, setUsaAnticoagulante] = useState(false);
   const [medicamentosAtuais, setMedicamentosAtuais] = useState('');
   const [observacoesClinicas, setObservacoesClinicas] = useState('');
+
+  // Perguntas Especializadas de Odontologia Biológica (Dra. Lucy)
+  const [temAmalgama, setTemAmalgama] = useState(false);
+  const [qtdAmalgamas, setQtdAmalgamas] = useState('1 a 3');
+  const [temTratamentoCanal, setTemTratamentoCanal] = useState(false);
+  const [qtdCanais, setQtdCanais] = useState('1');
+  const [temBruxismoApertamento, setTemBruxismoApertamento] = useState(false);
+  const [temDorMandibulaCabeca, setTemDorMandibulaCabeca] = useState(false);
+  const [temImplanteTitanio, setTemImplanteTitanio] = useState(false);
+  const [alergiaMetaisBijuterias, setAlergiaMetaisBijuterias] = useState(false);
+  const [queixasOdonto, setQueixasOdonto] = useState<string[]>([]);
 
   // Foto / Selfie / Câmera
   const [photoPreview, setPhotoPreview] = useState<string | null>(patientPhotoPrefill || null);
@@ -504,6 +521,11 @@ export default function PreConsultationAnamneseModal({
     if (temCardiopatia) alertas.push("PROBLEMAS CARDÍACOS");
     if (temMarcapasso) alertas.push("USO DE MARCAPASSO");
     if (usaAnticoagulante) alertas.push("USO DE ANTICOAGULANTE");
+    if (temAmalgama) alertas.push(`RESTAURAÇÃO AMÁLGAMA/MERCÚRIO (${qtdAmalgamas})`);
+    if (temTratamentoCanal) alertas.push(`CANAL TRATADO / ENDODONTIA (${qtdCanais})`);
+    if (temBruxismoApertamento) alertas.push("BRUXISMO / APERTAMENTO DENTAL");
+    if (alergiaMetaisBijuterias) alertas.push("ALERGIA A METAIS / BIJUTERIAS");
+
     if (alergias.length > 0) {
       alergias.forEach(a => {
         const cleanA = a.replace(/^ALERGIA:\s*/i, '').trim();
@@ -531,6 +553,17 @@ export default function PreConsultationAnamneseModal({
       medicamentos_atuais: medicamentosAtuais,
       observacoesClinicas,
       observacoes_clinicas: observacoesClinicas,
+      dados_odontologia_biologica: isDentalMode ? {
+        tem_amalgama: temAmalgama,
+        qtd_amalgamas: qtdAmalgamas,
+        tem_tratamento_canal: temTratamentoCanal,
+        qtd_canais: qtdCanais,
+        tem_bruxismo_apertamento: temBruxismoApertamento,
+        tem_dor_mandibula_cabeca: temDorMandibulaCabeca,
+        tem_implante_titanio: temImplanteTitanio,
+        alergia_metais_bijuterias: alergiaMetaisBijuterias,
+        queixas_odonto: queixasOdonto
+      } : undefined,
       foto_url: photoPreview,
       data_submissao: new Date().toISOString()
     };
@@ -629,19 +662,40 @@ export default function PreConsultationAnamneseModal({
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100">
         
         {/* Header Modal */}
-        <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 flex items-center justify-between">
+        <div className={`text-white p-5 flex items-center justify-between transition-colors ${
+          isDentalMode 
+            ? 'bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900' 
+            : 'bg-gradient-to-r from-blue-900 to-indigo-900'
+        }`}>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-500/20 text-blue-300 rounded-2xl border border-blue-400/30">
+            <div className={`p-2.5 rounded-2xl border ${
+              isDentalMode 
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' 
+                : 'bg-blue-500/20 text-blue-300 border-blue-400/30'
+            }`}>
               <User className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold">Anamnese Pré-Consulta & Cadastro Digital</h2>
-              <p className="text-xs text-blue-200">Preenchimento rápido e seguro para agilizar seu atendimento médico</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold">
+                  {isDentalMode ? 'Anamnese Odontológica Biológica & Cadastro Digital' : 'Anamnese Pré-Consulta & Cadastro Digital'}
+                </h2>
+                {isDentalMode && (
+                  <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 rounded-full text-[10px] font-extrabold uppercase">
+                    Dra. Lucy
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-200">
+                {isDentalMode 
+                  ? 'Rastreio de metais, focos dentais, histórico endodôntico e saúde integrativa' 
+                  : 'Preenchimento rápido e seguro para agilizar seu atendimento médico'}
+              </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-xl text-blue-200 hover:text-white transition-all"
+            className="p-2 hover:bg-white/10 rounded-xl text-slate-200 hover:text-white transition-all"
           >
             <X className="w-5 h-5" />
           </button>
@@ -1047,6 +1101,166 @@ export default function PreConsultationAnamneseModal({
               />
             </div>
           </div>
+
+          {/* Seção 4: Odontologia Biológica & Focos Bucais (Dra. Lucy) */}
+          {isDentalMode && (
+            <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-3xl space-y-4">
+              <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
+                <div className="flex items-center gap-2 text-emerald-950 font-bold text-sm">
+                  <Sparkles size={16} className="text-emerald-600" />
+                  <span>Rastreio de Odontologia Biológica & Focos Sistêmicos</span>
+                </div>
+                <span className="text-[10px] bg-emerald-200/80 text-emerald-900 font-extrabold px-2.5 py-0.5 rounded-full">
+                  Exclusivo Dra. Lucy
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {/* Amálgamas */}
+                <div className={`p-3 rounded-2xl border transition-all ${temAmalgama ? 'bg-amber-50 border-amber-300' : 'bg-white border-emerald-100'}`}>
+                  <label className="flex items-center justify-between cursor-pointer font-bold text-slate-800">
+                    <span>Possui restaurações escuras (Amálgama / Prata)?</span>
+                    <input
+                      type="checkbox"
+                      checked={temAmalgama}
+                      onChange={(e) => setTemAmalgama(e.target.checked)}
+                      className="w-4 h-4 rounded-md accent-amber-600 cursor-pointer"
+                    />
+                  </label>
+                  {temAmalgama && (
+                    <div className="mt-2.5 pt-2 border-t border-amber-200/70 flex items-center justify-between text-[11px]">
+                      <span className="text-amber-900 font-medium">Quantidade estimada:</span>
+                      <select
+                        value={qtdAmalgamas}
+                        onChange={(e) => setQtdAmalgamas(e.target.value)}
+                        className="bg-white border border-amber-300 rounded-lg px-2 py-1 font-bold text-amber-950 outline-none"
+                      >
+                        <option value="1 a 2">1 a 2 dentes</option>
+                        <option value="3 a 5">3 a 5 dentes</option>
+                        <option value="6 ou mais">6 ou mais dentes</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Canais / Endodontia */}
+                <div className={`p-3 rounded-2xl border transition-all ${temTratamentoCanal ? 'bg-amber-50 border-amber-300' : 'bg-white border-emerald-100'}`}>
+                  <label className="flex items-center justify-between cursor-pointer font-bold text-slate-800">
+                    <span>Possui dentes com Canal Tratado (Endodontia)?</span>
+                    <input
+                      type="checkbox"
+                      checked={temTratamentoCanal}
+                      onChange={(e) => setTemTratamentoCanal(e.target.checked)}
+                      className="w-4 h-4 rounded-md accent-amber-600 cursor-pointer"
+                    />
+                  </label>
+                  {temTratamentoCanal && (
+                    <div className="mt-2.5 pt-2 border-t border-amber-200/70 flex items-center justify-between text-[11px]">
+                      <span className="text-amber-900 font-medium">Quantidade de canais:</span>
+                      <select
+                        value={qtdCanais}
+                        onChange={(e) => setQtdCanais(e.target.value)}
+                        className="bg-white border border-amber-300 rounded-lg px-2 py-1 font-bold text-amber-950 outline-none"
+                      >
+                        <option value="1">1 canal tratado</option>
+                        <option value="2 a 3">2 a 3 canais</option>
+                        <option value="4 ou mais">4 ou mais canais</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Bruxismo & Dores Orofaciais */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                  temBruxismoApertamento ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-white border-emerald-100 text-slate-700'
+                }`}>
+                  <span>Range ou aperta os dentes (Bruxismo noturno/diurno)?</span>
+                  <input
+                    type="checkbox"
+                    checked={temBruxismoApertamento}
+                    onChange={(e) => setTemBruxismoApertamento(e.target.checked)}
+                    className="w-4 h-4 rounded-md accent-amber-600 cursor-pointer"
+                  />
+                </label>
+
+                {/* Dores de Cabeça / Mandíbula */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                  temDorMandibulaCabeca ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-white border-emerald-100 text-slate-700'
+                }`}>
+                  <span>Acorda com dores de cabeça, mandíbula ou têmporas?</span>
+                  <input
+                    type="checkbox"
+                    checked={temDorMandibulaCabeca}
+                    onChange={(e) => setTemDorMandibulaCabeca(e.target.checked)}
+                    className="w-4 h-4 rounded-md accent-amber-600 cursor-pointer"
+                  />
+                </label>
+
+                {/* Implantes ou Metais */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                  temImplanteTitanio ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-white border-emerald-100 text-slate-700'
+                }`}>
+                  <span>Possui implantes de titânio ou pinos metálicos?</span>
+                  <input
+                    type="checkbox"
+                    checked={temImplanteTitanio}
+                    onChange={(e) => setTemImplanteTitanio(e.target.checked)}
+                    className="w-4 h-4 rounded-md accent-amber-600 cursor-pointer"
+                  />
+                </label>
+
+                {/* Alergia a Metais */}
+                <label className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
+                  alergiaMetaisBijuterias ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-white border-emerald-100 text-slate-700'
+                }`}>
+                  <span>Sensibilidade ou alergia a bijuterias / metais (níquel)?</span>
+                  <input
+                    type="checkbox"
+                    checked={alergiaMetaisBijuterias}
+                    onChange={(e) => setAlergiaMetaisBijuterias(e.target.checked)}
+                    className="w-4 h-4 rounded-md accent-amber-600 cursor-pointer"
+                  />
+                </label>
+              </div>
+
+              {/* Queixas Odontológicas Rápidas */}
+              <div className="pt-2">
+                <span className="text-[11px] font-bold text-emerald-950 block mb-1.5">Queixas ou Objetivos Principais:</span>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {[
+                    'Remoção Segura de Amálgama (SMART)',
+                    'Implante de Zircônia Cerâmica',
+                    'Avaliação de Canal / Foco Inflamatório',
+                    'Dores na ATM / Estalos',
+                    'Fadiga Crônica / Sensibilidade Sistêmica',
+                    'Estética Livre de Metal'
+                  ].map((q) => {
+                    const isSelected = queixasOdonto.includes(q);
+                    return (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setQueixasOdonto(queixasOdonto.filter(item => item !== q));
+                          } else {
+                            setQueixasOdonto([...queixasOdonto, q]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl font-medium border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-700 text-white border-emerald-800 shadow-xs'
+                            : 'bg-white text-emerald-900 border-emerald-200 hover:border-emerald-400'
+                        }`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}{q}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Termo de Veracidade */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-start gap-3">

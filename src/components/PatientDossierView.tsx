@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, 
@@ -18,7 +18,9 @@ import {
   Download, 
   Plus, 
   MessageSquare, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronDown,
+  UserCheck,
   Stethoscope, 
   ShieldCheck, 
   X,
@@ -27,7 +29,9 @@ import {
   Printer,
   Brain,
   Leaf,
-  Layers
+  Layers,
+  Square,
+  Loader2
 } from 'lucide-react';
 import PatientMediaGallery from './PatientMediaGallery';
 import NeurologicalExamForm from './NeurologicalExamForm';
@@ -46,6 +50,38 @@ import { initialIntegrativeData } from '../types/integrativeChecklist';
 import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { processClinicalInput } from '../services/clinicalService';
+
+interface ClinicalDoctorProfile {
+  id: string;
+  full_name: string;
+  especialidade: string;
+  crm_cro?: string;
+  default_mode?: 'biological_dentistry' | 'neurological' | 'integrative' | 'standard';
+}
+
+const DEFAULT_DOCTOR_PROFILES: ClinicalDoctorProfile[] = [
+  {
+    id: 'dra_lucy',
+    full_name: 'Dra. Lucy Morata',
+    especialidade: 'Odontologia Biológica & Saúde Integrativa',
+    crm_cro: 'CRO/SP 98.412',
+    default_mode: 'biological_dentistry',
+  },
+  {
+    id: 'dr_carlos',
+    full_name: 'Dr. Carlos Morato',
+    especialidade: 'Neurologia & Medicina Integrativa',
+    crm_cro: 'CRM/SP 145.892',
+    default_mode: 'neurological',
+  },
+  {
+    id: 'dr_marco',
+    full_name: 'Dr. Marco Duarte',
+    especialidade: 'Clínica Geral & Gestão Integrativa',
+    crm_cro: 'CRM/SP 220.104',
+    default_mode: 'standard',
+  }
+];
 
 interface PatientDossierViewProps {
   patientName: string;
@@ -78,6 +114,8 @@ interface PatientDossierViewProps {
   setSpecialtyData: (data: any) => void;
   integrativeData: any;
   setIntegrativeData: (data: any) => void;
+  teamProfiles?: any[];
+  currentUser?: any;
 }
 
 // Precise age calculation function according to AGENTS.md Rule 1
@@ -262,6 +300,8 @@ export default function PatientDossierView({
   setSpecialtyData,
   integrativeData,
   setIntegrativeData,
+  teamProfiles,
+  currentUser,
 }: PatientDossierViewProps) {
   const [activeTab, setActiveTab] = useState<
     'evolucao' | 'anamnese' | 'plano' | 'especialidade' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
@@ -271,26 +311,218 @@ export default function PatientDossierView({
     currentRecord?.alertas_copiloto || currentRecord?.alertas_clinicos || []
   );
 
-  // Perfil Clínico / Especialidade Ativa (Dr. Carlos x Dra. Lucy x Modo Desenvolvedor)
-  const [specialtyView, setSpecialtyView] = useState<'dr_carlos' | 'dra_lucy' | 'full'>(() => {
-    const saved = localStorage.getItem('clinic_active_specialty_view');
-    if (saved === 'dra_lucy' || saved === 'full' || saved === 'dr_carlos') return saved;
-    if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.includes('odonto') || currentRecord?.dados_especialidade?.implantes_zirconia !== undefined) {
-      return 'dra_lucy';
+  // Lista unificada de profissionais da clínica (escalável para 10, 100, 1000 médicos/dentistas)
+  const allDoctorProfiles: ClinicalDoctorProfile[] = useMemo(() => {
+    const list: ClinicalDoctorProfile[] = [...DEFAULT_DOCTOR_PROFILES];
+    if (teamProfiles && Array.isArray(teamProfiles)) {
+      teamProfiles.forEach((p: any) => {
+        if (!p || !p.full_name) return;
+        const exists = list.some(d => d.id === p.id || d.full_name.toLowerCase() === p.full_name.toLowerCase());
+        if (!exists) {
+          const spec = p.especialidade || 'Clínica Geral';
+          let defMode: 'biological_dentistry' | 'neurological' | 'integrative' | 'standard' = 'standard';
+          if (spec.toLowerCase().includes('odonto') || spec.toLowerCase().includes('dent')) defMode = 'biological_dentistry';
+          else if (spec.toLowerCase().includes('neuro')) defMode = 'neurological';
+          else if (spec.toLowerCase().includes('integra')) defMode = 'integrative';
+
+          list.push({
+            id: p.id || `doc_${Date.now()}_${Math.random()}`,
+            full_name: p.full_name,
+            especialidade: spec,
+            crm_cro: p.crm_cro || p.crm || p.cro || 'CRM/CRO',
+            default_mode: defMode,
+          });
+        }
+      });
     }
-    return 'dr_carlos';
+    return list;
+  }, [teamProfiles]);
+
+  const isUserAdmin = useMemo(() => {
+    return currentUser?.role === 'admin' || 
+           currentUser?.email === 'marco.agduarte22@gmail.com' || 
+           currentUser?.email?.includes('admin') || 
+           currentUser?.id === 'master-admin-marco';
+  }, [currentUser]);
+
+  // Identificação do profissional responsável ativo
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
+    // 1. Se o modo inicial for Odontologia Biológica
+    if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.toLowerCase().includes('odonto') || currentRecord?.especialidade?.toLowerCase().includes('biol')) {
+      const dentalDoc = allDoctorProfiles.find(d => d.default_mode === 'biological_dentistry' || d.id === 'dra_lucy');
+      if (dentalDoc) return dentalDoc.id;
+    }
+
+    // 2. Se for médico logado (não admin), fixa compulsoriamente no perfil dele
+    if (currentUser && currentUser.role === 'doctor') {
+      const match = allDoctorProfiles.find(d => 
+        (currentUser.full_name && (d.full_name.toLowerCase().includes(currentUser.full_name.toLowerCase()) || currentUser.full_name.toLowerCase().includes(d.full_name.toLowerCase()))) ||
+        (currentUser.email && d.full_name.toLowerCase().includes(currentUser.email.split('@')[0].toLowerCase()))
+      );
+      if (match) return match.id;
+    }
+
+    // 3. Se o prontuário já tiver médico responsável registrado
+    if (currentRecord?.profissional_responsavel) {
+      const match = allDoctorProfiles.find(d => 
+        d.full_name.toLowerCase().includes(currentRecord.profissional_responsavel.toLowerCase()) ||
+        currentRecord.profissional_responsavel.toLowerCase().includes(d.full_name.toLowerCase())
+      );
+      if (match) return match.id;
+    }
+
+    // 4. Se a especialidade for Neurologia
+    if (examMode === 'neurological' || currentRecord?.especialidade?.toLowerCase().includes('neuro')) {
+      const neuroDoc = allDoctorProfiles.find(d => d.default_mode === 'neurological' || d.id === 'dr_carlos');
+      if (neuroDoc) return neuroDoc.id;
+    }
+
+    // 5. Se houver usuário logado
+    if (currentUser?.full_name) {
+      const match = allDoctorProfiles.find(d => 
+        d.full_name.toLowerCase().includes(currentUser.full_name.toLowerCase()) ||
+        currentUser.full_name.toLowerCase().includes(d.full_name.toLowerCase())
+      );
+      if (match) return match.id;
+    }
+
+    const saved = localStorage.getItem('clinic_active_doctor_id');
+    if (saved && allDoctorProfiles.some(d => d.id === saved)) return saved;
+
+    return (examMode === 'biological_dentistry') ? 'dra_lucy' : (allDoctorProfiles[0]?.id || 'dra_lucy');
   });
 
-  const handleSwitchSpecialtyView = (newView: 'dr_carlos' | 'dra_lucy' | 'full') => {
-    setSpecialtyView(newView);
-    localStorage.setItem('clinic_active_specialty_view', newView);
-    if (newView === 'dra_lucy') {
-      setExamMode('biological_dentistry');
+  // Sincroniza profissional quando o modo de exame alternar externamente
+  useEffect(() => {
+    if (examMode === 'biological_dentistry') {
+      const dentalDoc = allDoctorProfiles.find(d => d.default_mode === 'biological_dentistry' || d.id === 'dra_lucy');
+      if (dentalDoc && selectedDoctorId !== dentalDoc.id) {
+        setSelectedDoctorId(dentalDoc.id);
+      }
+    } else if (examMode === 'neurological') {
+      const neuroDoc = allDoctorProfiles.find(d => d.default_mode === 'neurological' || d.id === 'dr_carlos');
+      if (neuroDoc && selectedDoctorId !== neuroDoc.id) {
+        setSelectedDoctorId(neuroDoc.id);
+      }
+    }
+  }, [examMode, allDoctorProfiles]);
+
+  const activeDoctor = useMemo(() => {
+    return allDoctorProfiles.find(d => d.id === selectedDoctorId) || allDoctorProfiles[0];
+  }, [allDoctorProfiles, selectedDoctorId]);
+
+  // Seletor de especialidade e troca de profissional
+  const handleSelectDoctor = (doctorId: string) => {
+    setSelectedDoctorId(doctorId);
+    localStorage.setItem('clinic_active_doctor_id', doctorId);
+    const doc = allDoctorProfiles.find(d => d.id === doctorId);
+    if (!doc) return;
+
+    // Ajusta o modo de exame baseado na especialidade do profissional
+    const targetMode = doc.default_mode || 'standard';
+    setExamMode(targetMode);
+
+    if (targetMode === 'biological_dentistry') {
       setActiveTab('especialidade');
-    } else if (newView === 'dr_carlos') {
-      if (examMode === 'biological_dentistry') {
-        setExamMode('neurological');
-        setActiveTab('evolucao');
+      
+      // Procura se já existe um prontuário odontológico prévio deste paciente
+      const dentalRec = (history || []).find(r => 
+        r.especialidade?.toLowerCase().includes('odonto') || 
+        r.especialidade?.toLowerCase().includes('biolog') ||
+        r.dados_especialidade?.odontograma || 
+        r.profissional_responsavel?.toLowerCase().includes(doc.full_name.toLowerCase())
+      );
+      
+      if (dentalRec) {
+        setCurrentRecord(dentalRec);
+        setQueixaPrincipal(dentalRec.queixa_principal || '');
+        setExameFisico(dentalRec.exame_fisico || '');
+        setHipoteseDiag(dentalRec.hipotese_diagnostica || '');
+        setCondutaPlano(dentalRec.conduta_plano_terapeutico || '');
+        setPrescricaoText(dentalRec.prescricao || dentalRec.conduta_plano_terapeutico || '');
+        if (dentalRec.dados_especialidade) setSpecialtyData(dentalRec.dados_especialidade);
+      } else {
+        // Novo atendimento individualizado para este profissional
+        setCurrentRecord({
+          especialidade: doc.especialidade,
+          profissional_responsavel: doc.full_name,
+          medico_id: doc.id,
+          paciente_nome_completo: effectiveName,
+          queixa_principal: '',
+          exame_fisico: '',
+          hipotese_diagnostica: '',
+          conduta_plano_terapeutico: '',
+          prescricao: '',
+          dados_especialidade: { odontograma: {} }
+        });
+        setQueixaPrincipal('');
+        setExameFisico('');
+        setHipoteseDiag('');
+        setCondutaPlano('');
+        setPrescricaoText('');
+        setSpecialtyData({ odontograma: {} });
+      }
+    } else if (targetMode === 'neurological') {
+      setActiveTab('evolucao');
+      const neuroRec = (history || []).find(r => 
+        (r.especialidade?.toLowerCase().includes('neuro') || r.exame_neurologico) &&
+        (!r.profissional_responsavel || r.profissional_responsavel.toLowerCase().includes(doc.full_name.toLowerCase()))
+      );
+      
+      if (neuroRec) {
+        setCurrentRecord(neuroRec);
+        setQueixaPrincipal(neuroRec.queixa_principal || '');
+        setExameFisico(neuroRec.exame_fisico || '');
+        setHipoteseDiag(neuroRec.hipotese_diagnostica || '');
+        setCondutaPlano(neuroRec.conduta_plano_terapeutico || '');
+        setPrescricaoText(neuroRec.prescricao || neuroRec.conduta_plano_terapeutico || '');
+      } else {
+        setCurrentRecord({
+          especialidade: doc.especialidade,
+          profissional_responsavel: doc.full_name,
+          medico_id: doc.id,
+          paciente_nome_completo: effectiveName,
+          queixa_principal: '',
+          exame_fisico: '',
+          hipotese_diagnostica: '',
+          conduta_plano_terapeutico: '',
+          prescricao: '',
+        });
+        setQueixaPrincipal('');
+        setExameFisico('');
+        setHipoteseDiag('');
+        setCondutaPlano('');
+        setPrescricaoText('');
+      }
+    } else {
+      setActiveTab('evolucao');
+      const docRec = (history || []).find(r => 
+        r.profissional_responsavel?.toLowerCase().includes(doc.full_name.toLowerCase())
+      );
+      if (docRec) {
+        setCurrentRecord(docRec);
+        setQueixaPrincipal(docRec.queixa_principal || '');
+        setExameFisico(docRec.exame_fisico || '');
+        setHipoteseDiag(docRec.hipotese_diagnostica || '');
+        setCondutaPlano(docRec.conduta_plano_terapeutico || '');
+        setPrescricaoText(docRec.prescricao || docRec.conduta_plano_terapeutico || '');
+      } else {
+        setCurrentRecord({
+          especialidade: doc.especialidade,
+          profissional_responsavel: doc.full_name,
+          medico_id: doc.id,
+          paciente_nome_completo: effectiveName,
+          queixa_principal: '',
+          exame_fisico: '',
+          hipotese_diagnostica: '',
+          conduta_plano_terapeutico: '',
+          prescricao: '',
+        });
+        setQueixaPrincipal('');
+        setExameFisico('');
+        setHipoteseDiag('');
+        setCondutaPlano('');
+        setPrescricaoText('');
       }
     }
   };
@@ -510,6 +742,7 @@ export default function PatientDossierView({
       return;
     }
     setIsLocalProcessing(true);
+    const toastId = toast.loading("Processando texto com IA e preenchendo prontuário...");
     try {
       const result = await processClinicalInput(text, examMode || 'standard', 'Atendimento em Bloco Único');
       if (result) {
@@ -517,17 +750,101 @@ export default function PatientDossierView({
         if (result.exame_fisico) setExameFisico(result.exame_fisico);
         if (result.hipotese_diagnostica) setHipoteseDiag(result.hipotese_diagnostica);
         if (result.conduta_plano_terapeutico) setCondutaPlano(result.conduta_plano_terapeutico);
-        if (setCurrentRecord) {
-          setCurrentRecord((prev: any) => ({
-            ...prev,
-            ...result
+        if (result.prescricao) setPrescricaoText(result.prescricao);
+        if (result.alertas_copiloto && Array.isArray(result.alertas_copiloto)) {
+          setClinicalAlerts(result.alertas_copiloto);
+        }
+
+        if (result.checklist_integrativo && setIntegrativeData) {
+          setIntegrativeData((prev: any) => {
+            const updated = { ...(prev || {}) };
+            for (const cat of Object.keys(result.checklist_integrativo)) {
+              if (typeof result.checklist_integrativo[cat] === 'object' && result.checklist_integrativo[cat] !== null) {
+                updated[cat] = {
+                  ...(updated[cat] || {}),
+                  ...result.checklist_integrativo[cat]
+                };
+              } else {
+                updated[cat] = result.checklist_integrativo[cat];
+              }
+            }
+            return updated;
+          });
+        }
+
+        if (result.exame_neurologico) {
+          setSpecialtyData((prev: any) => {
+            const updated = { ...(prev || {}) };
+            for (const key of Object.keys(result.exame_neurologico)) {
+              if (typeof result.exame_neurologico[key] === 'object' && result.exame_neurologico[key] !== null) {
+                updated[key] = {
+                  ...(updated[key] || {}),
+                  ...result.exame_neurologico[key]
+                };
+              } else {
+                updated[key] = result.exame_neurologico[key];
+              }
+            }
+            return updated;
+          });
+        } else if (result.dados_especialidade) {
+          setSpecialtyData((prev: any) => ({
+            ...(prev || {}),
+            ...result.dados_especialidade
           }));
         }
-        toast.success("IA extraiu e preencheu a ficha do paciente com sucesso!");
+
+        if (setCurrentRecord) {
+          setCurrentRecord((prev: any) => {
+            const prevChecklist = prev?.checklist_integrativo || {};
+            const incomingChecklist = result.checklist_integrativo || {};
+            const mergedChecklist = { ...prevChecklist };
+            for (const cat of Object.keys(incomingChecklist)) {
+              if (typeof incomingChecklist[cat] === 'object' && incomingChecklist[cat] !== null) {
+                mergedChecklist[cat] = {
+                  ...(mergedChecklist[cat] || {}),
+                  ...incomingChecklist[cat]
+                };
+              } else {
+                mergedChecklist[cat] = incomingChecklist[cat];
+              }
+            }
+
+            const prevNeuro = prev?.exame_neurologico || {};
+            const incomingNeuro = result.exame_neurologico || {};
+            const mergedNeuro = { ...prevNeuro };
+            for (const key of Object.keys(incomingNeuro)) {
+              if (typeof incomingNeuro[key] === 'object' && incomingNeuro[key] !== null) {
+                mergedNeuro[key] = {
+                  ...(mergedNeuro[key] || {}),
+                  ...incomingNeuro[key]
+                };
+              } else {
+                mergedNeuro[key] = incomingNeuro[key];
+              }
+            }
+
+            return {
+              ...prev,
+              ...result,
+              checklist_integrativo: result.checklist_integrativo ? mergedChecklist : prev?.checklist_integrativo,
+              exame_neurologico: result.exame_neurologico ? mergedNeuro : prev?.exame_neurologico,
+              mapeamento_corporal: (result.mapeamento_corporal && result.mapeamento_corporal.length > 0)
+                ? result.mapeamento_corporal
+                : (prev?.mapeamento_corporal || []),
+              dados_especialidade: {
+                ...(prev?.dados_especialidade || {}),
+                ...(result.dados_especialidade || {}),
+                ...(result.exame_neurologico || {})
+              }
+            };
+          });
+        }
+        toast.success("✨ IA preencheu a ficha, exame neurológico e condutas com sucesso!", { id: toastId });
       }
     } catch (err) {
       console.error(err);
-      toast.error("Falha ao processar texto com a IA.");
+      toast.error("Falha ao processar texto com a IA.", { id: toastId });
     } finally {
       setIsLocalProcessing(false);
     }
@@ -547,13 +864,18 @@ export default function PatientDossierView({
       hipotese_diagnostica: hipoteseDiag,
       conduta_plano_terapeutico: condutaPlano,
       prescricao: prescricaoText,
-      checklist_integrativo: integrativeData,
+      checklist_integrativo: integrativeData || currentRecord?.checklist_integrativo,
+      exame_neurologico: currentRecord?.exame_neurologico || (examMode === 'neurological' ? specialtyData : undefined),
       dados_especialidade: {
         ...specialtyData,
         mapeamento_corporal: currentRecord?.mapeamento_corporal || specialtyData?.mapeamento_corporal || []
       },
       mapeamento_corporal: currentRecord?.mapeamento_corporal || specialtyData?.mapeamento_corporal || [],
-      especialidade: examMode === 'integrative' ? 'Integrativa' : (examMode === 'neurological' ? 'Neurologia' : (currentRecord?.especialidade || 'Geral')),
+      especialidade: examMode === 'biological_dentistry'
+        ? 'Odontologia Biológica' 
+        : (examMode === 'integrative' ? 'Integrativa' : (examMode === 'neurological' ? 'Neurologia' : (activeDoctor.especialidade || currentRecord?.especialidade || 'Geral'))),
+      profissional_responsavel: activeDoctor.full_name,
+      medico_id: activeDoctor.id,
       resumo_formatado: currentRecord?.resumo_formatado || queixaPrincipal
     };
 
@@ -571,6 +893,7 @@ export default function PatientDossierView({
     } : initialIntegrativeData;
 
     const loadedSpecialty = rec.dados_especialidade || {};
+    const loadedNeuro = rec.exame_neurologico || rec.dados_especialidade?.exame_neurologico || loadedSpecialty?.exame_neurologico;
     const loadedBodyMap = (rec.mapeamento_corporal && rec.mapeamento_corporal.length > 0)
       ? rec.mapeamento_corporal 
       : (rec.dados_especialidade?.mapeamento_corporal || []);
@@ -578,8 +901,10 @@ export default function PatientDossierView({
     const sanitizedRecord = {
       ...rec,
       checklist_integrativo: loadedChecklist,
+      exame_neurologico: loadedNeuro || rec.exame_neurologico,
       dados_especialidade: {
         ...loadedSpecialty,
+        exame_neurologico: loadedNeuro || loadedSpecialty?.exame_neurologico,
         mapeamento_corporal: loadedBodyMap
       },
       mapeamento_corporal: loadedBodyMap,
@@ -590,6 +915,8 @@ export default function PatientDossierView({
     setIntegrativeData(loadedChecklist);
     setSpecialtyData({
       ...loadedSpecialty,
+      ...(loadedNeuro || {}),
+      exame_neurologico: loadedNeuro,
       mapeamento_corporal: loadedBodyMap
     });
 
@@ -602,6 +929,15 @@ export default function PatientDossierView({
     if (rec.conduta_plano_terapeutico) setCondutaPlano(rec.conduta_plano_terapeutico);
     if (rec.prescricao || rec.conduta_plano_terapeutico) setPrescricaoText(rec.prescricao || rec.conduta_plano_terapeutico);
     
+    // Sincroniza o profissional do prontuário histórico
+    if (rec.profissional_responsavel) {
+      const match = allDoctorProfiles.find(d => 
+        d.full_name.toLowerCase().includes(rec.profissional_responsavel.toLowerCase()) ||
+        rec.profissional_responsavel.toLowerCase().includes(d.full_name.toLowerCase())
+      );
+      if (match) setSelectedDoctorId(match.id);
+    }
+
     if (rec.especialidade?.toLowerCase().includes('neuro') || (rec.exame_neurologico && hasMeaningfulData(rec.exame_neurologico))) {
       setExamMode('neurological');
     } else if (rec.especialidade?.toLowerCase().includes('integrativa') || (rec.checklist_integrativo && hasMeaningfulData(rec.checklist_integrativo))) {
@@ -676,14 +1012,14 @@ export default function PatientDossierView({
                     {convenio || 'Particular'}
                   </span>
                   {isPromoter && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1">
                       ★ Promotor 5★
                     </span>
                   )}
                   {effectivePaymentStatus && (
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                       effectivePaymentStatus.startsWith('Pago') 
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                        ? 'bg-sky-50 text-sky-700 border-sky-200' 
                         : 'bg-amber-50 text-amber-700 border-amber-200'
                     }`}>
                       {effectivePaymentStatus}{effectivePaymentValue ? ` • R$ ${effectivePaymentValue}` : ''}
@@ -868,90 +1204,123 @@ export default function PatientDossierView({
             </div>
           </div>
 
-          {/* Unified Specialty Switcher & Clinical Tabs Bar */}
+          {/* Unified Dynamic Professional Selector & Clinical Tabs Bar */}
           <div className="mt-5 pt-3.5 border-t border-slate-100 space-y-3">
-            {/* Seletor de Perfil / Visão de Especialidade */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
-                <span className="text-[11px] font-bold text-slate-500 px-2 flex items-center gap-1">
-                  <Layers size={13} /> Visão Clínica:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchSpecialtyView('dr_carlos')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
-                    specialtyView === 'dr_carlos'
-                      ? 'bg-slate-700 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                  title="Visão do Dr. Carlos: Prontuário focado em Neurologia, Medicina Integrativa e SOAP"
-                >
-                  <Brain size={13} />
-                  Dr. Carlos (Neuro)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchSpecialtyView('dra_lucy')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
-                    specialtyView === 'dra_lucy'
-                      ? 'bg-slate-700 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                  }`}
-                  title="Visão da Dra. Lucy: Planejamento de implantes de zircônia, remoção segura de amálgama, focos NICO e tomografias"
-                >
-                  <Sparkles size={13} />
-                  Dra. Lucy (Odonto Biológica)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSwitchSpecialtyView('full')}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition-all ${
-                    specialtyView === 'full'
-                      ? 'bg-slate-700 text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
-                  }`}
-                  title="Visão Completa: Exibe todas as abas e especialidades juntas"
-                >
-                  Todas as Abas
-                </button>
+            {/* Seletor do Profissional Responsável (Suporta 10, 100, 1000 médicos/dentistas) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/70">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                    {activeDoctor.default_mode === 'biological_dentistry' ? (
+                      <Sparkles size={15} className="text-amber-300" />
+                    ) : activeDoctor.default_mode === 'neurological' ? (
+                      <Brain size={15} className="text-sky-300" />
+                    ) : (
+                      <Stethoscope size={15} />
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Profissional Responsável:
+                    </span>
+                    {isUserAdmin ? (
+                      <div className="relative inline-block">
+                        <select
+                          id="select-active-doctor"
+                          value={selectedDoctorId}
+                          onChange={(e) => handleSelectDoctor(e.target.value)}
+                          className="font-bold text-xs text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 pr-7 cursor-pointer appearance-none shadow-2xs focus:ring-2 focus:ring-slate-400 focus:outline-hidden transition-all"
+                        >
+                          {allDoctorProfiles.map((doc) => (
+                            <option key={doc.id} value={doc.id}>
+                              {doc.full_name} ({doc.especialidade})
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={13} className="absolute right-2 top-2 text-slate-400 pointer-events-none" />
+                      </div>
+                    ) : (
+                      <span className="font-bold text-xs text-slate-800">
+                        {activeDoctor.full_name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-200">
+                  <span className="px-2.5 py-0.5 rounded-md bg-white text-slate-700 font-semibold text-[11px] border border-slate-200">
+                    {activeDoctor.especialidade}
+                  </span>
+                  {activeDoctor.crm_cro && (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-medium text-[11px]">
+                      {activeDoctor.crm_cro}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {specialtyView === 'dra_lucy' && (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-800 rounded-lg text-xs font-semibold border border-blue-200/60">
-                  <Sparkles size={13} className="text-blue-600" />
-                  <span>Módulo Dra. Lucy • Odontologia Biológica & Implantes Zircônia</span>
+              {/* Botões Rápidos para troca entre os principais médicos (Exclusivo Administrador) */}
+              {isUserAdmin && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {allDoctorProfiles.slice(0, 3).map((doc) => (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => handleSelectDoctor(doc.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                        selectedDoctorId === doc.id
+                          ? 'bg-slate-800 text-white shadow-xs'
+                          : 'bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
+                      }`}
+                    >
+                      {doc.default_mode === 'biological_dentistry' ? (
+                        <Sparkles size={12} className={selectedDoctorId === doc.id ? 'text-amber-300' : 'text-slate-500'} />
+                      ) : doc.default_mode === 'neurological' ? (
+                        <Brain size={12} className={selectedDoctorId === doc.id ? 'text-sky-300' : 'text-slate-500'} />
+                      ) : (
+                        <UserCheck size={12} className={selectedDoctorId === doc.id ? 'text-emerald-300' : 'text-slate-500'} />
+                      )}
+                      <span>{doc.full_name.split(' ')[0]} {doc.full_name.split(' ')[1] || ''}</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
 
-            {/* Abas Dinâmicas de acordo com a Especialidade Selecionada */}
+            {/* Abas Dinâmicas de acordo com o Profissional Selecionado */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
-              {/* Odonto Tab para Dra. Lucy ou Modo Completo */}
-              {(specialtyView === 'dra_lucy' || specialtyView === 'full') && (
+              {/* Odonto Tab para Dra. Lucy / Odontologia Biológica */}
+              {(activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry') && (
                 <button
+                  type="button"
+                  id="tab-odontologia-biologica"
                   onClick={() => {
                     setExamMode('biological_dentistry');
                     setActiveTab('especialidade');
                   }}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
                     activeTab === 'especialidade' && examMode === 'biological_dentistry'
-                      ? 'bg-slate-700 text-white shadow-xs'
+                      ? 'bg-slate-800 text-white shadow-xs'
                       : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                   }`}
                 >
-                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-white' : 'text-slate-500'} />
-                  Odontologia Biológica & Zircônia
+                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-amber-300' : 'text-slate-500'} />
+                  Odontologia Biológica
                 </button>
               )}
 
               <button
+                type="button"
+                id="tab-evolucao-soap"
                 onClick={() => {
-                  setExamMode('standard');
+                  if (activeDoctor.default_mode !== 'biological_dentistry' && examMode === 'biological_dentistry') {
+                    setExamMode(activeDoctor.default_mode || 'standard');
+                  }
                   setActiveTab('evolucao');
                 }}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'evolucao' && examMode === 'standard' 
-                    ? 'bg-slate-700 text-white shadow-xs' 
+                  activeTab === 'evolucao' 
+                    ? 'bg-slate-800 text-white shadow-xs' 
                     : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                 }`}
               >
@@ -959,56 +1328,67 @@ export default function PatientDossierView({
                 Evolução & Atendimento (SOAP)
               </button>
 
-              {/* Destaque Neurológico - Dr. Carlos ou Modo Completo */}
-              {(specialtyView === 'dr_carlos' || specialtyView === 'full') && (
+              {/* Destaque Neurológico - Dr. Carlos ou Especialistas em Neuro */}
+              {(activeDoctor.default_mode === 'neurological' || examMode === 'neurological') && (
                 <button
+                  type="button"
+                  id="tab-exame-neurologico"
                   onClick={() => {
                     setExamMode('neurological');
                     setActiveTab('especialidade');
                   }}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
                     activeTab === 'especialidade' && examMode === 'neurological' 
-                      ? 'bg-slate-700 text-white shadow-xs' 
+                      ? 'bg-slate-800 text-white shadow-xs' 
                       : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                   }`}
                 >
-                  <Brain size={14} className={activeTab === 'especialidade' && examMode === 'neurological' ? 'text-white' : 'text-slate-500'} />
+                  <Brain size={14} className={activeTab === 'especialidade' && examMode === 'neurological' ? 'text-sky-300' : 'text-slate-500'} />
                   Exame Neurológico
                 </button>
               )}
 
-              {/* Destaque Medicina Integrativa - Dr. Carlos ou Modo Completo */}
-              {(specialtyView === 'dr_carlos' || specialtyView === 'full') && (
+              {/* Destaque Medicina Integrativa - Dr. Carlos ou Integrativos */}
+              {(activeDoctor.default_mode === 'neurological' || activeDoctor.default_mode === 'integrative' || examMode === 'integrative') && (
                 <button
+                  type="button"
+                  id="tab-medicina-integrativa"
                   onClick={() => {
                     setExamMode('integrative');
                     setActiveTab('especialidade');
                   }}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
                     activeTab === 'especialidade' && examMode === 'integrative' 
-                      ? 'bg-slate-700 text-white shadow-xs' 
+                      ? 'bg-slate-800 text-white shadow-xs' 
                       : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                   }`}
                 >
-                  <Leaf size={14} className={activeTab === 'especialidade' && examMode === 'integrative' ? 'text-white' : 'text-slate-500'} />
+                  <Leaf size={14} className={activeTab === 'especialidade' && examMode === 'integrative' ? 'text-emerald-300' : 'text-slate-500'} />
                   Medicina Integrativa
                 </button>
               )}
 
-              <button
-                onClick={() => setActiveTab('anamnese')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'anamnese' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
-                }`}
-              >
-                <FileText size={14} />
-                Mapeamento de Dores (BodyMap)
-              </button>
+              {/* Mapeamento de Dores (BodyMap) */}
+              {activeDoctor.default_mode !== 'biological_dentistry' && (
+                <button
+                  type="button"
+                  id="tab-bodymap-dores"
+                  onClick={() => setActiveTab('anamnese')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'anamnese' ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <FileText size={14} />
+                  Mapeamento de Dores (BodyMap)
+                </button>
+              )}
 
               <button
+                type="button"
+                id="tab-prescricoes-receituario"
                 onClick={() => setActiveTab('prescricoes')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'prescricoes' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  activeTab === 'prescricoes' ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                 }`}
               >
                 <FileSignature size={14} />
@@ -1016,9 +1396,11 @@ export default function PatientDossierView({
               </button>
 
               <button
+                type="button"
+                id="tab-plano-terapeutico"
                 onClick={() => setActiveTab('plano')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'plano' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  activeTab === 'plano' ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                 }`}
               >
                 <Stethoscope size={14} />
@@ -1026,18 +1408,87 @@ export default function PatientDossierView({
               </button>
 
               <button
+                type="button"
+                id="tab-anexos-imagens"
                 onClick={() => setActiveTab('anexos')}
                 className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'anexos' ? 'bg-slate-700 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  activeTab === 'anexos' ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
                 }`}
               >
                 <Paperclip size={14} />
-                {specialtyView === 'dra_lucy' ? 'Tomografias & Raios-X (CBCT)' : 'Exames & Imagens (TC/X-Ray)'}
+                Exames & Imagens
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Live Recording / AI Processing Feedback Banner */}
+      <AnimatePresence>
+        {isRecording && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.98 }}
+            className="bg-red-500 text-white p-4 rounded-2xl shadow-lg border border-red-600 flex flex-col md:flex-row items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0 animate-pulse">
+                <Mic className="w-5 h-5 text-white animate-bounce" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+                  <span className="font-extrabold text-sm uppercase tracking-wide">
+                    Ouvindo Consulta em Tempo Real...
+                  </span>
+                </div>
+                <p className="text-xs text-red-100 font-medium truncate max-w-xl">
+                  {liveTranscript ? `"${liveTranscript}"` : "Fale naturalmente com o paciente. A IA está capturando o áudio..."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="w-full md:w-auto px-5 py-2.5 bg-white text-red-700 hover:bg-red-50 font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Square size={14} className="fill-red-700" />
+                Finalizar e Preencher com IA
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {isProcessing && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-blue-600 text-white p-4 rounded-2xl shadow-lg border border-blue-700 flex items-center justify-between gap-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5 text-amber-300 animate-spin" />
+              </div>
+              <div>
+                <span className="font-extrabold text-sm block">
+                  Inteligência Artificial Processando Consulta...
+                </span>
+                <span className="text-xs text-blue-100 font-medium">
+                  Extraindo queixas, odontograma, procedimentos, receitas e plano terapêutico...
+                </span>
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 bg-white/10 px-3 py-1.5 rounded-xl text-xs font-semibold">
+              <Loader2 className="w-4 h-4 animate-spin text-amber-300" />
+              Aguarde alguns instantes...
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Monitor Multiparamétrico de Sinais Vitais / ECG / Soro IV */}
       <AnimatePresence>
@@ -1073,110 +1524,112 @@ export default function PatientDossierView({
           >
             {/* Left Column (5/12): Historical Evolutions Timeline */}
             <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4 flex flex-col h-[740px]">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-                    <Clock size={16} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-sm">Histórico do Prontuário</h3>
-                    <p className="text-[10px] text-slate-400">Registros e evoluções anteriores</p>
-                  </div>
-                </div>
-                <span className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-bold">
-                  {history.length} Registros
-                </span>
-              </div>
-
-              {/* Scrollable Timeline List */}
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar-blue">
-                {/* Real-time Timeline items saved from current session or database */}
-                {history.length > 0 ? (
-                  history.map((rec, index) => {
-                    const isCurrentPatient = !patientName || (rec.paciente_nome_completo && rec.paciente_nome_completo.toLowerCase().trim() === patientName.toLowerCase().trim());
-                    const isPreCad = Boolean(
-                      rec.resumo_formatado?.toLowerCase().includes('pré-cadastro') || 
-                      rec.especialidade?.toLowerCase().includes('pré-cadastro') ||
-                      rec.paciente_status?.toLowerCase().includes('pré-cadastro')
-                    );
+              {(() => {
+                const isDental = activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' || activeDoctor.especialidade.toLowerCase().includes('odonto');
+                const filteredHistory = (history || []).filter(rec => {
+                  if (isDental) {
                     return (
-                      <div 
-                        key={rec.id || `rec-${index}`} 
-                        onClick={() => setSelectedHistoryRecord(rec)}
-                        className={`p-3.5 space-y-2 cursor-pointer transition-all hover:shadow-sm group rounded-xl border ${
-                          isPreCad
-                            ? 'bg-slate-50/80 border-slate-200 hover:border-slate-300'
-                            : isCurrentPatient 
-                              ? 'bg-sky-50/30 border-sky-200/70 hover:border-sky-300 shadow-2xs' 
-                              : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-900">
-                          <span className="flex items-center gap-1.5">
-                            <Clock size={13} className={isPreCad ? "text-slate-500" : isCurrentPatient ? "text-sky-600" : "text-slate-400"} />
-                            {rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : 'Atendimento')}
-                          </span>
-                          <span className={`px-2 py-0.5 text-[9px] rounded-md uppercase flex items-center gap-1 font-bold ${
-                            isPreCad 
-                              ? 'bg-slate-100 text-slate-700 border border-slate-200' 
-                              : isCurrentPatient 
-                                ? 'bg-sky-100 text-sky-800 border border-sky-200/80' 
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}>
-                            <Eye size={10} /> {isPreCad ? 'PRÉ-CADASTRO' : (rec.especialidade ? rec.especialidade.toUpperCase() : 'CONSULTA')}
-                          </span>
-                        </div>
+                      rec.especialidade?.toLowerCase().includes('odonto') || 
+                      rec.especialidade?.toLowerCase().includes('biolog') ||
+                      rec.dados_especialidade?.odontograma || 
+                      rec.profissional_responsavel?.toLowerCase().includes('lucy')
+                    );
+                  }
+                  return true;
+                });
 
-                        <div className="space-y-1.5 text-xs">
-                          <p className={`font-medium text-slate-800 line-clamp-2 bg-white p-2.5 rounded-lg border ${
-                            isPreCad ? 'border-slate-200/80' : 'border-slate-200/80'
-                          }`}>
-                            "{rec.resumo_formatado || rec.queixa_principal || rec.conduta_plano_terapeutico || 'Atendimento salvo no prontuário.'}"
+                return (
+                  <>
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                          <Clock size={16} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-sm">
+                            {isDental ? 'Histórico Odontológico' : 'Histórico do Prontuário'}
+                          </h3>
+                          <p className="text-[10px] text-slate-400">
+                            {isDental ? 'Atendimentos de Odontologia Biológica' : 'Registros e evoluções anteriores'}
                           </p>
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-0.5">
-                            <span className="font-medium text-slate-600">👤 {rec.paciente_nome_completo || patientName || 'Paciente'}</span>
-                            <span className="font-semibold text-slate-500">
-                              {isPreCad ? '📲 Ficha Digital' : `🩺 ${rec.profissional_responsavel || 'Médico'}`}
-                            </span>
-                          </div>
                         </div>
                       </div>
-                    );
-                  })
-                ) : (
-                  <>
-                    <div className="p-4 text-center text-xs text-slate-600 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-1">
-                      <p className="font-bold text-slate-800">Nenhum atendimento anterior salvo</p>
-                      <p className="text-[11px] text-slate-500">Ao clicar em <strong className="text-slate-800">"Evoluir Prontuário"</strong>, o registro aparecerá nesta lista imediatamente.</p>
+                      <span className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-bold">
+                        {filteredHistory.length} Registros
+                      </span>
                     </div>
 
-                    <div 
-                      onClick={() => setSelectedHistoryRecord({
-                        data_consulta: '2026-07-28',
-                        paciente_nome_completo: patientName || 'Paciente Exemplo',
-                        especialidade: 'Neurologia & Medicina Integrativa',
-                        profissional_responsavel: 'Dr. Carlos Morato',
-                        queixa_principal: 'Queixas de dores articulares e fadiga crônica persistente. Paciente relata melhora após conduta terapêutica.',
-                        exame_fisico: 'Sinais vitais estáveis. PA 120/80 mmHg, FC 74 bpm. Ausência de edema.',
-                        hipotese_diagnostica: 'M501 - TRANSTORNO DO DISCO CERVICAL COM RADICULOPATIA',
-                        conduta_plano_terapeutico: '1. Manter suplementação com Coenzima Q10 e Melatonina.\n2. Sessão de Fisioterapia Neuro Centro agendada.\n3. Retorno em 30 dias.',
-                        resumo_formatado: 'Atendimento de demonstração em 28/07/2026.'
-                      })}
-                      className="bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl p-3 space-y-1.5 cursor-pointer transition-all opacity-75 hover:opacity-100"
-                    >
-                      <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
-                        <span>28/07/2026 (Exemplo de Histórico)</span>
-                        <span className="px-2 py-0.5 bg-slate-200 text-slate-600 text-[9px] rounded-md uppercase">
-                          Exemplo
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-600 italic bg-white p-2 rounded-lg border border-slate-100">
-                        "Exemplo de atendimento anterior para consulta de demonstração."
-                      </p>
+                    {/* Scrollable Timeline List */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar-blue">
+                      {filteredHistory.length > 0 ? (
+                        filteredHistory.map((rec, index) => {
+                          const isCurrentPatient = !patientName || (rec.paciente_nome_completo && rec.paciente_nome_completo.toLowerCase().trim() === patientName.toLowerCase().trim());
+                          const isPreCad = Boolean(
+                            rec.resumo_formatado?.toLowerCase().includes('pré-cadastro') || 
+                            rec.especialidade?.toLowerCase().includes('pré-cadastro') ||
+                            rec.paciente_status?.toLowerCase().includes('pré-cadastro')
+                          );
+                          return (
+                            <div 
+                              key={rec.id || `rec-${index}`} 
+                              onClick={() => setSelectedHistoryRecord(rec)}
+                              className={`p-3.5 space-y-2 cursor-pointer transition-all hover:shadow-sm group rounded-xl border ${
+                                isPreCad
+                                  ? 'bg-slate-50/80 border-slate-200 hover:border-slate-300'
+                                  : isCurrentPatient 
+                                    ? 'bg-sky-50/30 border-sky-200/70 hover:border-sky-300 shadow-2xs' 
+                                    : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                                <span className="flex items-center gap-1.5">
+                                  <Clock size={13} className={isPreCad ? "text-slate-500" : isCurrentPatient ? "text-sky-600" : "text-slate-400"} />
+                                  {rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : 'Atendimento')}
+                                </span>
+                                <span className={`px-2 py-0.5 text-[9px] rounded-md uppercase flex items-center gap-1 font-bold ${
+                                  isPreCad 
+                                    ? 'bg-slate-100 text-slate-700 border border-slate-200' 
+                                    : isCurrentPatient 
+                                      ? 'bg-sky-100 text-sky-800 border border-sky-200/80' 
+                                      : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                }`}>
+                                  <Eye size={10} /> {isPreCad ? 'PRÉ-CADASTRO' : (rec.especialidade ? rec.especialidade.toUpperCase() : 'CONSULTA')}
+                                </span>
+                              </div>
+
+                              <div className="space-y-1.5 text-xs">
+                                <p className={`font-medium text-slate-800 line-clamp-2 bg-white p-2.5 rounded-lg border ${
+                                  isPreCad ? 'border-slate-200/80' : 'border-slate-200/80'
+                                }`}>
+                                  "{rec.resumo_formatado || rec.queixa_principal || rec.conduta_plano_terapeutico || 'Atendimento salvo no prontuário.'}"
+                                </p>
+                                <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-0.5">
+                                  <span className="font-medium text-slate-600">👤 {rec.paciente_nome_completo || patientName || 'Paciente'}</span>
+                                  <span className="font-semibold text-slate-500">
+                                    {isPreCad ? '📲 Ficha Digital' : `🩺 ${rec.profissional_responsavel || activeDoctor.full_name}`}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="p-6 text-center text-xs text-slate-600 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 space-y-2 mt-4">
+                          <div className="text-3xl mx-auto">{isDental ? '🦷' : '📋'}</div>
+                          <p className="font-bold text-slate-800">
+                            {isDental ? 'Nenhum histórico odontológico anterior' : 'Nenhum atendimento anterior salvo'}
+                          </p>
+                          <p className="text-[11px] text-slate-500 leading-relaxed max-w-xs mx-auto">
+                            {isDental 
+                              ? `Este paciente ainda não possui consultas odontológicas registradas por ${activeDoctor.full_name}. A nova consulta está pronta para ser preenchida ao lado.` 
+                              : 'Ao clicar em "Evoluir Prontuário", os atendimentos deste paciente aparecerão nesta lista.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </>
-                )}
-              </div>
+                );
+              })()}
             </div>
 
             {/* Right Column (7/12): Active Clinical Record Editor (SOAP / Voice Copilot) */}
@@ -1188,8 +1641,12 @@ export default function PatientDossierView({
                     <Stethoscope size={16} />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-sm">Registro Clínico da Consulta</h3>
-                    <p className="text-[10px] text-slate-400">Preenchimento automático por voz ou campos estruturados</p>
+                    <h3 className="font-bold text-slate-800 text-sm">
+                      {activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'Registro Clínico Odontológico' : 'Registro Clínico da Consulta'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      {`Evolução clínica • ${activeDoctor.full_name} (${activeDoctor.especialidade})`}
+                    </p>
                   </div>
                 </div>
 
@@ -1223,7 +1680,7 @@ export default function PatientDossierView({
                     <Mic size={18} className="text-red-600 shrink-0" />
                     <div>
                       <p className="font-bold">Ouvindo consulta por voz em tempo real...</p>
-                      <p className="opacity-80 font-mono text-[11px] mt-0.5">"{liveTranscript || 'Aguardando voz do médico...'}"</p>
+                      <p className="opacity-80 font-mono text-[11px] mt-0.5">"{liveTranscript || 'Aguardando voz...'}"</p>
                     </div>
                   </div>
                 )}
@@ -1233,52 +1690,68 @@ export default function PatientDossierView({
                   <div className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Queixa Principal (Problema Ativo)
+                        {activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'Queixa Odontológica Principal (Subjetivo)' : 'Queixa Principal (Problema Ativo)'}
                       </label>
                       <textarea
                         rows={3}
                         value={queixaPrincipal}
                         onChange={(e) => setQueixaPrincipal(e.target.value)}
-                        placeholder="PACIENTE COM DIFICULDADES NA MARCHA HÁ ALGUNS MESES..."
+                        placeholder={
+                          activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'
+                            ? "Ex: Paciente relata dor à mastigação no dente 16, sensibilidade térmica, relato de restaurações antigas em amálgama..."
+                            : "Descreva a queixa principal do paciente..."
+                        }
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Exame Físico
+                        {activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'Exame Físico Intraoral & Tomografia (Objetivo)' : 'Exame Físico'}
                       </label>
                       <textarea
                         rows={2}
                         value={exameFisico}
                         onChange={(e) => setExameFisico(e.target.value)}
-                        placeholder="Sinais vitais normais, reflexos preservados..."
+                        placeholder={
+                          activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'
+                            ? "Ex: Exame de tecidos moles íntegro, restauração infiltrada no dente 16, área hipodensa no dente 38 na tomografia..."
+                            : "Sinais vitais normais, reflexos preservados..."
+                        }
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Conclusão / Suspeita Diagnóstica (CID-10)
+                        {activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'Diagnóstico / Suspeita Odontológica (Avaliação)' : 'Conclusão / Suspeita Diagnóstica (CID-10)'}
                       </label>
                       <input
                         type="text"
                         value={hipoteseDiag}
                         onChange={(e) => setHipoteseDiag(e.target.value)}
-                        placeholder="M501 - TRANSTORNO DO DISCO CERVICAL COM RADICULOPATIA"
+                        placeholder={
+                          activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'
+                            ? "Ex: K02.1 - Cárie dentinária secundária / K08.8 - Foco inflamatório maxilar (NICO)"
+                            : "CID-10 ou conclusão diagnóstica..."
+                        }
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-bold text-blue-800"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Plano Terapêutico (Conduta / Prescrição)
+                        {activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'Plano Terapêutico & Conduta Biológica (Plano)' : 'Plano Terapêutico (Conduta / Prescrição)'}
                       </label>
                       <textarea
                         rows={3}
                         value={condutaPlano}
                         onChange={(e) => setCondutaPlano(e.target.value)}
-                        placeholder="Encaminhamento para Fisioterapia e prescrição médica..."
+                        placeholder={
+                          activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'
+                            ? "Ex: Remoção segura de amálgama (Protocolo SMART), suplementação prévia com Vitamina C/Zinco, Terapia Neural..."
+                            : "Encaminhamento para Fisioterapia e prescrição médica..."
+                        }
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none font-sans"
                       />
                     </div>
@@ -1340,7 +1813,7 @@ export default function PatientDossierView({
 
                 {examMode === 'integrative' && (
                   <div className="border-t pt-4">
-                    <h4 className="font-bold text-xs uppercase text-emerald-700 mb-2">Checklist de Medicina Integrativa</h4>
+                    <h4 className="font-bold text-xs uppercase text-sky-800 mb-2">Checklist de Medicina Integrativa</h4>
                     <IntegrativeChecklistForm
                       data={integrativeData}
                       onChange={setIntegrativeData}
@@ -1464,11 +1937,11 @@ export default function PatientDossierView({
                 </div>
 
                 <NeurologicalExamForm
-                  data={currentRecord?.exame_neurologico || specialtyData || {}}
+                  data={currentRecord?.exame_neurologico || specialtyData?.exame_neurologico || specialtyData || {}}
                   onChange={(data) => {
-                    setSpecialtyData(data);
+                    setSpecialtyData((prev: any) => ({ ...(prev || {}), ...data, exame_neurologico: data }));
                     if (setCurrentRecord) {
-                      setCurrentRecord({ ...(currentRecord || {}), exame_neurologico: data });
+                      setCurrentRecord((prev: any) => ({ ...(prev || {}), exame_neurologico: data }));
                     }
                   }}
                 />
@@ -1487,15 +1960,32 @@ export default function PatientDossierView({
                   </div>
                 </div>
 
+                {/* 1. Galeria de Exames Radiológicos e Tomografia CBCT no topo para análise clínica */}
+                <div className="bg-slate-50/80 p-4 rounded-3xl border border-slate-200/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                        <span>📷</span>
+                        <span>Exames de Imagem: Tomografia CBCT, Radiografias & Fotos Clínicas</span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Analise as imagens e cortes tomográficos abaixo para orientar a marcação da arcada no odontograma.
+                      </p>
+                    </div>
+                  </div>
+                  <PatientMediaGallery 
+                    patientName={patientName} 
+                    hideEmbeddedOdontogram={true}
+                    initialOdontogram={specialtyData?.odontograma || currentRecord?.dados_especialidade?.odontograma}
+                    onOdontogramChange={(od) => setSpecialtyData((prev: any) => ({ ...prev, odontograma: od }))}
+                  />
+                </div>
+
+                {/* 2. Formulário Clínico e Odontograma Interativo logo abaixo das imagens */}
                 <BiologicalDentistryForm
                   data={currentRecord?.dados_especialidade || specialtyData || {}}
                   onChange={(data) => setSpecialtyData(data)}
                 />
-
-                <div className="pt-4 border-t">
-                  <h4 className="font-bold text-sm text-slate-800 mb-3">Imagens Odontológicas, Tomografia CBCT & Registros do Tratamento</h4>
-                  <PatientMediaGallery patientName={patientName} />
-                </div>
               </div>
             )}
 
@@ -1528,7 +2018,11 @@ export default function PatientDossierView({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
-            <PatientMediaGallery patientName={patientName} />
+            <PatientMediaGallery 
+              patientName={patientName} 
+              initialOdontogram={specialtyData?.odontograma || currentRecord?.dados_especialidade?.odontograma}
+              onOdontogramChange={(od) => setSpecialtyData((prev: any) => ({ ...prev, odontograma: od }))}
+            />
           </motion.div>
         )}
 
@@ -1543,8 +2037,10 @@ export default function PatientDossierView({
           >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
               <div>
-                <h3 className="text-xl font-bold text-slate-800">Emissão de Receitas e Atestados Médicos</h3>
-                <p className="text-xs text-slate-500">Gere documentos clínicos oficiais com cabeçalho da clínica e assinatura digital.</p>
+                <h3 className="text-xl font-bold text-slate-800">
+                  {activeDoctor.default_mode === 'biological_dentistry' ? 'Emissão de Receitas e Atestados Odontológicos' : 'Emissão de Receitas e Atestados Médicos'}
+                </h3>
+                <p className="text-xs text-slate-500">Documentos clínicos oficiais timbrados com assinatura digital do profissional responsável.</p>
               </div>
 
               {/* Toggle Document Type */}
@@ -1569,9 +2065,43 @@ export default function PatientDossierView({
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Atestado Médico Oficial
+                  {activeDoctor.default_mode === 'biological_dentistry' ? 'Atestado Odontológico' : 'Atestado Médico Oficial'}
                 </button>
               </div>
+            </div>
+
+            {/* SELETOR RÁPIDO DE PROFISSIONAL EMISSOR */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200/90 p-3 rounded-2xl">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-slate-700">Profissional Responsável (Emissor):</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {allDoctorProfiles.map((doc) => {
+                    const isSelected = doc.id === selectedDoctorId;
+                    const isDental = doc.default_mode === 'biological_dentistry' || doc.id === 'dra_lucy';
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => handleSelectDoctor(doc.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                          isSelected
+                            ? (isDental 
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
+                                : 'bg-blue-600 text-white border-blue-600 shadow-xs')
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {isDental ? <Sparkles size={13} className={isSelected ? "text-amber-200" : "text-emerald-600"} /> : <Stethoscope size={13} className={isSelected ? "text-white" : "text-blue-600"} />}
+                        <span>{doc.full_name}</span>
+                        <span className={`text-[10px] font-medium ${isSelected ? 'text-white/85' : 'text-slate-500'}`}>({doc.crm_cro})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                {activeDoctor.especialidade}
+              </span>
             </div>
 
             {docType === 'receituario' ? (
@@ -1678,8 +2208,12 @@ export default function PatientDossierView({
                 <div className="lg:col-span-6 bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4 shadow-inner text-slate-800 flex flex-col justify-between">
                   <div className="space-y-4">
                     <div className="text-center border-b border-slate-200 pb-4">
-                      <h2 className="font-extrabold text-sm uppercase tracking-widest text-slate-900">AMBULATÓRIO IA • MEDICINA INTEGRATIVA</h2>
-                      <p className="text-[10px] text-slate-500 font-medium mt-0.5">Dr. Carlos Alberto Morato • CRM 126.235586</p>
+                      <h2 className="font-extrabold text-sm uppercase tracking-widest text-slate-900">
+                        AMBULATÓRIO IA • {activeDoctor.default_mode === 'biological_dentistry' ? 'ODONTOLOGIA BIOLÓGICA & SAÚDE INTEGRATIVA' : (activeDoctor.default_mode === 'neurological' ? 'NEUROLOGIA & MEDICINA INTEGRATIVA' : 'MEDICINA INTEGRATIVA')}
+                      </h2>
+                      <p className="text-[10px] text-slate-600 font-semibold mt-0.5">
+                        {activeDoctor.full_name} • {activeDoctor.crm_cro}
+                      </p>
                     </div>
 
                     <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs flex justify-between items-center">
@@ -1699,18 +2233,21 @@ export default function PatientDossierView({
                     </div>
                   </div>
 
-                  <div className="pt-4 text-center border-t border-slate-200 text-xs">
-                    <div className="w-32 border-b border-slate-400 mx-auto mb-1" />
-                    <p className="font-bold text-slate-900">Dr. Carlos Alberto Morato</p>
-                    <p className="text-[10px] text-slate-500">Assinatura Digital ICP-Brasil Verificada</p>
+                  <div className="pt-4 text-center border-t border-slate-200 text-xs space-y-0.5">
+                    <div className="w-32 border-b border-slate-400 mx-auto mb-1.5" />
+                    <p className="font-bold text-slate-900">{activeDoctor.full_name}</p>
+                    <p className="text-[10px] text-slate-600 font-medium">{activeDoctor.crm_cro} • {activeDoctor.especialidade}</p>
+                    <p className="text-[9px] text-slate-400">Assinatura Digital ICP-Brasil Verificada</p>
                   </div>
                 </div>
               </div>
             ) : (
-              /* Atestado Médico View */
+              /* Atestado Médico / Odontológico View */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-5 space-y-4">
-                  <h4 className="font-bold text-xs uppercase text-slate-700 tracking-wider">Parâmetros do Atestado Médico</h4>
+                  <h4 className="font-bold text-xs uppercase text-slate-700 tracking-wider">
+                    {activeDoctor.default_mode === 'biological_dentistry' ? 'Parâmetros do Atestado Odontológico' : 'Parâmetros do Atestado Médico'}
+                  </h4>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-600 mb-1">Dias de Afastamento</label>
@@ -1730,7 +2267,7 @@ export default function PatientDossierView({
                       type="text"
                       value={atestadoCid}
                       onChange={(e) => setAtestadoCid(e.target.value)}
-                      placeholder="Ex: M501 - TRANSTORNO DO DISCO CERVICAL"
+                      placeholder={activeDoctor.default_mode === 'biological_dentistry' ? "Ex: K08 - Transtornos dos dentes" : "Ex: M501 - Transtorno cervical"}
                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-blue-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
@@ -1752,15 +2289,20 @@ export default function PatientDossierView({
                 <div className="lg:col-span-7 bg-slate-50 border border-slate-200 rounded-3xl p-8 space-y-6 shadow-inner text-slate-800 flex flex-col justify-between">
                   <div className="space-y-6">
                     <div className="text-center border-b border-slate-200 pb-4">
-                      <h2 className="font-extrabold text-base uppercase tracking-widest text-slate-900">ATESTADO MÉDICO</h2>
+                      <h2 className="font-extrabold text-base uppercase tracking-widest text-slate-900">
+                        {activeDoctor.default_mode === 'biological_dentistry' ? 'ATESTADO ODONTOLÓGICO' : 'ATESTADO MÉDICO'}
+                      </h2>
                       <p className="text-[10px] text-slate-500 font-medium mt-1">
-                        AMBULATÓRIO IA • UNIDADE DE MEDICINA INTEGRATIVA
+                        AMBULATÓRIO IA • UNIDADE DE {activeDoctor.default_mode === 'biological_dentistry' ? 'ODONTOLOGIA BIOLÓGICA' : 'MEDICINA INTEGRATIVA'}
+                      </p>
+                      <p className="text-[10px] text-slate-600 font-bold mt-0.5">
+                        {activeDoctor.full_name} • {activeDoctor.crm_cro}
                       </p>
                     </div>
 
                     <div className="text-xs space-y-4 font-sans leading-relaxed text-slate-800 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
                       <p>
-                        Atesto para os devidos fins que o(a) Sr.(a) <strong className="text-slate-900 uppercase font-black">{patientName || 'PACIENTE'}</strong>, inscrito(a) no CPF nº <strong>{patientCpf || '---'}</strong>, esteve em atendimento médico nesta unidade nesta data.
+                        Atesto para os devidos fins que o(a) Sr.(a) <strong className="text-slate-900 uppercase font-black">{patientName || 'PACIENTE'}</strong>, inscrito(a) no CPF nº <strong>{patientCpf || '---'}</strong>, esteve em atendimento {activeDoctor.default_mode === 'biological_dentistry' ? 'odontológico especializado' : 'médico'} nesta unidade nesta data.
                       </p>
                       <p>
                         Necessitando de <strong>{diasAfastamento} ({diasAfastamento === 1 ? 'um' : (diasAfastamento === 2 ? 'dois' : (diasAfastamento === 3 ? 'três' : (diasAfastamento === 5 ? 'cinco' : diasAfastamento)))}) dia(s)</strong> de afastamento de suas atividades profissionais/escolares por motivo de saúde, a contar desta data.
@@ -1775,8 +2317,9 @@ export default function PatientDossierView({
 
                   <div className="pt-8 text-center text-xs border-t border-slate-200 space-y-1">
                     <div className="w-36 border-b border-slate-400 mx-auto mb-2" />
-                    <p className="font-bold text-slate-900">Dr. Carlos Alberto Morato</p>
-                    <p className="text-[10px] text-slate-500">CRM 126.235586 • Medicina e Saúde Integrativa</p>
+                    <p className="font-bold text-slate-900">{activeDoctor.full_name}</p>
+                    <p className="text-[10px] text-slate-600 font-medium">{activeDoctor.crm_cro} • {activeDoctor.especialidade}</p>
+                    <p className="text-[9px] text-slate-400">Assinatura Digital ICP-Brasil Verificada</p>
                   </div>
                 </div>
               </div>
@@ -1973,7 +2516,7 @@ export default function PatientDossierView({
                   {selectedHistoryRecord.paciente_nome_completo || patientName || 'Paciente'}
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Médico Responsável: {selectedHistoryRecord.profissional_responsavel || 'Dr. Carlos Morato'}
+                  Profissional Responsável: {selectedHistoryRecord.profissional_responsavel || activeDoctor.full_name}
                 </p>
               </div>
               <button 
@@ -2098,7 +2641,7 @@ export default function PatientDossierView({
         patientName={patientName}
         patientPhone={patientPhone}
         patientCpf={patientCpf}
-        doctorName="Dr. Carlos Morato"
+        doctorName={activeDoctor.full_name}
       />
 
       <PreConsultationAnamneseModal
@@ -2108,6 +2651,8 @@ export default function PatientDossierView({
         patientPhonePrefill={patientPhone}
         patientCpfPrefill={patientCpf}
         patientDobPrefill={patientDob}
+        isDental={activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'}
+        specialty={activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'odontologia_biologica' : 'neurologia'}
         onAnamneseSubmitted={(data) => {
           if (data.alertas_clinicos) {
             setClinicalAlerts(data.alertas_clinicos);

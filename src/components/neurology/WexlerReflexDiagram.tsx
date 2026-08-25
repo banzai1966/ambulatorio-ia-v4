@@ -17,7 +17,9 @@ const WEXLER_SCORES = [
 ];
 
 export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange }: Props) {
-  const getScore = (key: string) => data[key] || '2+';
+  const getScore = (key: string) => {
+    return (data as any)?.[key] || (data as any)?.reflexos_wexler?.[key] || '2+';
+  };
 
   const cycleScore = (key: string) => {
     const current = getScore(key);
@@ -30,7 +32,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
     if (onBatchChange) {
       onBatchChange({});
     } else {
-      const keys = ['biceps_d', 'biceps_e', 'patelar_d', 'patelar_e', 'aquileu_d', 'aquileu_e', 'axiais_face', 'grasping', 'groping', 'hoffmann', 'palmo_mentoniano', 'wartenberg'];
+      const keys = ['biceps_d', 'biceps_e', 'estiloradial_d', 'estiloradial_e', 'patelar_d', 'patelar_e', 'aquileu_d', 'aquileu_e', 'axiais_face', 'grasping', 'groping', 'hoffmann', 'palmo_mentoniano', 'wartenberg'];
       keys.forEach(k => onChange(`reflexos_wexler.${k}`, '2+'));
     }
   };
@@ -77,9 +79,9 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-        {/* Interactive SVG Stickman */}
-        <div className="relative flex justify-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <svg viewBox="0 0 300 380" className="w-full max-w-[280px] h-auto select-none">
+        {/* Interactive SVG Stickman with widened viewBox to prevent text cut-off */}
+        <div className="relative flex justify-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <svg viewBox="-55 0 410 380" className="w-full max-w-[320px] h-auto select-none">
             {/* Body Stick Skeleton Lines */}
             {/* Head */}
             <circle cx="150" cy="50" r="22" className="fill-slate-50 stroke-slate-700 stroke-[2]" />
@@ -113,23 +115,40 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
             <line x1="180" y1="190" x2="200" y2="265" className="stroke-slate-700 stroke-[3]" />
             <line x1="200" y1="265" x2="220" y2="345" className="stroke-slate-700 stroke-[3]" />
 
-            {/* REFLEX POINTS (CLICKABLE HOTSPOTS) */}
             {/* Biceps Right (elbow joint) */}
             <g className="cursor-pointer group" onClick={() => cycleScore('biceps_d')}>
-              <circle cx="60" cy="145" r="14" className={getScoreStyle(getScore('biceps_d')) + " stroke-[2] transition-transform group-hover:scale-110"} />
-              <text x="60" y="149" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
+              <circle cx="60" cy="135" r="13" className={getScoreStyle(getScore('biceps_d')) + " stroke-[2] transition-transform group-hover:scale-110"} />
+              <text x="60" y="139" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
                 {getScore('biceps_d')}
               </text>
-              <text x="35" y="145" textAnchor="end" className="text-[9px] fill-slate-600 font-medium pointer-events-none">Biceps D</text>
+              <text x="38" y="135" textAnchor="end" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Bíceps D</text>
+            </g>
+
+            {/* Estilorradial Right (wrist) */}
+            <g className="cursor-pointer group" onClick={() => cycleScore('estiloradial_d')}>
+              <circle cx="45" cy="180" r="13" className={getScoreStyle(getScore('estiloradial_d')) + " stroke-[2] transition-transform group-hover:scale-110"} />
+              <text x="45" y="184" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
+                {getScore('estiloradial_d')}
+              </text>
+              <text x="25" y="180" textAnchor="end" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Estilorradial D</text>
             </g>
 
             {/* Biceps Left */}
             <g className="cursor-pointer group" onClick={() => cycleScore('biceps_e')}>
-              <circle cx="240" cy="145" r="14" className={getScoreStyle(getScore('biceps_e')) + " stroke-[2] transition-transform group-hover:scale-110"} />
-              <text x="240" y="149" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
+              <circle cx="240" cy="135" r="13" className={getScoreStyle(getScore('biceps_e')) + " stroke-[2] transition-transform group-hover:scale-110"} />
+              <text x="240" y="139" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
                 {getScore('biceps_e')}
               </text>
-              <text x="265" y="145" textAnchor="start" className="text-[9px] fill-slate-600 font-medium pointer-events-none">Biceps E</text>
+              <text x="262" y="135" textAnchor="start" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Bíceps E</text>
+            </g>
+
+            {/* Estilorradial Left (wrist) */}
+            <g className="cursor-pointer group" onClick={() => cycleScore('estiloradial_e')}>
+              <circle cx="255" cy="180" r="13" className={getScoreStyle(getScore('estiloradial_e')) + " stroke-[2] transition-transform group-hover:scale-110"} />
+              <text x="255" y="184" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
+                {getScore('estiloradial_e')}
+              </text>
+              <text x="275" y="180" textAnchor="start" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Estilorradial E</text>
             </g>
 
             {/* Patelar Right (knee) */}
@@ -138,7 +157,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
               <text x="100" y="269" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
                 {getScore('patelar_d')}
               </text>
-              <text x="75" y="265" textAnchor="end" className="text-[9px] fill-slate-600 font-medium pointer-events-none">Patelar D</text>
+              <text x="75" y="265" textAnchor="end" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Patelar D</text>
             </g>
 
             {/* Patelar Left */}
@@ -147,7 +166,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
               <text x="200" y="269" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
                 {getScore('patelar_e')}
               </text>
-              <text x="225" y="265" textAnchor="start" className="text-[9px] fill-slate-600 font-medium pointer-events-none">Patelar E</text>
+              <text x="225" y="265" textAnchor="start" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Patelar E</text>
             </g>
 
             {/* Aquileu Right (ankle) */}
@@ -156,7 +175,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
               <text x="80" y="348" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
                 {getScore('aquileu_d')}
               </text>
-              <text x="58" y="345" textAnchor="end" className="text-[9px] fill-slate-600 font-medium pointer-events-none">Aquileu D</text>
+              <text x="58" y="345" textAnchor="end" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Aquileu D</text>
             </g>
 
             {/* Aquileu Left */}
@@ -165,7 +184,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
               <text x="220" y="348" textAnchor="middle" className="text-[10px] font-bold fill-slate-800 pointer-events-none">
                 {getScore('aquileu_e')}
               </text>
-              <text x="242" y="345" textAnchor="start" className="text-[9px] fill-slate-600 font-medium pointer-events-none">Aquileu E</text>
+              <text x="242" y="345" textAnchor="start" className="text-[10px] fill-slate-700 font-bold pointer-events-none">Aquileu E</text>
             </g>
           </svg>
         </div>
@@ -182,7 +201,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
             { id: 'palmo_mentoniano', label: 'Palmo-mentoniano' },
             { id: 'wartenberg', label: 'Sinal de Wartenberg' },
           ].map(ref => {
-            const val = data[ref.id] || 'Ausente';
+            const val = (data as any)?.[ref.id] || (data as any)?.reflexos_wexler?.[ref.id] || 'Ausente';
             return (
               <div key={ref.id} className="flex items-center justify-between gap-2 p-1.5 rounded hover:bg-slate-50 border border-slate-100">
                 <span className="font-medium text-slate-700">{ref.label}</span>
@@ -193,7 +212,7 @@ export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange
                       type="button"
                       onClick={() => onChange(`reflexos_wexler.${ref.id}`, opt)}
                       className={cn(
-                        "px-2.5 py-1 rounded text-[11px] font-bold transition-all",
+                        "px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer",
                         val === opt
                           ? opt === 'Presente' 
                             ? 'bg-rose-600 text-white shadow-xs' 

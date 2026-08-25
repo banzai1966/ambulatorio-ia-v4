@@ -26,6 +26,18 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
     onChange(updateRecursive(data || {}, keys));
   };
 
+  const isOptionChecked = (val: any, opt: string) => {
+    if (!val) return false;
+    const v = String(val).toLowerCase().trim();
+    const o = opt.toLowerCase().trim();
+    if (v === o) return true;
+    if (o === 'típica' && (v === 'tipica' || v === 'típica')) return true;
+    if (o === 'atípica' && (v === 'atipica' || v === 'atípica')) return true;
+    if (o === 'd' && (v === 'd' || v === 'destro' || v === 'direita' || v === 'direito')) return true;
+    if (o === 'e' && (v === 'e' || v === 'canhoto' || v === 'esquerda' || v === 'esquerdo')) return true;
+    return false;
+  };
+
   const RadioGroup = ({ path, options, label }: { path: string, options: string[], label?: string }) => {
     const value = path.split('.').reduce((acc: any, key) => acc?.[key], data) as string;
     return (
@@ -38,7 +50,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                 type="radio" 
                 name={path} 
                 value={opt} 
-                checked={value === opt} 
+                checked={isOptionChecked(value, opt)} 
                 onChange={(e) => updateField(path, e.target.value)}
                 className="w-4 h-4 text-slate-800 border-slate-300 focus:ring-slate-800"
               />
@@ -48,6 +60,21 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
         </div>
       </div>
     );
+  };
+
+  const handleFillAllMuscleNormal = () => {
+    const regions = ['face', 'lingua', 'msd', 'mse', 'mid', 'mie', 'coluna'];
+    const updatedForca: any = { ...(data?.forca_muscular || {}) };
+    regions.forEach(r => {
+      updatedForca[r] = {
+        tonus: 'Normal',
+        trofismo: 'Normal',
+        mov_anormais: 'Ausente',
+        deformidades: 'Ausente',
+        fatigabilidade: 'Grau V'
+      };
+    });
+    updateField('forca_muscular', updatedForca);
   };
 
   return (
@@ -110,10 +137,20 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
 
           {/* Força Muscular Table */}
           <div>
-            <h3 className="font-bold text-slate-800 mb-2 text-sm flex items-center gap-2">
-              <Activity size={16} className="text-blue-600" />
-              Força Muscular, Tônus e Trofismo
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <Activity size={16} className="text-blue-600" />
+                Força Muscular, Tônus e Trofismo
+              </h3>
+              <button
+                type="button"
+                onClick={handleFillAllMuscleNormal}
+                className="px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                title="Preencher todas as regiões com Normal / Ausente / Grau V"
+              >
+                ✨ Auto-Preencher Normal (Grau V)
+              </button>
+            </div>
             <table className="w-full text-center border-collapse border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
               <thead>
                 <tr className="bg-slate-100 text-slate-800">
@@ -128,6 +165,8 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
               <tbody>
                 {['Face', 'Lingua', 'MSD', 'MSE', 'MID', 'MIE', 'Coluna'].map((regiao) => {
                   const k = regiao.toLowerCase();
+                  const fm = (data?.forca_muscular as any);
+                  const rowData = fm?.[k] || fm?.[k.normalize("NFD").replace(/[\u0300-\u036f]/g, "")] || fm?.[k.toUpperCase()];
                   return (
                     <tr key={regiao} className="hover:bg-slate-50/80">
                       <td className="border border-slate-300 p-1.5 font-bold text-slate-700 bg-slate-50 text-xs">{regiao}</td>
@@ -135,7 +174,7 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
                         <td key={col} className="border border-slate-300 p-0">
                           <input 
                             type="text" 
-                            value={(data?.forca_muscular as any)?.[k]?.[col] || ''}
+                            value={rowData?.[col] || ''}
                             onChange={(e) => updateField(`forca_muscular.${k}.${col}`, e.target.value)}
                             className="w-full h-full p-1.5 outline-none text-center bg-transparent text-xs focus:bg-blue-50/50"
                           />
@@ -234,17 +273,18 @@ export default function NeurologicalExamForm({ data, onChange }: Props) {
               <Eye size={16} className="text-blue-600" />
               Nervos Cranianos (I a XII), Pupilas & Campo Visual
             </h3>
-            <div className="flex justify-between items-center px-2 mb-4 relative overflow-x-auto pb-2">
+            <div className="flex justify-between items-center px-1 mb-4 relative overflow-x-auto pb-2 gap-1.5">
                {/* Connecting line */}
                <div className="absolute top-6 left-2 right-2 h-[1px] bg-slate-300 -z-10" />
                {['II', 'III', 'IV', 'VI', 'V', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'].map(n => (
-                 <div key={n} className="flex flex-col items-center gap-1 bg-white px-1 rounded border border-slate-200 shadow-2xs">
-                   <span className="font-bold text-slate-800 text-[10px]">{n}</span>
+                 <div key={n} className="flex flex-col items-center gap-1 bg-white px-1.5 py-1 rounded-lg border border-slate-200 shadow-2xs min-w-[64px] shrink-0">
+                   <span className="font-bold text-slate-800 text-[10px] uppercase">Par {n}</span>
                    <input 
                      type="text" 
                      value={(data?.nervos_cranianos as any)?.[n.toLowerCase()] || ''}
+                     placeholder="Preservado"
                      onChange={(e) => updateField(`nervos_cranianos.${n.toLowerCase()}`, e.target.value)}
-                     className="w-10 outline-none text-center text-slate-700 bg-transparent focus:border-blue-600 text-xs py-0.5"
+                     className="w-full outline-none text-center text-slate-700 bg-transparent focus:text-blue-700 text-[11px] font-semibold py-0.5"
                    />
                  </div>
                ))}

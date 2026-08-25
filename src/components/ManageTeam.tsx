@@ -78,6 +78,23 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
     };
   }, []);
 
+  const getLocalCrmCroMap = (): Record<string, string> => {
+    try {
+      const stored = localStorage.getItem('clinic_crm_cro_map');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return {};
+  };
+
+  const setLocalCrmCro = (idOrEmail: string, crm: string) => {
+    if (!idOrEmail) return;
+    try {
+      const map = getLocalCrmCroMap();
+      map[idOrEmail.toLowerCase().trim()] = crm;
+      localStorage.setItem('clinic_crm_cro_map', JSON.stringify(map));
+    } catch (e) {}
+  };
+
   const getLocalDeletedMembers = (): string[] => {
     try {
       const stored = localStorage.getItem('deleted_members_local');
@@ -95,6 +112,16 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         list.push(norm);
         localStorage.setItem('deleted_members_local', JSON.stringify(list));
       }
+    } catch (e) {}
+  };
+
+  const removeLocalDeletedMember = (emailOrId: string) => {
+    if (!emailOrId) return;
+    try {
+      const list = getLocalDeletedMembers();
+      const norm = emailOrId.toLowerCase().trim();
+      const updated = list.filter(item => item !== norm);
+      localStorage.setItem('deleted_members_local', JSON.stringify(updated));
     } catch (e) {}
   };
 
@@ -133,6 +160,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
       }
       
       const localDeleted = getLocalDeletedMembers();
+      const crmMap = getLocalCrmCroMap();
 
       // Remove duplicatas locais caso existam no banco por email e ignora deletados
       const uniqueMap = new Map<string, any>();
@@ -145,10 +173,15 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
           continue;
         }
 
+        const enriched = {
+          ...p,
+          crm_cro: p.crm_cro || crmMap[key] || crmMap[idKey] || ''
+        };
+
         if (key && !uniqueMap.has(key)) {
-          uniqueMap.set(key, p);
+          uniqueMap.set(key, enriched);
         } else if (!key) {
-          uniqueMap.set(p.id, p);
+          uniqueMap.set(p.id, enriched);
         }
       }
       const uniqueProfiles = Array.from(uniqueMap.values());
@@ -186,48 +219,91 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
     setIsCreating(true);
     const toastId = toast.loading('Cadastrando membro da equipe...');
     try {
-      let createdUserId = '';
-      
-      // Cria usuário no Auth se tiver senha fornecida
-      if (newMemberPassword && newMemberPassword.length >= 6) {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: newMemberEmail.trim(),
-          password: newMemberPassword,
-          options: { 
-            data: { 
-              full_name: newMemberName.trim(), 
-              role: newMemberRole 
-            } 
-          }
+      const email = newMemberEmail.trim().toLowerCase();
+      const fullName = newMemberName.trim();
+      const password = newMemberPassword.trim() || "Duarte2026!";
+      const role = newMemberRole;
+      const especialidade = newMemberSpecialty;
+      const crm_cro = newMemberCrm.trim();
+
+      removeLocalDeletedMember(email);
+      if (crm_cro) {
+        setLocalCrmCro(email, crm_cro);
+      }
+
+      // 1. Tenta cadastrar via rota administrativa segura do backend
+      let createdViaApi = false;
+      try {
+        const resp = await fetch("/api/admin/create-member", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            password,
+            full_name: fullName,
+            role,
+            especialidade,
+            crm_cro
+          })
         });
-        if (authError && !authError.message.includes('already registered')) {
-          console.warn('Aviso Auth signUp:', authError);
+
+        if (resp.ok) {
+          const resData = await resp.json();
+          if (resData.success) {
+            createdViaApi = true;
+            if (resData.member?.id && crm_cro) {
+              setLocalCrmCro(resData.member.id, crm_cro);
+            }
+          }
         }
-        if (authData?.user) {
-          createdUserId = authData.user.id;
-        }
+      } catch (apiErr) {
+        console.warn("Aviso chamada API admin create-member:", apiErr);
       }
 
-      // Garante inserção ou atualização no profiles
-      const profileData: any = {
-        email: newMemberEmail.trim(),
-        full_name: newMemberName.trim(),
-        role: newMemberRole,
-        especialidade: newMemberSpecialty,
-        crm_cro: newMemberCrm.trim(),
-        status: 'approved'
-      };
-      if (createdUserId) {
-        profileData.id = createdUserId;
-      }
+      // 2. Fallback direto pelo client caso o backend não tenha respondido
+      if (!createdViaApi) {
+        let createdUserId = '';
+        if (password.length >= 6) {
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { 
+              data: { 
+                full_name: fullName, 
+                role,
+                especialidade,
+                crm_cro
+              } 
+            }
+          });
+          if (authError && !authError.message.includes('already registered')) {
+            console.warn('Aviso Auth signUp:', authError);
+          }
+          if (authData?.user) {
+            createdUserId = authData.user.id;
+          }
+        }
 
-      const { error: upsertError } = await supabase
-        .from('profiles')
-        .upsert(profileData, { onConflict: 'email' });
+        const profileData: any = {
+          email,
+          full_name: fullName,
+          role,
+          especialidade,
+          status: 'approved'
+        };
+        if (createdUserId) {
+          profileData.id = createdUserId;
+          if (crm_cro) setLocalCrmCro(createdUserId, crm_cro);
+        }
 
-      if (upsertError) {
-        console.error('Erro ao salvar no profiles:', upsertError);
-        throw upsertError;
+        const { error: upsertError } = await supabase
+          .from('profiles')
+          .upsert(profileData, { onConflict: 'email' });
+
+        if (upsertError) {
+          console.error('Erro ao salvar no profiles:', upsertError);
+          throw upsertError;
+        }
       }
 
       toast.success('Membro cadastrado e acesso liberado com sucesso!', { id: toastId });
@@ -237,7 +313,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
       setNewMemberPassword('');
       setNewMemberCrm('');
       setNewMemberSpecialty('Nenhuma');
-      fetchProfiles();
+      await fetchProfiles();
     } catch (err: any) {
       console.error("Erro ao adicionar membro:", err);
       toast.error(`Falha ao adicionar: ${err.message || 'Verifique os dados'}`, { id: toastId });
@@ -249,18 +325,41 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
   const updateProfile = async (id: string, updates: Partial<Profile>) => {
     setUpdating(id);
     try {
-      const cleanUpdates: any = { ...updates };
-      const { data, error } = await supabase
-        .from('profiles')
-        .update(cleanUpdates)
-        .eq('id', id)
-        .select('id, email, role, status, full_name, especialidade, crm_cro');
+      const { crm_cro, ...dbUpdates } = updates as any;
       
-      if (error) throw error;
+      // Salva CRM/CRO localmente e na API de auth
+      if (crm_cro !== undefined) {
+        setLocalCrmCro(id, crm_cro);
+        const existingProf = profiles.find(p => p.id === id);
+        if (existingProf?.email) {
+          setLocalCrmCro(existingProf.email, crm_cro);
+        }
+      }
+
+      // Atualiza no banco somente campos existentes na tabela profiles
+      if (Object.keys(dbUpdates).length > 0) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(dbUpdates)
+          .eq('id', id)
+          .select('id, email, role, status, full_name, especialidade');
+        
+        if (error) {
+          console.warn("Aviso atualização remota profile:", error);
+        }
+      }
       
       toast.success("Perfil atualizado com sucesso!");
-      const updatedData = data && data[0] ? data[0] : { ...profiles.find(p => p.id === id), ...cleanUpdates };
-      setProfiles(profiles.map(p => p.id === id ? updatedData : p));
+      setProfiles(prev => prev.map(p => {
+        if (p.id === id) {
+          return {
+            ...p,
+            ...updates,
+            crm_cro: crm_cro !== undefined ? crm_cro : p.crm_cro
+          };
+        }
+        return p;
+      }));
     } catch (err: any) {
       console.error("Erro ao atualizar perfil:", err);
       toast.error(`Falha ao atualizar: ${err.message || 'Erro desconhecido'}`);
@@ -595,8 +694,8 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                   </div>
                   <p className="text-xs text-slate-400 px-1">{profile.email}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-0.5 px-1">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                      <CheckCircle2 className="w-3 h-3" /> ACESSO LIBERADO
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200/80">
+                      <CheckCircle2 className="w-3 h-3 text-sky-600" /> ACESSO LIBERADO
                     </span>
                     {profile.crm_cro && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">

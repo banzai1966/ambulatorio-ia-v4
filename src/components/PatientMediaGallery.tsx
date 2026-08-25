@@ -24,9 +24,12 @@ import {
   Contrast,
   ShieldCheck,
   UserCheck,
-  Eye
+  Eye,
+  Layers,
+  Activity
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
 
 interface MediaItem {
   id: string;
@@ -66,16 +69,37 @@ const DEFAULT_SAMPLE_MEDIA: MediaItem[] = [
 
 export default function PatientMediaGallery({ 
   patientName, 
-  onClose 
+  onClose,
+  initialOdontogram,
+  onOdontogramChange,
+  hideEmbeddedOdontogram = false
 }: { 
   patientName: string; 
   onClose?: () => void;
+  initialOdontogram?: OdontogramData;
+  onOdontogramChange?: (data: OdontogramData) => void;
+  hideEmbeddedOdontogram?: boolean;
 }) {
   const [items, setItems] = useState<MediaItem[]>(DEFAULT_SAMPLE_MEDIA);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(DEFAULT_SAMPLE_MEDIA[0]);
   const [activeTab, setActiveTab] = useState<'all' | 'tomography' | 'radiograph' | 'photo'>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAnnotateModal, setShowAnnotateModal] = useState(false);
+  const [showOdontogram, setShowOdontogram] = useState<boolean>(false);
+  const [localOdontogram, setLocalOdontogram] = useState<OdontogramData>(initialOdontogram || {
+    teeth: {
+      16: { id: 16, status: 'amalgam', cbctFindings: 'Amálgama com microinfiltração visível na TC', biologicalPlan: 'Troca Segura SMART (IAOMT)' },
+      21: { id: 21, status: 'zirconia_implant', cbctFindings: 'Espessura óssea favorável para implante cerâmico', biologicalPlan: 'Implante Zircônia Metal-Free' },
+      38: { id: 38, status: 'cavitation_nico', cbctFindings: 'Área hipodensa NICO em leito de siso extraído', biologicalPlan: 'Curetagem + Ozônio + Terapia Neural', neuralTherapy: true }
+    }
+  });
+
+  const handleOdontoUpdate = (newOdonto: OdontogramData) => {
+    setLocalOdontogram(newOdonto);
+    if (onOdontogramChange) {
+      onOdontogramChange(newOdonto);
+    }
+  };
 
   // Upload Form state
   const [newTitle, setNewTitle] = useState('');
@@ -331,6 +355,22 @@ export default function PatientMediaGallery({
         </div>
 
         <div className="flex items-center gap-2">
+          {!hideEmbeddedOdontogram && (
+            <button
+              type="button"
+              onClick={() => setShowOdontogram(!showOdontogram)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                showOdontogram 
+                  ? 'bg-sky-50 text-sky-800 border-sky-300 shadow-2xs' 
+                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+              }`}
+              title="Exibir ou ocultar a arcada dentária interativa para marcação de dentes durante a análise da tomografia"
+            >
+              <Layers size={15} className="text-sky-600" />
+              <span>{showOdontogram ? 'Ocultar Odontograma' : 'Mapear Arcada Dentária'}</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowUploadModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
@@ -553,6 +593,16 @@ export default function PatientMediaGallery({
           <FolderOpen size={40} className="mx-auto text-slate-300 mb-2" />
           <p className="text-sm font-bold text-slate-500">Nenhum exame cadastrado</p>
           <p className="text-xs text-slate-400">Clique em "Anexar Nova Imagem" para subir a tomografia ou foto do paciente.</p>
+        </div>
+      )}
+
+      {/* ODONTOGRAMA SINCRONIZADO COM A TOMOGRAFIA / RX */}
+      {!hideEmbeddedOdontogram && showOdontogram && (
+        <div className="pt-2 animate-in fade-in duration-300">
+          <InteractiveOdontogram
+            data={localOdontogram}
+            onChange={handleOdontoUpdate}
+          />
         </div>
       )}
 

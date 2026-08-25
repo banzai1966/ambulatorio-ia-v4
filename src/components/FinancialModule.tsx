@@ -239,7 +239,7 @@ export default function FinancialModule() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
         <div>
           <div className="flex items-center gap-2">
-            <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-2xl">
+            <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl">
               <Wallet className="w-6 h-6" />
             </div>
             <div>
@@ -262,7 +262,7 @@ export default function FinancialModule() {
 
           <button
             onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all hover:scale-105"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all hover:scale-105"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Lançamento</span>
@@ -273,17 +273,17 @@ export default function FinancialModule() {
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Entradas */}
-        <div className="p-5 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 rounded-3xl relative overflow-hidden">
+        <div className="p-5 bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 rounded-3xl relative overflow-hidden">
           <div className="flex justify-between items-start mb-2">
-            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Receitas Recebidas</span>
-            <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-xl">
+            <span className="text-xs font-bold text-sky-900 uppercase tracking-wider">Receitas Recebidas</span>
+            <div className="p-2 bg-sky-500/10 text-sky-600 rounded-xl">
               <ArrowUpRight className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl font-black text-emerald-900 mb-1">
+          <div className="text-2xl font-black text-slate-900 mb-1">
             {totalIncome.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </div>
-          <div className="text-[11px] text-emerald-700 flex items-center gap-1">
+          <div className="text-[11px] text-sky-700 flex items-center gap-1">
             <CheckCircle className="w-3 h-3" />
             <span>Confirmado em caixa</span>
           </div>
@@ -310,11 +310,11 @@ export default function FinancialModule() {
         <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl relative overflow-hidden shadow-xl">
           <div className="flex justify-between items-start mb-2">
             <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Saldo Líquido</span>
-            <div className="p-2 bg-white/10 text-emerald-400 rounded-xl">
+            <div className="p-2 bg-white/10 text-sky-400 rounded-xl">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl font-black mb-1 ${netBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <div className={`text-2xl font-black mb-1 ${netBalance >= 0 ? 'text-sky-400' : 'text-rose-400'}`}>
             {netBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </div>
           <div className="text-[11px] text-slate-400">
@@ -351,7 +351,7 @@ export default function FinancialModule() {
                 placeholder="Buscar paciente ou descrição..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -367,7 +367,7 @@ export default function FinancialModule() {
               </button>
               <button 
                 onClick={() => setFilterType('income')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${filterType === 'income' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all ${filterType === 'income' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'}`}
               >
                 Receitas
               </button>
@@ -440,7 +440,7 @@ export default function FinancialModule() {
                     </td>
 
                     <td className="p-3.5">
-                      <span className={`font-black ${t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <span className={`font-black ${t.type === 'income' ? 'text-blue-600' : 'text-rose-600'}`}>
                         {t.type === 'income' ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                     </td>
@@ -450,11 +450,11 @@ export default function FinancialModule() {
                         onClick={() => toggleStatus(t.id)}
                         className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition-transform hover:scale-105 ${
                           t.status === 'paid'
-                            ? 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
                             : 'bg-amber-100 text-amber-800'
                         }`}
                       >
-                        {t.status === 'paid' ? <CheckCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                        {t.status === 'paid' ? <CheckCircle className="w-3 h-3 text-blue-600" /> : <Clock className="w-3 h-3" />}
                         <span>{t.status === 'paid' ? 'Pago' : 'Pendente'}</span>
                       </button>
                     </td>
@@ -492,7 +492,7 @@ export default function FinancialModule() {
           <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-emerald-600" />
+                <Plus className="w-5 h-5 text-blue-600" />
                 Novo Lançamento Financeiro
               </h3>
               <button 
@@ -509,9 +509,9 @@ export default function FinancialModule() {
                 <button
                   type="button"
                   onClick={() => setNewType('income')}
-                  className={`py-2 rounded-xl transition-all ${newType === 'income' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-600'}`}
+                  className={`py-2 rounded-xl transition-all ${newType === 'income' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}
                 >
-                  🟢 Receita / Entrada
+                  🔵 Receita / Entrada
                 </button>
                 <button
                   type="button"
@@ -525,12 +525,12 @@ export default function FinancialModule() {
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Descrição do Serviço / Conta *</label>
                 <input 
-                  type="text"
+                  type="text" 
                   required
                   placeholder={newType === 'income' ? "Ex: Consulta Neurológica de Avaliação" : "Ex: Conta de Luz / Material Médico"}
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -539,22 +539,22 @@ export default function FinancialModule() {
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Nome do Paciente</label>
                     <input 
-                      type="text"
+                      type="text" 
                       placeholder="Nome completo do paciente"
                       value={newPatientName}
                       onChange={(e) => setNewPatientName(e.target.value)}
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">CPF do Paciente (Para Recibo)</label>
                     <input 
-                      type="text"
+                      type="text" 
                       placeholder="000.000.000-00"
                       value={newPatientCpf}
                       onChange={(e) => setNewPatientCpf(e.target.value)}
-                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -564,12 +564,12 @@ export default function FinancialModule() {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Valor (R$) *</label>
                   <input 
-                    type="text"
+                    type="text" 
                     required
                     placeholder="0,00"
                     value={newAmount}
                     onChange={(e) => setNewAmount(e.target.value)}
-                    className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full p-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
 
@@ -578,7 +578,7 @@ export default function FinancialModule() {
                   <select 
                     value={newPaymentMethod}
                     onChange={(e) => setNewPaymentMethod(e.target.value as any)}
-                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     <option value="pix">PIX</option>
                     <option value="credit_card">Cartão de Crédito</option>
@@ -595,7 +595,7 @@ export default function FinancialModule() {
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value)}
-                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     {newType === 'income' ? (
                       <>
@@ -623,7 +623,7 @@ export default function FinancialModule() {
                   <select
                     value={newStatus}
                     onChange={(e) => setNewStatus(e.target.value as any)}
-                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     <option value="paid">Confirmado / Pago</option>
                     <option value="pending">Pendente / A Receber</option>
@@ -641,7 +641,7 @@ export default function FinancialModule() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20"
                 >
                   Salvar Lançamento
                 </button>

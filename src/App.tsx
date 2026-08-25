@@ -61,6 +61,7 @@ import Agenda from './components/Agenda';
 import MessageHistory from './components/MessageHistory';
 import ManageTeam from './components/ManageTeam';
 import SystemOverviewModal from './components/SystemOverviewModal';
+import ManualClinicoModal from './components/ManualClinicoModal';
 import NeurologicalExamForm from './components/NeurologicalExamForm';
 import ClinicSettings from './components/ClinicSettings';
 import UserProfileModal from './components/UserProfileModal';
@@ -280,6 +281,8 @@ export default function App() {
   const [showAgenda, setShowAgenda] = useState(savedActiveTab === 'agenda');
   const [showMessageHistory, setShowMessageHistory] = useState(savedActiveTab === 'mensagens');
   const [showSystemOverview, setShowSystemOverview] = useState(false);
+  const [showManualClinico, setShowManualClinico] = useState(false);
+  const [manualDefaultProfile, setManualDefaultProfile] = useState<'dr_carlos' | 'dra_lucy'>('dr_carlos');
   const [showClinicSettings, setShowClinicSettings] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -1476,6 +1479,7 @@ export default function App() {
 
   const handleAudioProcess = async (blob: Blob) => {
     setIsProcessing(true);
+    const toastId = toast.loading("🎙️ Processando áudio da consulta com IA...");
     try {
       let result;
       const finalTranscript = transcriptRef.current.trim();
@@ -1820,18 +1824,24 @@ export default function App() {
         if (newRecord.checklist_integrativo) {
           setIntegrativeData(newRecord.checklist_integrativo);
         }
-        if (newRecord.dados_especialidade) {
+        if (newRecord.exame_neurologico && (examMode === 'neurological' || hasMeaningfulData(newRecord.exame_neurologico))) {
+          setSpecialtyData(newRecord.exame_neurologico);
+        } else if (newRecord.dados_especialidade) {
           setSpecialtyData(newRecord.dados_especialidade);
         }
+        toast.success("✨ IA preencheu a ficha e prontuário com sucesso!", { id: toastId });
     } catch (err: any) {
       console.error("Erro no processamento clínico:", err);
       const msg = err.message || "";
       if (msg.includes("API_KEY_MISSING")) {
         setError("Configuração pendente: Chave de API não encontrada.");
+        toast.error("Chave de API não configurada.", { id: toastId });
       } else if (msg.includes("quota") || msg.includes("429")) {
         setError("Limite de uso da IA atingido. Tente novamente em alguns minutos.");
+        toast.error("Limite de IA atingido temporariamente.", { id: toastId });
       } else {
         setError(`Erro ao processar áudio: ${msg || 'Verifique sua conexão e tente novamente.'}`);
+        toast.error("Erro ao processar áudio.", { id: toastId });
       }
     } finally {
       setIsProcessing(false);
@@ -2028,7 +2038,7 @@ export default function App() {
   const getStatusColor = (status: string) => {
     switch (status?.toLowerCase()) {
       case 'alerta': return 'text-red-500 bg-red-50 border-red-100';
-      case 'melhora': return 'text-emerald-500 bg-emerald-50 border-emerald-100';
+      case 'melhora': return 'text-sky-600 bg-sky-50 border-sky-100';
       case 'piora': return 'text-orange-500 bg-orange-50 border-orange-100';
       default: return 'text-blue-500 bg-blue-50 border-blue-100';
     }
@@ -2604,16 +2614,26 @@ export default function App() {
       doc.setLineWidth(0.5);
       doc.line(pageWidth / 2 - 40, footerY, pageWidth / 2 + 40, footerY);
       
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setTextColor(0, 50, 100);
       doc.setFont('helvetica', 'bold');
-      const docName = record.profiles?.full_name || record.profissional_responsavel || 'Médico Responsável';
-      doc.text(`Dr(a). ${docName}`, pageWidth / 2, footerY + 7, { align: 'center' });
       
-      doc.setFontSize(8);
+      const isDental = record.especialidade?.toLowerCase().includes('odonto') || record.especialidade?.toLowerCase().includes('biol') || examMode === 'biological_dentistry';
+      const fallbackDoc = isDental ? 'Dra. Lucy Morata' : (examMode === 'neurological' ? 'Dr. Carlos Morato' : 'Dr. Marco Duarte');
+      const docName = record.profiles?.full_name || record.profissional_responsavel || fallbackDoc;
+      const prefix = (docName.toLowerCase().startsWith('dr.') || docName.toLowerCase().startsWith('dra.') || docName.toLowerCase().startsWith('dr ') || docName.toLowerCase().startsWith('dra ')) ? '' : 'Dr(a). ';
+      doc.text(`${prefix}${docName}`, pageWidth / 2, footerY + 6, { align: 'center' });
+      
+      doc.setFontSize(8.5);
+      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'normal');
+      const councilText = isDental ? 'CRO/SP 98.412 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Medicina Integrativa';
+      doc.text(councilText, pageWidth / 2, footerY + 11, { align: 'center' });
+
+      doc.setFontSize(7.5);
       doc.setTextColor(150, 150, 150);
       doc.setFont('helvetica', 'normal');
-      doc.text("Documento com validade digital gerado pelo Ambulatório IA.", pageWidth / 2, footerY + 15, { align: 'center' });
+      doc.text("Documento com validade digital gerado pelo Ambulatório IA.", pageWidth / 2, footerY + 16, { align: 'center' });
       
       const fileName = `receita_${(record.paciente_nome_completo || 'paciente').replace(/\s+/g, '_')}.pdf`;
 
@@ -3095,20 +3115,50 @@ export default function App() {
 
             {!isSidebarCollapsed && (
               <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                Suporte
+                Manuais & Ajuda
               </div>
             )}
 
             <button
-              onClick={() => setShowSystemOverview(true)}
-              title={isSidebarCollapsed ? "Manual & Sobre o Sistema" : undefined}
+              onClick={() => {
+                setManualDefaultProfile('dr_carlos');
+                setShowManualClinico(true);
+              }}
+              title={isSidebarCollapsed ? "Manual Dr. Carlos (Medicina, Neurologia & Integrativa)" : undefined}
               className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 transition-all",
+                "w-full flex items-center rounded-2xl text-xs font-bold text-blue-700 bg-blue-50/80 hover:bg-blue-100/90 border border-blue-200/70 transition-all shadow-2xs cursor-pointer",
                 isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
               )}
             >
-              <HelpCircle size={17} className="text-slate-500" />
-              {!isSidebarCollapsed && <span>Manual & Sobre o Sistema</span>}
+              <Brain size={17} className="text-blue-600 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Manual Dr. Carlos (Neuro)</span>}
+            </button>
+
+            <button
+              onClick={() => {
+                setManualDefaultProfile('dra_lucy');
+                setShowManualClinico(true);
+              }}
+              title={isSidebarCollapsed ? "Manual Dra. Lucy (Odontologia Biológica & Cirurgia)" : undefined}
+              className={cn(
+                "w-full flex items-center rounded-2xl text-xs font-bold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100/90 border border-emerald-200/70 transition-all shadow-2xs cursor-pointer",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+              )}
+            >
+              <Sparkles size={17} className="text-emerald-600 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Manual Dra. Lucy (Odonto)</span>}
+            </button>
+
+            <button
+              onClick={() => setShowSystemOverview(true)}
+              title={isSidebarCollapsed ? "Manual Geral (Recepção, Caixa & Equipe)" : undefined}
+              className={cn(
+                "w-full flex items-center rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 transition-all cursor-pointer",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
+              )}
+            >
+              <HelpCircle size={17} className="text-slate-500 shrink-0" />
+              {!isSidebarCollapsed && <span className="truncate">Manual Geral (Recepção)</span>}
             </button>
           </nav>
 
@@ -3305,6 +3355,12 @@ export default function App() {
         isOpen={showSystemOverview} 
         onClose={() => setShowSystemOverview(false)} 
         userId={user?.id || ''}
+      />
+
+      <ManualClinicoModal
+        isOpen={showManualClinico}
+        onClose={() => setShowManualClinico(false)}
+        defaultProfile={manualDefaultProfile}
       />
 
       <AnimatePresence>
@@ -3629,18 +3685,18 @@ export default function App() {
                     </div>
                     <button 
                       onClick={exportToCSV}
-                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors shadow-sm"
+                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-semibold transition-all shadow-xs active:scale-98"
                       title="Exportar prontuários filtrados em planilha CSV"
                     >
-                      <Download size={16} />
-                      Exportar CSV
+                      <Download size={15} className="text-slate-500" />
+                      <span>Exportar CSV</span>
                     </button>
                     <label 
-                      className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors cursor-pointer shadow-sm"
+                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-98"
                       title="Importar lista de pacientes a partir de planilha Excel (.csv)"
                     >
-                      <UploadCloud size={16} />
-                      Importar Planilha (CSV)
+                      <UploadCloud size={15} className="text-slate-500" />
+                      <span>Importar Planilha (CSV)</span>
                       <input 
                         type="file" 
                         accept=".csv,.txt" 
@@ -3664,11 +3720,11 @@ export default function App() {
                       />
                     </label>
                     <label 
-                      className="flex items-center gap-2 px-3.5 py-2 bg-amber-600 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors cursor-pointer shadow-sm"
+                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-98"
                       title="Restaurar backup completo em formato JSON"
                     >
-                      <Save size={16} />
-                      Importar Backup (JSON)
+                      <Save size={15} className="text-slate-500" />
+                      <span>Importar Backup (JSON)</span>
                       <input 
                         type="file" 
                         accept=".json" 
@@ -3743,7 +3799,7 @@ export default function App() {
                                   </span>
                                 )}
                                 {(record.especialidade?.toLowerCase().includes('integrativa') || (record.checklist_integrativo && hasMeaningfulData(record.checklist_integrativo))) && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-100 bg-emerald-50 text-emerald-700">
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-sky-200 bg-sky-50 text-sky-700">
                                     INTEGRATIVA
                                   </span>
                                 )}
@@ -3911,6 +3967,7 @@ export default function App() {
                   setSpecialtyData={setSpecialtyData}
                   integrativeData={integrativeData}
                   setIntegrativeData={setIntegrativeData}
+                  currentUser={user}
                 />
 
 

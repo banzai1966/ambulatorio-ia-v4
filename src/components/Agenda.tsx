@@ -170,7 +170,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         return 'bg-blue-50 text-blue-800 border-blue-200/80';
       case 'presente':
       case 'aguardando':
-        return 'bg-emerald-50 text-emerald-800 border-emerald-200/80';
+        return 'bg-sky-50 text-sky-800 border-sky-200/80';
       case 'em atendimento':
         return 'bg-indigo-50 text-indigo-800 border-indigo-200/80';
       case 'atendido':
@@ -1087,10 +1087,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                           <button
                             type="button"
                             onClick={() => openPaymentModal(app)}
-                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-all flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 transition-all flex items-center gap-1 cursor-pointer"
                             title="Clique para ver ou alterar detalhes do pagamento"
                           >
-                            <CheckCircle2 size={11} className="text-emerald-600" />
+                            <CheckCircle2 size={11} className="text-sky-600" />
                             {app.status_pagamento} {app.valor_consulta ? `• R$ ${app.valor_consulta}` : ''}
                           </button>
                         ) : (
@@ -1277,7 +1277,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Telefone / WhatsApp <span className="text-emerald-600 font-extrabold">(Com 55 + DDD)</span>
+                    Telefone / WhatsApp <span className="text-sky-600 font-extrabold">(Com 55 + DDD)</span>
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -1421,16 +1421,24 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
                 <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
                   <User size={14} className="text-clinical-blue" />
-                  Especialidade & Médico Responsável *
+                  Especialidade & Profissional Responsável *
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <select 
                     className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-semibold"
                     value={newAppointment.especialidade_id}
                     onChange={e => {
+                      const selectedVal = e.target.value;
                       const nextMedicoId = user?.role === 'doctor' ? user.id : '';
-                      setNewAppointment({...newAppointment, especialidade_id: e.target.value, medico_id: nextMedicoId});
-                      fetchDoctors(e.target.value);
+                      const isDentalSelected = selectedVal === 'odontologia_biologica' || selectedVal.toLowerCase().includes('odonto');
+                      setNewAppointment({
+                        ...newAppointment, 
+                        especialidade_id: selectedVal, 
+                        medico_id: nextMedicoId,
+                        convenio: isDentalSelected ? 'Particular' : (newAppointment.convenio || 'Particular'),
+                        tipo_consulta: isDentalSelected ? 'Avaliação Odontológica Biológica & Laudo' : 'Primeira Consulta'
+                      });
+                      fetchDoctors(selectedVal);
                     }}
                   >
                     <option value="">Selecione a Especialidade</option>
@@ -1440,9 +1448,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       ))
                     ) : (
                       <>
-                        <option value="integrativa">Medicina Integrativa</option>
-                        <option value="odontologia_biologica">Odontologia Biológica & Implantes Zircônia</option>
-                        <option value="neurologia">Neurologia Especializada</option>
+                        <option value="odontologia_biologica">Odontologia Biológica & Implantes Zircônia (Dra. Lucy)</option>
+                        <option value="integrativa">Medicina Integrativa (Dr. Carlos Morato)</option>
+                        <option value="neurologia">Neurologia Especializada (Dr. Carlos Morato)</option>
                         <option value="clinica_geral">Clínica Geral & Rotina</option>
                       </>
                     )}
@@ -1450,7 +1458,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
                   {user?.role === 'doctor' ? (
                     <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-100 text-clinical-blue text-xs font-bold flex items-center">
-                      Médico: {user.full_name || user.email}
+                      Profissional: {user.full_name || user.email}
                     </div>
                   ) : (
                     <select 
@@ -1458,7 +1466,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       value={newAppointment.medico_id}
                       onChange={e => setNewAppointment({...newAppointment, medico_id: e.target.value})}
                     >
-                      <option value="">Selecione o Médico *</option>
+                      <option value="">Selecione o Profissional *</option>
                       {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
                     </select>
                   )}
@@ -1487,7 +1495,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 
                 {!newAppointment.medico_id || !newAppointment.data_hora_inicio.split('T')[0] ? (
                   <div className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 text-xs text-center italic">
-                    Selecione um médico e uma data para ver os horários.
+                    Selecione um profissional e uma data para ver os horários.
                   </div>
                 ) : isLoadingSlots ? (
                   <div className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 text-xs text-center flex items-center justify-center gap-2">
@@ -1523,13 +1531,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Convênio / Plano</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Convênio / Modalidade</label>
                   <select 
                     className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
                     value={newAppointment.convenio}
                     onChange={e => setNewAppointment({...newAppointment, convenio: e.target.value})}
                   >
-                    <option value="Particular">Particular</option>
+                    <option value="Particular">Particular (Direto)</option>
+                    <option value="Particular (Reembolso)">Particular (Com Recibo para Reembolso)</option>
                     <option value="SulAmérica Saúde">SulAmérica Saúde</option>
                     <option value="Bradesco Saúde">Bradesco Saúde</option>
                     <option value="Unimed">Unimed</option>
@@ -1541,31 +1550,45 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Tipo de Consulta</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Tipo de Procedimento / Consulta</label>
                   <select 
                     className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
                     value={newAppointment.tipo_consulta}
                     onChange={e => setNewAppointment({...newAppointment, tipo_consulta: e.target.value})}
                   >
-                    <option value="Primeira Consulta">Primeira Consulta</option>
-                    <option value="Retorno">Retorno</option>
-                    <option value="Implante Zircônia / Cirurgia Biológica">Implante Zircônia / Cirurgia Biológica</option>
-                    <option value="Avaliação Integrativa">Avaliação Integrativa</option>
-                    <option value="Emergência / Encaixe">Emergência / Encaixe</option>
+                    {newAppointment.especialidade_id === 'odontologia_biologica' || newAppointment.especialidade_id.toLowerCase().includes('odonto') ? (
+                      <>
+                        <option value="Avaliação Odontológica Biológica & Laudo">Avaliação Odontológica Biológica & Laudo</option>
+                        <option value="Remoção Segura de Amálgama (SMART)">Remoção Segura de Amálgama (SMART)</option>
+                        <option value="Implante Cerâmico de Zircônia">Implante Cerâmico de Zircônia</option>
+                        <option value="Cirurgia de Cavitação NICO / Foco Ósseo">Cirurgia de Cavitação NICO / Foco Ósseo</option>
+                        <option value="Terapia Neural & Ozonioterapia Odontológica">Terapia Neural & Ozonioterapia Odontológica</option>
+                        <option value="Retorno Odontológico">Retorno Odontológico</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Primeira Consulta">Primeira Consulta</option>
+                        <option value="Retorno">Retorno</option>
+                        <option value="Avaliação Integrativa">Avaliação Integrativa</option>
+                        <option value="Consulta Neurológica Especializada">Consulta Neurológica Especializada</option>
+                        <option value="Emergência / Encaixe">Emergência / Encaixe</option>
+                      </>
+                    )}
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Valor (R$)</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Valor / Honorários (R$)</label>
                   <input 
                     type="number"
                     className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
-                    placeholder="350"
+                    placeholder="Definido por procedimento"
                     value={newAppointment.valor_consulta}
                     onChange={e => setNewAppointment({...newAppointment, valor_consulta: e.target.value})}
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">Opcional. Pode ser orçado durante a consulta.</p>
                 </div>
 
                 <div>
@@ -1575,8 +1598,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     value={newAppointment.status_pagamento}
                     onChange={e => setNewAppointment({...newAppointment, status_pagamento: e.target.value})}
                   >
-                    <option value="Pago">Pago</option>
                     <option value="Pendente no Balcão">Pendente no Balcão</option>
+                    <option value="Pago">Pago</option>
                     <option value="Guia Faturada">Guia Faturada</option>
                     <option value="Cortesia / Isento">Cortesia / Isento</option>
                   </select>
@@ -1631,6 +1654,12 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         patientEstadoPrefill={selectedAppointmentForAnamnese?.estado || ''}
         patientNumeroPrefill={selectedAppointmentForAnamnese?.numero || ''}
         patientComplementoPrefill={selectedAppointmentForAnamnese?.complemento || ''}
+        isDental={
+          String(selectedAppointmentForAnamnese?.medico_especialidade || (selectedAppointmentForAnamnese as any)?.especialidade_nome || '').toLowerCase().includes('odonto') ||
+          String(selectedAppointmentForAnamnese?.medico_especialidade || (selectedAppointmentForAnamnese as any)?.especialidade_nome || '').toLowerCase().includes('biolog') ||
+          String((selectedAppointmentForAnamnese as any)?.medico_nome || '').toLowerCase().includes('lucy')
+        }
+        specialty={selectedAppointmentForAnamnese?.medico_especialidade || (selectedAppointmentForAnamnese as any)?.especialidade_nome || ''}
         onAnamneseSubmitted={() => {
           fetchAppointments();
           toast.success("Ficha Pré-Consulta vinculada com sucesso!");
@@ -1645,7 +1674,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             {/* Cabeçalho */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-black">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-black">
                   <CreditCard size={24} />
                 </div>
                 <div>
@@ -1707,7 +1736,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     onClick={() => setPaymentMethod(m.id as any)}
                     className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
                       paymentMethod === m.id
-                        ? 'border-emerald-500 bg-emerald-50/80 text-emerald-900 font-extrabold shadow-xs scale-102 ring-2 ring-emerald-500/20'
+                        ? 'border-blue-500 bg-blue-50/80 text-blue-900 font-extrabold shadow-xs scale-102 ring-2 ring-blue-500/20'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium'
                     }`}
                   >
@@ -1730,7 +1759,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   <input
                     type="number"
                     step="0.01"
-                    className="w-full pl-10 pr-3 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-emerald-500 focus:bg-white text-slate-900 font-extrabold text-sm outline-none transition-all"
+                    className="w-full pl-10 pr-3 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-blue-500 focus:bg-white text-slate-900 font-extrabold text-sm outline-none transition-all"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
                     placeholder="0,00"
@@ -1743,7 +1772,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </label>
                 <input
                   type="text"
-                  className="w-full px-3.5 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-emerald-500 focus:bg-white text-slate-900 text-xs outline-none transition-all font-medium"
+                  className="w-full px-3.5 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-blue-500 focus:bg-white text-slate-900 text-xs outline-none transition-all font-medium"
                   value={paymentNotes}
                   onChange={(e) => setPaymentNotes(e.target.value)}
                   placeholder="Ex: Pago na recepção balcão"
@@ -1768,7 +1797,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 type="button"
                 onClick={() => handleConfirmPayment(true)}
                 disabled={isProcessingPayment}
-                className="w-2/3 py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                className="w-2/3 py-3.5 px-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
               >
                 {isProcessingPayment ? (
                   <>

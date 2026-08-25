@@ -301,9 +301,9 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
               <p className="text-xs text-slate-400 font-medium">Fluxo de pacientes atendidos nos últimos 7 dias</p>
             </div>
             
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100/80">
-              <TrendingUp size={14} className="text-emerald-600" />
-              <span className="text-xs font-bold text-emerald-700">+15% vs semana anterior</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-50 rounded-xl border border-sky-100/80">
+              <TrendingUp size={14} className="text-sky-600" />
+              <span className="text-xs font-bold text-sky-700">+15% vs semana anterior</span>
             </div>
           </div>
           

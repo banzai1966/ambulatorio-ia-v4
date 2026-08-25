@@ -192,14 +192,34 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
   };
 }
 
-// --- PERSISTÊNCIA DE MEMBROS EXCLUÍDOS (GARANTE QUE NUNCA REAPAREÇAM) ---
+// --- PERSISTÊNCIA DE MEMBROS EXCLUÍDOS & CRM/CRO (GARANTE QUE NUNCA REAPAREÇAM OU QUEBREM SCHEMA) ---
 const DELETED_MEMBERS_FILE = path.join(process.cwd(), 'deleted_members.json');
+const CRM_CRO_FILE = path.join(process.cwd(), 'crm_cro_map.json');
+
 const PROTECTED_ADMIN_EMAILS = [
   'marco.agduarte22@gmail.com',
   'carvalhomorato@gmail.com',
   'pitangatania@hotmail.com',
   'demo@ambulatorio.ia'
 ];
+
+function getCrmCroMapServer(): Record<string, string> {
+  try {
+    if (fs.existsSync(CRM_CRO_FILE)) {
+      return JSON.parse(fs.readFileSync(CRM_CRO_FILE, 'utf-8'));
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveCrmCroServer(idOrEmail: string, crm: string) {
+  if (!idOrEmail) return;
+  try {
+    const map = getCrmCroMapServer();
+    map[idOrEmail.toLowerCase().trim()] = crm;
+    fs.writeFileSync(CRM_CRO_FILE, JSON.stringify(map, null, 2), 'utf-8');
+  } catch (e) {}
+}
 
 function getDeletedMembers(): string[] {
   try {
@@ -243,10 +263,92 @@ function unmarkDeletedMember(emailOrId: string) {
   }
 }
 
+// --- ROTA DE CRIAÇÃO / CADASTRO DE MEMBRO DA EQUIPE ---
+app.post("/api/admin/create-member", async (req, res) => {
+  try {
+    const { email, password, full_name, role, especialidade, crm_cro } = req.body;
+    if (!email || !full_name) {
+      return res.status(400).json({ error: "Nome e e-mail são obrigatórios" });
+    }
+    const normEmail = email.toLowerCase().trim();
+    const userPassword = password || "Duarte2026!";
+    const userName = full_name.trim();
+    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com') ? 'admin' : (role || 'doctor');
+    const userSpec = especialidade || 'Nenhuma';
+    const userCrm = (crm_cro || '').trim();
+
+    unmarkDeletedMember(normEmail);
+    if (userCrm) {
+      saveCrmCroServer(normEmail, userCrm);
+    }
+
+    // 1. Cria ou atualiza no Supabase Auth com Service Role
+    const { data: usersList } = await supabase.auth.admin.listUsers();
+    const existingUser = (usersList?.users as any[])?.find((u: any) => u.email?.toLowerCase().trim() === normEmail);
+
+    let userId: string;
+    if (existingUser) {
+      userId = existingUser.id;
+      await supabase.auth.admin.updateUserById(userId, {
+        password: userPassword,
+        email_confirm: true,
+        user_metadata: { full_name: userName, role: userRole, especialidade: userSpec, crm_cro: userCrm }
+      });
+      console.log(`[ADMIN] Usuário Auth atualizado para: ${normEmail}`);
+    } else {
+      const { data: newUser, error: createErr } = await supabase.auth.admin.createUser({
+        email: normEmail,
+        password: userPassword,
+        email_confirm: true,
+        user_metadata: { full_name: userName, role: userRole, especialidade: userSpec, crm_cro: userCrm }
+      });
+      if (createErr) throw createErr;
+      userId = newUser.user.id;
+      console.log(`[ADMIN] Novo usuário Auth criado com sucesso: ${normEmail}`);
+    }
+
+    if (userCrm && userId) {
+      saveCrmCroServer(userId, userCrm);
+    }
+
+    // 2. Upsert no profiles (somente colunas válidas no schema do banco)
+    const profilePayload: any = {
+      id: userId,
+      email: normEmail,
+      role: userRole,
+      status: 'approved',
+      full_name: userName,
+      especialidade: userSpec
+    };
+
+    const { error: upsertErr } = await supabase.from('profiles').upsert(profilePayload, { onConflict: 'email' });
+    if (upsertErr) {
+      console.warn("[ADMIN] Aviso upsert profiles:", upsertErr.message);
+    }
+
+    return res.json({
+      success: true,
+      member: {
+        id: userId,
+        email: normEmail,
+        full_name: userName,
+        role: userRole,
+        especialidade: userSpec,
+        crm_cro: userCrm,
+        status: 'approved'
+      },
+      message: "Membro da equipe cadastrado com sucesso!"
+    });
+  } catch (err: any) {
+    console.error("[ADMIN] Erro ao criar membro:", err);
+    return res.status(500).json({ error: err.message || "Erro ao criar membro" });
+  }
+});
+
 // --- ROTA DE PROVISIONAMENTO / RESET INSTANTÂNEO DE USUÁRIO AUTH ---
 app.post("/api/auth/ensure-user", async (req, res) => {
   try {
-    const { email, password, full_name, role } = req.body;
+    const { email, password, full_name, role, especialidade, crm_cro } = req.body;
     if (!email) {
       return res.status(400).json({ error: "E-mail é obrigatório" });
     }
@@ -255,8 +357,13 @@ app.post("/api/auth/ensure-user", async (req, res) => {
     const userPassword = password || "Duarte2026!";
     const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : 'Médico');
     const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com') ? 'admin' : (role || 'doctor');
+    const userSpec = especialidade || 'Nenhuma';
+    const userCrm = (crm_cro || '').trim();
 
     unmarkDeletedMember(normEmail);
+    if (userCrm) {
+      saveCrmCroServer(normEmail, userCrm);
+    }
 
     // 1. Verifica se o usuário já existe no Supabase Auth
     const { data: usersList } = await supabase.auth.admin.listUsers();
@@ -270,7 +377,7 @@ app.post("/api/auth/ensure-user", async (req, res) => {
       await supabase.auth.admin.updateUserById(userId, {
         password: userPassword,
         email_confirm: true,
-        user_metadata: { full_name: userName }
+        user_metadata: { full_name: userName, role: userRole, especialidade: userSpec, crm_cro: userCrm }
       });
       console.log(`[AUTH] Senha e dados atualizados no Auth para: ${normEmail}`);
     } else {
@@ -279,7 +386,7 @@ app.post("/api/auth/ensure-user", async (req, res) => {
         email: normEmail,
         password: userPassword,
         email_confirm: true,
-        user_metadata: { full_name: userName }
+        user_metadata: { full_name: userName, role: userRole, especialidade: userSpec, crm_cro: userCrm }
       });
       if (createErr) {
         throw createErr;
@@ -288,14 +395,19 @@ app.post("/api/auth/ensure-user", async (req, res) => {
       console.log(`[AUTH] Novo usuário Auth criado com sucesso: ${normEmail}`);
     }
 
-    // 2. Garante o registro na tabela profiles com role correta e status approved
+    if (userCrm && userId) {
+      saveCrmCroServer(userId, userCrm);
+    }
+
+    // 2. Garante o registro na tabela profiles com role correta e status approved (somente colunas existentes)
     await supabase.from('profiles').upsert({
       id: userId,
       email: normEmail,
       role: userRole,
       status: 'approved',
-      full_name: userName
-    });
+      full_name: userName,
+      especialidade: userSpec
+    }, { onConflict: 'email' });
 
     return res.json({
       success: true,
@@ -406,7 +518,7 @@ app.post("/api/process-clinical", async (req, res) => {
 
     const genAI = new GoogleGenerativeAI(key);
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.5-flash",
       generationConfig: { responseMimeType: "application/json" }
     });
 
@@ -429,78 +541,101 @@ app.post("/api/process-clinical", async (req, res) => {
       - patogenos: candida, c_trachomatis, b_burgdorferi, c_pneumoniae, mycobact_tbc, mycobact_avium, hsv_type_1, hsv_type_2, zoster_virus, cmv_5
     `;
 
-    const basePrompt = `Analise o seguinte relato clínico (texto ou áudio) e extraia as informações estruturadas.
+    const basePrompt = `Você é um Médico Especialista e Copiloto Clínico de Inteligência Artificial de elite para o Ambulatório IA.
+      Analise com máxima precisão e rigor o seguinte relato clínico (texto ou áudio) e extraia todas as informações estruturadas em JSON.
       Data atual: ${currentDateStr}
       Motivo da consulta: ${reason}
       Modo de exame/Especialidade: ${examMode}
       
-      REGRAS CRÍTICAS DE RIGIDEZ (MODO INTEGRATIVO):
-      1. MAPEAMENTO EXATO: Você deve ser EXTREMAMENTE RÍGIDO ao mapear termos para o checklist_integrativo. Use apenas as chaves fornecidas.
-      2. VALORES NUMÉRICOS: No checklist_integrativo, os valores NÃO são mais booleanos. Você deve extrair o VALOR NUMÉRICO ou SIMBÓLICO mencionado (ex: "5 > 100", "300 mcg", "10 pg", "3 > 1").
-      3. UNIDADES DE MEDIDA: Diferencie rigorosamente miligramas (mg), gramas (g), microgramas (mcg ou ug) e picogramas (pg). Se o médico disser "trezentos microgramas", escreva "300mcg". Se disser "dez picogramas", escreva "10pg".
-      4. CHECKLIST INTEGRATIVO: Preencha com o valor exato mencionado. Se apenas o item for citado sem valor numérico mas com forma (ex: "em gotas", "1 capsula", "injetável"), extraia a forma como o valor (ex: "gotas"). Se o item for citado, mas sem nenhum valor ou forma, use a string "Sinalizado". É ESTRITAMENTE PROIBIDO "adivinhar", "deduzir" ou "copiar" dosagens de um item para outro. Nunca preencha uma dosagem que não foi claramente ditada para AQUELE item específico.
-      5. DOSAGENS: Extraia dosagens exatas para a 'prescricao'.
-      6. CORREÇÃO DE TRANSCRIÇÃO: O texto de entrada pode conter erros ortográficos, caracteres estranhos () ou palavras quebradas devido a pausas na transcrição de áudio. É SUA OBRIGAÇÃO corrigir contextualmente esses erros e gerar todos os textos (resumo, conduta, hipótese, prescrição) em um português médico polido, impecável e com a acentuação correta.
+      REGRAS CRÍTICAS DE FIDELIDADE ABSOLUTA:
+      1. NUNCA invente, deduza ou alucine informações não contidas no relato.
+      2. PRESCRIÇÃO MÉDICA (RECEITUÁRIO): Deve conter EXCLUSIVAMENTE medicamentos, fórmulas, suplementos ativos e condutas com posologias que o paciente deve tomar (ex: "Metilcobalamina 1.000 mcg", "Coenzima Q10 100 mg", "Magnésio Treonato 250 mg", "Vitamina D3 10.000 UI/dia").
+         - NUNCA COLOQUE RESULTADOS DE EXAMES DE SANGUE OU LABORATORIAIS DENTRO DA 'prescricao'! Exames laboratoriais pertencem ao 'resumo_formatado' ou 'exame_fisico'.
+         - Se houver horários indicados, organize com cabeçalhos claros: "🌅 PELA MANHÃ:", "🌙 À NOITE:", "📋 USO GERAL:".
+      3. CÁLCULO DE IDADE PRECISO:
+         - Se a data de nascimento ou idade for fornecida (ex: 08/05/1966), calcule/confirme a idade baseada na data atual (${currentDateStr}).
+         - Subtraia os anos e verifique se o dia/mês atual já passou o dia/mês de nascimento. Se não passou, Idade = (AnoAtual - AnoNasc - 1).
+      4. EXAME NEUROLÓGICO COMPLETO:
+         - Se o relato contiver achados neurológicos (ou se o modo for 'neurological'), preencha a estrutura 'exame_neurologico' de forma COMPLETA.
+         - 'fascia': 'típica' ou 'atípica'
+         - 'atitude': 'ativa' ou 'passiva'
+         - 'dominancia': 'D' ou 'E'
+         - 'marcha': 'normal' ou 'alterada'
+         - 'escala_glasgow': número inteiro (ex: 15).
+         - 'reflexos_wexler': objeto com notas de 0 a 4+ para cada reflexo ("biceps_d", "biceps_e", "estiloradial_d", "estiloradial_e", "patelar_d", "patelar_e", "aquileu_d", "aquileu_e", "axiais_face", "grasping", "groping", "hoffmann", "palmo_mentoniano", "wartenberg").
+         - 'dermatomos_marcardos': objeto mapeando dermátomos com alteração, ex: { "C6": "hipoestesia" } (valores permitidos: 'hipoestesia', 'parestesia', 'hiperestesia', 'dor', 'normal').
+         - 'nervos_cranianos': preencha "ii", "iii", "iv", "vi", "v", "vii", "viii", "ix", "x", "xi", "xii" com "Preservado" ou a alteração relatada, e "pupilas_d": "Isocórica", "pupilas_e": "Isocórica", "fundo_olho": "normal", "campo": "Preservado".
+         - 'forca_muscular': preencha OBRIGATORIAMENTE todas as 7 regiões: "face", "lingua", "msd", "mse", "mid", "mie", "coluna" com seus respectivos "tonus" ('Normal'), "trofismo" ('Normal'), "mov_anormais" ('Ausente'), "deformidades" ('Ausente'), "fatigabilidade" ('Grau V') ou os achados citados.
+         - 'sensibilidade': preencha todas as 5 regiões: "cabeca", "torax", "mmss", "abdome", "mmii" com "proprio", "vibrat", "temp", "dor", "toque" (ex: mmss toque "Hipoestesia C6 à D").
+         - 'coordenacao': preencha status ("normal"|"alterado"), romberg (boolean: false se negativo/normal), index_nariz, etc.
+      5. CHECKLIST INTEGRATIVO (INTERDISCIPLINARIDADE):
+         - Extraia SEMPRE o 'checklist_integrativo' se houver menção a suplementos, fitoterápicos, vitaminas, minerais, neurotransmissores (ex: homocisteína) ou patógenos, SEJA NO MODO NEUROLÓGICO OU INTEGRATIVO!
+         - Chaves permitidas apenas do schema. Se o item não foi citado, NÃO inclua a chave. Se foi citado com dosagem/valor (ex: "100 mg", "10.000 UI", "15.8 µmol/L"), use o valor exato como string. Se citado sem valor, use "Sinalizado".
+      6. CORREÇÃO DE TRANSCRIÇÃO:
+         - Gere todos os textos em português médico impecável, formal e gramaticalmente perfeito.
 
-      REGRAS PARA CÁLCULO DE IDADE:
-      - Se a data de nascimento for fornecida (ex: 08/05/1966), calcule a idade baseada na data atual (${currentDateStr}).
-      - Seja preciso: subtraia os anos e verifique se o dia/mês atual já passou o dia/mês de nascimento. Se não passou, a idade é (AnoAtual - AnoNasc - 1).
-      - Exemplo: 08/05/1966 em 12/04/2026 -> 2026-1966 = 60, mas como 12/04 é antes de 08/05, a idade correta é 59 anos.
-      
-      Extraia em formato JSON:
-      - paciente_nome_completo: Nome do paciente
-      - paciente_cpf: CPF (apenas números)
-      - paciente_data_nascimento: Data de nascimento (YYYY-MM-DD)
-      - resumo_formatado: Resumo clínico profissional (inclua a idade calculada corretamente no texto)
-      - hipotese_diagnostica: Hipótese diagnóstica baseada no relato
-      - conduta_plano_terapeutico: Plano terapêutico e conduta médica
-      - prescricao: STRING com Receituário detalhado e DOSAGENS EXATAS. REGRA CRONOBIOLÓGICA: Se o médico ditar horários (ex: "de manhã", "ao deitar"), agrupe os itens usando cabeçalhos com emojis (ex: "🌅 PELA MANHÃ:", "🌙 À NOITE:") - TUDO DENTRO DA MESMA STRING, separados por quebra de linha. OBEDIÊNCIA CEGA: É ESTRITAMENTE PROIBIDO adivinhar horários. Se o médico não disser a hora, agrupe em "📋 USO GERAL:". Nunca deduzir horários. Se nenhum horário for citado no áudio inteiro, faça apenas uma lista normal. O RETORNO ABSOLUTO DE DEVE SER UMA STRING (TEXTO) E NUNCA UM OBJETO OU ARRAY.
-      - sugestao_conduta: Resumo da conduta (para exibição rápida)
-      - alertas_copiloto: Array de strings. Atue como um Copiloto Clínico Integrativo. Analise as suplementações/vitaminas e cite alertas CUIDADOSOS. Exemplos Obrigatórios: "Uso de altas doses de Vitamina D3 (como 50.000 UI) exige Vitamina K2 associada obrigatoriamente para evitar toxicidade e calcificação", "Zinco sem Cobre...". Seja breve e comece com "Atenção:". Mesmo riscos e dicas de controle devem ser pontuados.  Se a prescrição estiver 100% perfeita, retorne um array vazio [].
-      - especialidade: Especialidade sugerida ou confirmada
-      - paciente_status: Status ("Estável", "Atenção" ou "Crítico"). Avalie a gravidade. Se encontrar FC, SpO2, Pressão ou Respiração fora do normal, use "Atenção" ou "Crítico".
-      - vitals: Objeto contendo os sinais vitais extraídos do relato. Estrutura: { "bpm": numero, "spo2": numero, "resp": numero, "pressao": "string", "soroName": "string", "soroRate": "string" }. Ex: { "bpm": 72, "spo2": 98, "resp": 16, "pressao": "120/80", "soroName": "Soro Fisiológico 0.9% (500ml)", "soroRate": "21 gotas/min" }. Mantenha undefined para os não citados.
-      - resumo_clinico: String curta justificando o paciente_status e os sinais vitais, ou preencha com a condição geral rápida se for normal.
-      - mapeamento_corporal: Array de objetos marcando sintomas locais ou dores. IMPORTANTE: Extraia SEMPRE o mapeamento se o paciente relatar dor (ex: "dor na perna") ou outros sintomas físicos localizados (ex: "peso nas pernas", "formigamento na mão"). Use labels curtíssimos (ex: "Dor Joelho D", "Peso Pernas"). Se não houver sintoma localizado relatado, retorne []. 
-        Estrutura de cada ponto: { "x": numero, "y": numero, "side": "front" ou "back", "label": "string curta" }. 
-        Use coordenadas percentuais X (lateral, 50 é o centro) e Y (altura, 10 a cabeça, 95 o pé).
-        Lista de coordenadas (X, Y) - VALORES OBRIGATÓRIOS: Cabeça(50,10), Cervical(50,15), Ombro Dir(32,22), Ombro Esq(68,22), Braço Dir(25,40), Braço Esq(75,40), Mãos(20,55 / 80,55), Estômago(50,35), Costas/Dorsal(50,30), Lombar(50,48), Quadril(50,54), Coxa Dir(40,62), Coxa Esq(60,62), Joelho Dir(40,72), Joelho Esq(60,72), Canela Dir(40,82), Canela Esq(60,82), Pé Dir(38,95), Pé Esq(62,95).
-        Lados: Se dor nas costas/lombar/posterior, usar side: "back". Caso contrário, "front".
-        Para o campo "label", utilize no máximo 2 palavras (ex: "Dor Joelho D"). Se não houver dor clara no áudio para o ponto identificado, retorne label: "".
-      - dados_especialidade: Objeto JSON com campos específicos da especialidade se mencionados. 
-        IMPORTANTE: Extraia APENAS o número (ex: 18 em vez de "18 Kg").
-        Use EXATAMENTE estas chaves se os dados forem encontrados:
-        - Para Pediatria: peso, altura, perimetro_cefalico, vacinas_em_dia (boolean)
-        - Para Cardiologia: pa_sistolica, pa_diastolica, frequencia_cardiaca, tabagista (boolean)
-        - Para Psiquiatria: humor_predominante, qualidade_sono, medicacao_atual, ideacao_suicida (boolean)
-      - exame_neurologico: Se o modo for 'neurological', preencha um objeto segundo a estrutura abaixo. Mapeie exatamente os valores mencionados, use strings curtas. Se o modo NÃO for 'neurological', retorne null: 
-        {
-          "fascia": "atípica" | "típica",
-          "atitude": "ativa" | "passiva",
-          "dominancia": "D" | "E",
-          "marcha": "normal" | "alterada",
-          "fluencia_verbal": "0-15" | "15-30" | "30-45" | "45-60",
-          "cognitivo": { "orient_temp": "", "orient_esp": "", "mem_imed": "", "calculo": "", "mem_evoc": "", "nomeacao": "", "repeticao": "", "leitura": "", "comando": "", "total_score": "" },
-          "nervos_cranianos": { "ii": "", "iii": "", "iv": "", "vi": "", "v": "", "vii": "", "viii": "", "ix": "", "x": "", "xi": "", "xii": "", "pupilas_d": "", "pupilas_e": "", "fundo_olho": "normal"|"alterado", "campo": "" },
-          "coordenacao": { "status": "normal"|"alterado", "lado": "D"|"E", "index_nariz": true|false, "romberg": true|false, "calcanhar_joelho": true|false, "diadococinesia": true|false },
-          "sensibilidade": { "cabeca": {"proprio":"","vibrat":"","temp":"","dor":"","toque":""}, "torax": {...}, "mmss": {...}, "abdome": {...}, "mmii": {...} },
-          "dermatomos_marcardos": { "C2": "hipoestesia", "C3": "hipoestesia", "C4": "dor", "L4": "parestesia" },
-          "forca_muscular": { "face": {"tonus":"","trofismo":"","mov_anormais":"","deformidades":"","fatigabilidade":""}, "lingua": {...}, "msd": {...}, "mse": {...}, "mid": {...}, "mie": {...}, "coluna": {...} }
+      Extraia em formato JSON com a seguinte estrutura:
+      {
+        "paciente_nome_completo": "Nome do paciente",
+        "paciente_cpf": "CPF se mencionado",
+        "paciente_data_nascimento": "YYYY-MM-DD se mencionada",
+        "resumo_formatado": "Resumo clínico estruturado e detalhado da consulta",
+        "queixa_principal": "Queixa principal do paciente",
+        "exame_fisico": "Descrição textual detalhada do exame físico e neurológico",
+        "hipotese_diagnostica": "Hipótese diagnóstica estruturada",
+        "conduta_plano_terapeutico": "Conduta médica, exames solicitados e orientações",
+        "prescricao": "Receituário formatado EXCLUSIVO de medicamentos/suplementos para o paciente tomar com horários e doses (NUNCA incluir resultados de exames laboratoriais aqui)",
+        "sugestao_conduta": "Resumo executivo da conduta",
+        "alertas_copiloto": ["Alertas clínicos ou interações"],
+        "especialidade": "Especialidade médica sugerida",
+        "paciente_status": "Estável",
+        "vitals": { "bpm": 75, "spo2": 98, "resp": 16, "pressao": "120/80" },
+        "resumo_clinico": "Breve justificativa dos sinais vitais",
+        "mapeamento_corporal": [
+          { "x": 50, "y": 15, "side": "back", "label": "Dor Cervical" },
+          { "x": 80, "y": 55, "side": "front", "label": "Parestesia C6 D" }
+        ],
+        "dados_especialidade": {},
+        "exame_neurologico": {
+          "fascia": "típica",
+          "atitude": "ativa",
+          "dominancia": "D",
+          "marcha": "normal",
+          "escala_glasgow": 15,
+          "fluencia_verbal": "45-60",
+          "cognitivo": { "orient_temp": "Preservado", "orient_esp": "Preservado", "mem_imed": "Preservado", "calculo": "Preservado", "mem_evoc": "Preservado", "nomeacao": "Preservado", "repeticao": "Preservado", "leitura": "Preservado", "comando": "Preservado", "total_score": "" },
+          "nervos_cranianos": { "ii": "Preservado", "iii": "Preservado", "iv": "Preservado", "vi": "Preservado", "v": "Preservado", "vii": "Preservado", "viii": "Preservado", "ix": "Preservado", "x": "Preservado", "xi": "Preservado", "xii": "Preservado", "pupilas_d": "Isocórica", "pupilas_e": "Isocórica", "fundo_olho": "normal", "campo": "Preservado" },
+          "coordenacao": { "status": "normal", "lado": null, "index_nariz": false, "romberg": false, "calcanhar_joelho": false, "diadococinesia": false },
+          "reflexos_wexler": {
+            "biceps_d": "3+", "biceps_e": "2+", "estiloradial_d": "3+", "estiloradial_e": "2+", "patelar_d": "2+", "patelar_e": "2+", "aquileu_d": "2+", "aquileu_e": "2+", "axiais_face": "0", "grasping": "0", "groping": "0", "hoffmann": "0", "palmo_mentoniano": "0", "wartenberg": "0"
+          },
+          "dermatomos_marcardos": { "C6": "hipoestesia" },
+          "forca_muscular": {
+            "face": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "lingua": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "msd": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "mse": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "mid": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "mie": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "coluna": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" }
+          },
+          "sensibilidade": {
+            "cabeca": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
+            "torax": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
+            "mmss": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Hipoestesia C6 à D" },
+            "abdome": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
+            "mmii": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" }
+          }
+        },
+        "checklist_integrativo": {
+          "suplementos": { "coenzima_q10": "100 mg", "acido_folico": "400 mcg", "vit_b3_b6": "1.000 mcg" },
+          "vitaminas_minerais": { "vit_d3": "10.000 UI", "ca_mg_zn": "250 mg" },
+          "neurotransmissores_hormonios": { "homocystine": "15.8 µmol/L" }
         }
-      - checklist_integrativo: SEMPRE extraia este objeto se houver menção a suplementos, vitaminas, fitoterápicos, biomarcadores ou patógenos no relato, MESMO QUE O MODO NÃO SEJA 'integrative'! É PROIBIDO USAR BOOLEAN (true/false) AQUI. O valor DEVE SER UMA STRING.
-        REGRA CRÍTICA DE ABSOLUTA FIDELIDADE (APENAS ITENS CITADOS NO RELATO):
-        1. Inclua no objeto JSON APENAS E EXCLUSIVAMENTE as chaves dos itens que FORAM REALMENTE MENCIONADOS/DITADOS NO RELATO DO PACIENTE!
-        2. É ESTRITAMENTE PROIBIDO "preencher", "sinalizar" ou incluir itens que NÃO foram falados ou escritos no relato. Se o médico NÃO citou "Silimarina", "Quercetina", "Saw Palmetto", "Biomarcadores", etc., NÃO INCLUA NENHUMA DESSAS CHAVES NO JSON!
-        3. Se o item foi citado COM dosagem/percentual (ex: "Lugol 5%", "Coenzima Q10 100mg", "Vitamina D3 50.000 UI"), coloque a dosagem exata (ex: "5%", "100 mg", "50.000 UI").
-        4. Se o item foi citado SEM dosagem nem percentual (ex: apenas "uso de Própolis", "histórico de Candida"), preencha ESTRITAMENTE com a string "Sinalizado".
-        5. Se o item NÃO foi citado no texto, OMITA COMPLETAMENTE A CHAVE DELE DO JSON!
-        
-        ATENÇÃO: Números no nome do item (ex: "Coenzima Q10", "Mix D9", "Vit K2") NÃO são dosagens! O "10" em "Coenzima Q10" faz parte do nome. Se o médico disser apenas "Coenzima Q10", preencha "coenzima_q10" com "Sinalizado".
-        Estrutura esperada (exemplo para relato que cita apenas Coenzima Q10 e Lugol 5%): { "suplementos": { "coenzima_q10": "Sinalizado" }, "vitaminas_minerais": { "lugol": "5%" } }
-        Chaves disponíveis para mapeamento:
-        ${checklistSchema}
+      }
       
-      IMPORTANTE: Para o checklist_integrativo, você DEVE mapear APENAS e EXCLUSIVAMENTE os itens mencionados no relato para as chaves exatas acima. Se um item não foi mencionado, NÃO inclua sua chave.`;
+      Schema Checklist Disponível:
+      ${checklistSchema}`;
 
     let parts: any[];
     if (typeof input === 'string') {
@@ -1072,7 +1207,7 @@ app.get("/api/admin/members", async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, role, status, full_name, especialidade, crm_cro')
+      .select('id, email, role, status, full_name, especialidade')
       .order('role', { ascending: true });
 
     if (error) {
@@ -1080,12 +1215,22 @@ app.get("/api/admin/members", async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
+    const crmMap = getCrmCroMapServer();
     const deletedList = getDeletedMembers();
-    const activeMembers = (data || []).filter(p => {
-      const pEmail = (p.email || '').toLowerCase().trim();
-      const pId = (p.id || '').toLowerCase().trim();
-      return !deletedList.includes(pEmail) && !deletedList.includes(pId);
-    });
+    const activeMembers = (data || [])
+      .filter(p => {
+        const pEmail = (p.email || '').toLowerCase().trim();
+        const pId = (p.id || '').toLowerCase().trim();
+        return !deletedList.includes(pEmail) && !deletedList.includes(pId);
+      })
+      .map(p => {
+        const pEmail = (p.email || '').toLowerCase().trim();
+        const pId = (p.id || '').toLowerCase().trim();
+        return {
+          ...p,
+          crm_cro: crmMap[pEmail] || crmMap[pId] || (p as any).crm_cro || ''
+        };
+      });
 
     return res.json({ success: true, members: activeMembers });
   } catch (err: any) {
