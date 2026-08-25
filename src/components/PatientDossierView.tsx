@@ -76,9 +76,9 @@ const DEFAULT_DOCTOR_PROFILES: ClinicalDoctorProfile[] = [
   },
   {
     id: 'dr_marco',
-    full_name: 'Dr. Marco Duarte',
-    especialidade: 'Clínica Geral & Gestão Integrativa',
-    crm_cro: 'CRM/SP 220.104',
+    full_name: 'Marco Duarte',
+    especialidade: 'Gestão & Administração Geral',
+    crm_cro: 'Administrador Mestre',
     default_mode: 'standard',
   }
 ];
@@ -772,7 +772,23 @@ export default function PatientDossierView({
           });
         }
 
-        if (result.exame_neurologico) {
+        if (examMode === 'biological_dentistry' || (result.dados_especialidade && Object.keys(result.dados_especialidade).length > 0)) {
+          const incomingOdonto = result.dados_especialidade?.odontograma || result.odontograma;
+          setSpecialtyData((prev: any) => ({
+            ...(prev || {}),
+            ...(result.dados_especialidade || {}),
+            odontograma: incomingOdonto 
+              ? { 
+                  ...(prev?.odontograma || {}), 
+                  ...incomingOdonto,
+                  teeth: {
+                    ...(prev?.odontograma?.teeth || {}),
+                    ...(incomingOdonto?.teeth || {})
+                  }
+                }
+              : prev?.odontograma
+          }));
+        } else if (result.exame_neurologico && (examMode === 'neurological' || hasMeaningfulData(result.exame_neurologico))) {
           setSpecialtyData((prev: any) => {
             const updated = { ...(prev || {}) };
             for (const key of Object.keys(result.exame_neurologico)) {
@@ -787,11 +803,6 @@ export default function PatientDossierView({
             }
             return updated;
           });
-        } else if (result.dados_especialidade) {
-          setSpecialtyData((prev: any) => ({
-            ...(prev || {}),
-            ...result.dados_especialidade
-          }));
         }
 
         if (setCurrentRecord) {
@@ -824,23 +835,36 @@ export default function PatientDossierView({
               }
             }
 
+            const incomingSpec = result.dados_especialidade || {};
+            const incomingOdonto = incomingSpec.odontograma || result.odontograma;
+            const mergedOdonto = incomingOdonto ? {
+              ...(prev?.dados_especialidade?.odontograma || {}),
+              ...incomingOdonto,
+              teeth: {
+                ...(prev?.dados_especialidade?.odontograma?.teeth || {}),
+                ...(incomingOdonto?.teeth || {})
+              }
+            } : prev?.dados_especialidade?.odontograma;
+
+            const mergedDadosEspecialidade = {
+              ...(prev?.dados_especialidade || {}),
+              ...incomingSpec,
+              ...(mergedOdonto ? { odontograma: mergedOdonto } : {})
+            };
+
             return {
               ...prev,
               ...result,
               checklist_integrativo: result.checklist_integrativo ? mergedChecklist : prev?.checklist_integrativo,
-              exame_neurologico: result.exame_neurologico ? mergedNeuro : prev?.exame_neurologico,
+              exame_neurologico: (examMode === 'neurological' || (result.exame_neurologico && hasMeaningfulData(result.exame_neurologico))) ? mergedNeuro : prev?.exame_neurologico,
               mapeamento_corporal: (result.mapeamento_corporal && result.mapeamento_corporal.length > 0)
                 ? result.mapeamento_corporal
                 : (prev?.mapeamento_corporal || []),
-              dados_especialidade: {
-                ...(prev?.dados_especialidade || {}),
-                ...(result.dados_especialidade || {}),
-                ...(result.exame_neurologico || {})
-              }
+              dados_especialidade: mergedDadosEspecialidade
             };
           });
         }
-        toast.success("✨ IA preencheu a ficha, exame neurológico e condutas com sucesso!", { id: toastId });
+        toast.success("✨ IA preencheu a ficha, especialidade e condutas com sucesso!", { id: toastId });
       }
     } catch (err) {
       console.error(err);
@@ -1824,8 +1848,22 @@ export default function PatientDossierView({
                 {examMode === 'biological_dentistry' && (
                   <div className="border-t pt-4">
                     <BiologicalDentistryForm
-                      data={currentRecord?.dados_especialidade || specialtyData || {}}
-                      onChange={(data) => setSpecialtyData(data)}
+                      data={{
+                        ...(currentRecord?.dados_especialidade || {}),
+                        ...(specialtyData || {})
+                      }}
+                      onChange={(data) => {
+                        setSpecialtyData(data);
+                        if (setCurrentRecord) {
+                          setCurrentRecord((prev: any) => ({
+                            ...prev,
+                            dados_especialidade: {
+                              ...(prev?.dados_especialidade || {}),
+                              ...data
+                            }
+                          }));
+                        }
+                      }}
                     />
                   </div>
                 )}
@@ -1983,8 +2021,22 @@ export default function PatientDossierView({
 
                 {/* 2. Formulário Clínico e Odontograma Interativo logo abaixo das imagens */}
                 <BiologicalDentistryForm
-                  data={currentRecord?.dados_especialidade || specialtyData || {}}
-                  onChange={(data) => setSpecialtyData(data)}
+                  data={{
+                    ...(currentRecord?.dados_especialidade || {}),
+                    ...(specialtyData || {})
+                  }}
+                  onChange={(data) => {
+                    setSpecialtyData(data);
+                    if (setCurrentRecord) {
+                      setCurrentRecord((prev: any) => ({
+                        ...prev,
+                        dados_especialidade: {
+                          ...(prev?.dados_especialidade || {}),
+                          ...data
+                        }
+                      }));
+                    }
+                  }}
                 />
               </div>
             )}

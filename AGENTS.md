@@ -1,6 +1,14 @@
 # Instruções de IA do Ambulatório IA
 
-Este arquivo contém regras críticas para o processamento de dados clínicos e manutenção da lógica do sistema.
+Este arquivo contém regras críticas para o processamento de dados clínicos, manutenção da lógica do sistema e governança do projeto.
+
+## 0. Identidade do Criador e Administrador Mestre
+- **Criador & Responsável pelo Projeto:** **Marco Duarte** (`marco.agduarte22@gmail.com`). 
+- **Marco** é o idealizador, gestor e criador deste aplicativo. Ele não deve ser confundido com nomes fictícios ou temporários.
+- **Profissionais Clínicos do Ambulatório IA:**
+  1. **Dr. Carlos Morato** (Neurologia & Medicina Integrativa - CRM/SP 145.892)
+  2. **Dra. Lucy Morata** (Odontologia Biológica & Saúde Integrativa - CRO/SP 98.412)
+  3. **Marco Duarte** (Gestor Mestre & Administrador do Ambulatório IA)
 
 ## 1. Cálculo de Idade Preciso
 Sempre que o sistema precisar calcular a idade de um paciente com base na data de nascimento (DOB):
@@ -30,11 +38,25 @@ Estes módulos e fluxos estão 100% validados e NUNCA devem ser regredidos, simp
 - **Estrutura de Wexler:** O boneco contém 8 pontos principais de reflexo: Bíceps D/E, Estilorradial D/E, Patelar D/E e Aquileu D/E, com viewBox expandida para não cortar rótulos.
 - **Deep Merge & Sincronização:** Toda carga de prontuário e salvamento deve manter `rec.exame_neurologico`, `rec.checklist_integrativo` e `rec.mapeamento_corporal` preservados com sincronização bidirecional entre `dados_especialidade` e a raiz do registro, sem sobrescrever campos não citados.
 
-## 6. Planejamento Científico Integrativo & Odontologia Biológica (Módulo Dra. Lucy)
-Quando o usuário solicitar a implementação deste módulo no futuro:
-- **Funcionalidade**: Gerador de Relatório de Casos Complexos em Odontologia Biológica & Saúde Integrativa.
-- **Entradas**: Queixas, exames de sangue, focos de inflamação crônica, amálgama/biocompatibilidade, raio-X/tomografia.
-- **Saídas**: Relatório clínico estruturado com diretrizes de intervenção, estilo de vida, imunologia, terapia neural e citações científicas / referências no rodapé.
-- **Base de Conhecimento**: Suporte a RAG (upload de diretrizes/artigos em PDF/Markdown) e busca científica integrada (Google Scholar / PubMed via Gemini Grounding).
+## 6. Blindagem e Preservação da Odontologia Biológica (Dra. Lucy)
+O módulo de Odontologia Biológica e Saúde Integrativa (Dra. Lucy) está 100% implementado, validado e BLINDADO contra regressões:
+- **Estrutura de Dados Preservada:**
+  * `dados_especialidade.odontograma`: Objeto mapeando dentes FDI (11 a 48) com `{ id, status, notes, biologicalPlan, neuralTherapy, tomografia }`. Status aceitos: `amalgam`, `zirconia_implant`, `titanium_implant`, `endodontic`, `cavitation_nico`, `missing`, `caries`, `ceramic_crown`, `healthy`.
+  * **Protocolo SMART (IAOMT):** `amalgama_ativo`, `amalgama_elementos`, `smart_dique_nitrilo`, `smart_oxigenio_nasal`, `smart_exaustor_vapor`, `smart_irrigacao_alta`, `smart_carvao_chlorella`, `smart_quelacao_vitc`.
+  * **Implantes Cerâmicos Metal-Free:** `implante_zirconia_ativo`, `implante_elementos`, `implante_prf_ienxerto`, `implante_tipo_sistema`.
+  * **Cavitações Ósseas NICO/FDOK:** `focos_cavitacao_ativo`, `focos_descricao`, `focos_tomografia_cbct`.
+  * **Terapia Neural & Ozônio Odontológico:** `terapia_neural_ativo`, `terapia_neural_locais`, `ozonioterapia_ativo`, `ozonio_modalidades`, `atm_bruxismo_ativo`.
+  * **Suplementação Sistêmica Pré/Pós-Cirúrgica:** `suplemento_vit_d3_k2`, `suplemento_vit_c`, `suplemento_zinco_mg`, `suplemento_arnica_homeo`, `suplemento_coenzima_q10`, `observacoes_odonto_biologica`.
+- **Interação Híbrida & Odontograma:** O odontograma anatômico (FDI 11 a 48) permite clique manual interativo para cada dente, seleção de condições clínicas, laudo CBCT e correlação dente-órgão-meridiano, além de preenchimento automático por voz e IA.
+- **Regra de Sanitização:** NUNCA aplicar filtros de remoção de caracteres alfanuméricos ou substituições numéricas brutas sobre `dados_especialidade` ou `odontograma`.
+
+## 7. Isolamento Total dos Pilares Clínicos (Dr. Carlos e Dra. Lucy)
+O sistema possui especialidades clínicas principais que NUNCA devem interferir umas nas outras:
+1. **Neurologia & Medicina Integrativa (Dr. Carlos):** `exame_neurologico` (Wexler 8 pontos, Dermátomos C2-S5, Força Muscular, Nervos Cranianos, MEEM), `checklist_integrativo` (40+ suplementos, fitoterápicos, minerais, patógenos) e `mapeamento_corporal` (BodyMap 360°).
+2. **Odontologia Biológica (Dra. Lucy):** `dados_especialidade` (Odontograma Anatômico 32 dentes, SMART, Zircônia, NICO, Ozônio, Terapia Neural).
+
+**Princípio de Não-Regressão (Coração Clínico Intocável):**
+- Ao implementar melhorias em módulos periféricos (financeiro, faturamento, WhatsApp, layout, relatórios, agenda), os fluxos clínicos NUNCA devem ser alterados, simplificados ou desconfigurados.
+- Ao carregar ou alternar pacientes e especialidades, usar sempre *deep merge* seguro para garantir que os dados de uma especialidade não apaguem ou contaminem os da outra.
 
 

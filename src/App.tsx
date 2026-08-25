@@ -1570,20 +1570,26 @@ export default function App() {
           
           const sanitized: any = { ...baseData };
           Object.entries(aiData).forEach(([key, val]) => {
-            let finalVal = val;
-            if (typeof val === 'string') {
-              const cleanVal = val.replace(/[kKgGcmCM\s]/g, '').replace(',', '.');
-              const numVal = parseFloat(cleanVal);
-              finalVal = isNaN(numVal) ? val : numVal;
+            if (key === 'odontograma' && typeof val === 'object' && val !== null) {
+              sanitized.odontograma = {
+                ...(baseData.odontograma || {}),
+                ...val,
+                teeth: {
+                  ...(baseData.odontograma?.teeth || {}),
+                  ...((val as any)?.teeth || {})
+                }
+              };
+              return;
             }
             
-            // Lógica de Mesclagem: 
-            // Se for booleano, faz um OR (mantém o true se já existir)
-            // Se for valor novo, sobrescreve (ex: novo peso medido)
-            if (typeof finalVal === 'boolean') {
-              sanitized[key] = sanitized[key] || finalVal;
+            if (typeof val === 'boolean') {
+              sanitized[key] = sanitized[key] || val;
+            } else if (Array.isArray(val)) {
+              sanitized[key] = val;
+            } else if (typeof val === 'object' && val !== null) {
+              sanitized[key] = { ...(sanitized[key] || {}), ...val };
             } else {
-              sanitized[key] = finalVal;
+              sanitized[key] = val;
             }
           });
           return sanitized;
@@ -1824,7 +1830,9 @@ export default function App() {
         if (newRecord.checklist_integrativo) {
           setIntegrativeData(newRecord.checklist_integrativo);
         }
-        if (newRecord.exame_neurologico && (examMode === 'neurological' || hasMeaningfulData(newRecord.exame_neurologico))) {
+        if (examMode === 'biological_dentistry' || (newRecord.dados_especialidade && hasMeaningfulData(newRecord.dados_especialidade))) {
+          setSpecialtyData(newRecord.dados_especialidade);
+        } else if (newRecord.exame_neurologico && (examMode === 'neurological' || hasMeaningfulData(newRecord.exame_neurologico))) {
           setSpecialtyData(newRecord.exame_neurologico);
         } else if (newRecord.dados_especialidade) {
           setSpecialtyData(newRecord.dados_especialidade);

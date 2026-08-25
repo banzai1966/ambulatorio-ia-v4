@@ -91,27 +91,38 @@ export async function processClinicalInput(
       Data atual: ${currentDateStr}. Motivo do atendimento: ${reason}. Modo selecionado: ${examMode}.
       
       REGRAS CRÍTICAS DE EXTRAÇÃO:
-      1. PRESCRIÇÃO MÉDICA (RECEITUÁRIO): Deve conter EXCLUSIVAMENTE medicamentos, fórmulas, suplementos ativos prescritos e condutas com posologias para o paciente tomar (ex: "Metilcobalamina 1.000 mcg", "Coenzima Q10 100 mg", "Magnésio Treonato 250 mg", "Vitamina D3 10.000 UI/dia").
+      1. PRESCRIÇÃO MÉDICA (RECEITUÁRIO): Deve conter EXCLUSIVAMENTE medicamentos, fórmulas, suplementos ativos prescritos e condutas com posologias para o paciente tomar (ex: "Metilcobalamina 1.000 mcg", "Coenzima Q10 100 mg", "Magnésio Treonato 250 mg", "Vitamina D3 10.000 UI/dia", "Vitamina C 2.000 mg/dia", "Zinco Quelado 30 mg").
          - NUNCA COLOQUE RESULTADOS DE EXAMES DE SANGUE DENTRO DA 'prescricao'!
-      2. EXAME NEUROLÓGICO:
+      2. EXAME NEUROLÓGICO (QUANDO APLICÁVEL):
          - Reflexos de Wexler: Mapeie os reflexos testados (0 a 4+). Se referir hiper-reflexia à direita (+/4+ ou 3+/4+), coloque "3+" em biceps_d e estiloradial_d.
          - Força Muscular / Tônus / Trofismo: Se normal, preencha todos (face, lingua, msd, mse, mid, mie, coluna) com tonus="Normal", trofismo="Normal", mov_anormais="Ausente", deformidades="Ausente", fatigabilidade="Grau V".
          - Nervos Cranianos: Todos de II a XII como "Preservado".
          - Marcha: "normal" se sem alterações/atípica, ou "alterada" se patológica.
+         - Se o modo for 'biological_dentistry' e não houver achados neurológicos, retorne exame_neurologico como {}.
       3. CHECKLIST INTEGRATIVO (MAPEAMENTO EXATO):
          - Coenzima Q10 -> suplementos.coenzima_q10: "100 mg" (ou dose citada)
          - Ácido Fólico / Metilfolato -> suplementos.acido_folico: "400 mcg"
          - Vitamina B12 / Metilcobalamina / Complexo B -> suplementos.vit_b3_b6: "1.000 mcg" (ou valor de exame se citado)
-         - Vitamina D3 -> vitaminas_minerais.vit_d3: "22 ng/ml" (ou dose/valor citado)
+         - Vitamina D3 -> vitaminas_minerais.vit_d3: "10.000 UI" (ou dose/valor citado)
          - Cálcio, Magnésio, Zinco / Magnésio Treonato -> vitaminas_minerais.ca_mg_zn: "250 mg" (ou valor de exame)
          - Homocisteína -> neurotransmissores_hormonios.homocystine: "15.8 µmol/L"
-      
+      4. ODONTOLOGIA BIOLÓGICA (DRA. LUCY) & ODONTOGRAMA:
+         - Se houver achados odontológicos ou o modo for 'biological_dentistry', preencha 'dados_especialidade' com os campos e o 'odontograma':
+           * 'amalgama_ativo': true se houver amálgama; 'amalgama_elementos': "16, 46" (números FDI dos dentes).
+           * 'smart_dique_nitrilo', 'smart_oxigenio_nasal', 'smart_exaustor_vapor', 'smart_irrigacao_alta', 'smart_carvao_chlorella', 'smart_quelacao_vitc': true/false.
+           * 'implante_zirconia_ativo': true; 'implante_elementos': "36"; 'implante_prf_ienxerto': true; 'implante_tipo_sistema': "Cerâmico Zircônia Metal-Free".
+           * 'focos_cavitacao_ativo': true; 'focos_descricao': texto; 'focos_tomografia_cbct': texto (ex: "Área hipodensa trabecular em região de 38/48").
+           * 'terapia_neural_ativo': true; 'terapia_neural_locais': "Polos retromolares e foco 38 com Procaína 0,7%"; 'ozonioterapia_ativo': true; 'ozonio_modalidades': ["Insuflação Cavitacional", "Água Ozonizada (Irrigação)"].
+           * 'suplemento_vit_d3_k2': true/false, 'suplemento_vit_c': true/false, 'suplemento_zinco_mg': true/false, 'suplemento_arnica_homeo': true/false, 'suplemento_coenzima_q10': true/false.
+           * 'observacoes_odonto_biologica': texto do plano.
+           * 'odontograma': { "teeth": { [numDente]: { "id": number, "status": "amalgam"|"zirconia_implant"|"titanium_implant"|"endodontic"|"cavitation_nico"|"missing"|"caries"|"ceramic_crown"|"healthy", "notes": string, "biologicalPlan": string, "neuralTherapy": boolean } } }.
+       
       MODELO JSON OBRIGATÓRIO DE RETORNO:
       {
         "paciente_nome_completo": "Nome do paciente",
         "paciente_cpf": "",
         "paciente_data_nascimento": "",
-        "especialidade": "",
+        "especialidade": "Odontologia Biológica | Neurologia | Integrativa | Clínica Geral",
         "resumo_formatado": "Gere um resumo clínico estruturado e detalhado.",
         "hipotese_diagnostica": "",
         "conduta_plano_terapeutico": "",
@@ -129,25 +140,44 @@ export async function processClinicalInput(
         },
         "alertas_copiloto": [],
         "resumo_clinico": "Breve justificativa clínica dos sinais vitais",
-        "mapeamento_corporal": [
-           {"x": 50, "y": 15, "label": "Dor Cervical", "side": "posterior"}
-        ],
-        "dados_especialidade": {},
-        "exame_neurologico": {
-          "fascia": "típica",
-          "atitude": "ativa",
-          "dominancia": "D",
-          "marcha": "normal",
-          "escala_glasgow": 15,
-          "fluencia_verbal": "45-60",
-          "cognitivo": { "orient_temp": "Preservado", "orient_esp": "Preservado", "mem_imed": "Preservado", "calculo": "Preservado", "mem_evoc": "Preservado", "nomeacao": "Preservado", "repeticao": "Preservado", "leitura": "Preservado", "comando": "Preservado", "total_score": "" },
-          "nervos_cranianos": { "ii": "Preservado", "iii": "Preservado", "iv": "Preservado", "vi": "Preservado", "v": "Preservado", "vii": "Preservado", "viii": "Preservado", "ix": "Preservado", "x": "Preservado", "xi": "Preservado", "xii": "Preservado", "pupilas_d": "Isocórica", "pupilas_e": "Isocórica", "fundo_olho": "normal", "campo": "Preservado" },
-          "coordenacao": { "status": "normal", "lado": null, "index_nariz": false, "romberg": false, "calcanhar_joelho": false, "diadococinesia": false },
-          "sensibilidade": { "cabeca": {"proprio":"Normal","vibrat":"Normal","temp":"Normal","dor":"Normal","toque":"Normal"}, "torax": {"proprio":"Normal","vibrat":"Normal","temp":"Normal","dor":"Normal","toque":"Normal"}, "mmss": {"proprio":"Normal","vibrat":"Normal","temp":"Normal","dor":"Normal","toque":"Hipoestesia C6 à D"}, "abdome": {"proprio":"Normal","vibrat":"Normal","temp":"Normal","dor":"Normal","toque":"Normal"}, "mmii": {"proprio":"Normal","vibrat":"Normal","temp":"Normal","dor":"Normal","toque":"Normal"} },
-          "dermatomos_marcardos": { "C6": "hipoestesia" },
-          "reflexos_wexler": { "biceps_d": "3+", "biceps_e": "2+", "estiloradial_d": "3+", "estiloradial_e": "2+", "patelar_d": "2+", "patelar_e": "2+", "aquileu_d": "2+", "aquileu_e": "2+", "axiais_face": "0", "grasping": "0", "groping": "0", "hoffmann": "0", "palmo_mentoniano": "0", "wartenberg": "0" },
-          "forca_muscular": { "face": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"}, "lingua": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"}, "msd": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"}, "mse": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"}, "mid": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"}, "mie": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"}, "coluna": {"tonus":"Normal","trofismo":"Normal","mov_anormais":"Ausente","deformidades":"Ausente","fatigabilidade":"Grau V"} }
+        "mapeamento_corporal": [],
+        "dados_especialidade": {
+          "amalgama_ativo": true,
+          "amalgama_elementos": "16, 46",
+          "smart_dique_nitrilo": true,
+          "smart_oxigenio_nasal": true,
+          "smart_exaustor_vapor": true,
+          "smart_irrigacao_alta": true,
+          "smart_carvao_chlorella": true,
+          "smart_quelacao_vitc": true,
+          "implante_zirconia_ativo": true,
+          "implante_elementos": "36",
+          "implante_prf_ienxerto": true,
+          "implante_tipo_sistema": "Cerâmico Zircônia Metal-Free",
+          "focos_cavitacao_ativo": true,
+          "focos_descricao": "Foco cavitacional NICO em região 38",
+          "focos_tomografia_cbct": "Área hipodensa trabecular em 38",
+          "terapia_neural_ativo": true,
+          "terapia_neural_locais": "Polos retromolares e foco 38 com Procaína 0,7%",
+          "ozonioterapia_ativo": true,
+          "ozonio_modalidades": ["Insuflação Cavitacional", "Água Ozonizada (Irrigação)"],
+          "atm_bruxismo_ativo": false,
+          "suplemento_vit_d3_k2": true,
+          "suplemento_vit_c": true,
+          "suplemento_zinco_mg": true,
+          "suplemento_arnica_homeo": true,
+          "suplemento_coenzima_q10": true,
+          "observacoes_odonto_biologica": "Protocolo SMART para amálgamas 16 e 46. Implante de Zircônia 36 com PRF. Curetagem e ozônio em cavitação NICO 38 com Terapia Neural.",
+          "odontograma": {
+            "teeth": {
+              "16": { "id": 16, "status": "amalgam", "notes": "Amálgama oclusal - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" },
+              "46": { "id": 46, "status": "amalgam", "notes": "Amálgama extenso - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" },
+              "36": { "id": 36, "status": "zirconia_implant", "notes": "Ausência dental - Implante Zircônia", "biologicalPlan": "Implante Cerâmico Metal-Free + PRF" },
+              "38": { "id": 38, "status": "cavitation_nico", "notes": "Biointerferência NICO / FDOK", "biologicalPlan": "Curetagem + Ozonioterapia + Terapia Neural", "neuralTherapy": true }
+            }
+          }
         },
+        "exame_neurologico": {},
         "checklist_integrativo": {
           "suplementos": { "coenzima_q10": "100 mg", "acido_folico": "400 mcg", "vit_b3_b6": "1.000 mcg" },
           "vitaminas_minerais": { "vit_d3": "10.000 UI", "ca_mg_zn": "250 mg" },

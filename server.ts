@@ -549,14 +549,15 @@ app.post("/api/process-clinical", async (req, res) => {
       
       REGRAS CRÍTICAS DE FIDELIDADE ABSOLUTA:
       1. NUNCA invente, deduza ou alucine informações não contidas no relato.
-      2. PRESCRIÇÃO MÉDICA (RECEITUÁRIO): Deve conter EXCLUSIVAMENTE medicamentos, fórmulas, suplementos ativos e condutas com posologias que o paciente deve tomar (ex: "Metilcobalamina 1.000 mcg", "Coenzima Q10 100 mg", "Magnésio Treonato 250 mg", "Vitamina D3 10.000 UI/dia").
+      2. PRESCRIÇÃO MÉDICA (RECEITUÁRIO): Deve conter EXCLUSIVAMENTE medicamentos, fórmulas, suplementos ativos e condutas com posologias que o paciente deve tomar (ex: "Metilcobalamina 1.000 mcg", "Coenzima Q10 100 mg", "Magnésio Treonato 250 mg", "Vitamina D3 10.000 UI/dia", "Vitamina C 2.000 mg/dia", "Zinco Quelado 30 mg").
          - NUNCA COLOQUE RESULTADOS DE EXAMES DE SANGUE OU LABORATORIAIS DENTRO DA 'prescricao'! Exames laboratoriais pertencem ao 'resumo_formatado' ou 'exame_fisico'.
          - Se houver horários indicados, organize com cabeçalhos claros: "🌅 PELA MANHÃ:", "🌙 À NOITE:", "📋 USO GERAL:".
       3. CÁLCULO DE IDADE PRECISO:
          - Se a data de nascimento ou idade for fornecida (ex: 08/05/1966), calcule/confirme a idade baseada na data atual (${currentDateStr}).
          - Subtraia os anos e verifique se o dia/mês atual já passou o dia/mês de nascimento. Se não passou, Idade = (AnoAtual - AnoNasc - 1).
-      4. EXAME NEUROLÓGICO COMPLETO:
+      4. EXAME NEUROLÓGICO (QUANDO APLICÁVEL):
          - Se o relato contiver achados neurológicos (ou se o modo for 'neurological'), preencha a estrutura 'exame_neurologico' de forma COMPLETA.
+         - Se o modo for 'biological_dentistry' e não houver relato neurológico, retorne 'exame_neurologico: {}' vazio.
          - 'fascia': 'típica' ou 'atípica'
          - 'atitude': 'ativa' ou 'passiva'
          - 'dominancia': 'D' ou 'E'
@@ -566,12 +567,25 @@ app.post("/api/process-clinical", async (req, res) => {
          - 'dermatomos_marcardos': objeto mapeando dermátomos com alteração, ex: { "C6": "hipoestesia" } (valores permitidos: 'hipoestesia', 'parestesia', 'hiperestesia', 'dor', 'normal').
          - 'nervos_cranianos': preencha "ii", "iii", "iv", "vi", "v", "vii", "viii", "ix", "x", "xi", "xii" com "Preservado" ou a alteração relatada, e "pupilas_d": "Isocórica", "pupilas_e": "Isocórica", "fundo_olho": "normal", "campo": "Preservado".
          - 'forca_muscular': preencha OBRIGATORIAMENTE todas as 7 regiões: "face", "lingua", "msd", "mse", "mid", "mie", "coluna" com seus respectivos "tonus" ('Normal'), "trofismo" ('Normal'), "mov_anormais" ('Ausente'), "deformidades" ('Ausente'), "fatigabilidade" ('Grau V') ou os achados citados.
-         - 'sensibilidade': preencha todas as 5 regiões: "cabeca", "torax", "mmss", "abdome", "mmii" com "proprio", "vibrat", "temp", "dor", "toque" (ex: mmss toque "Hipoestesia C6 à D").
-         - 'coordenacao': preencha status ("normal"|"alterado"), romberg (boolean: false se negativo/normal), index_nariz, etc.
+         - 'sensibilidade': preencha todas as 5 regiões: "cabeca", "torax", "mmss", "abdome", "mmii" com "proprio", "vibrat", "temp", "dor", "toque".
+         - 'coordenacao': preencha status ("normal"|"alterado"), romberg (boolean), index_nariz, etc.
       5. CHECKLIST INTEGRATIVO (INTERDISCIPLINARIDADE):
-         - Extraia SEMPRE o 'checklist_integrativo' se houver menção a suplementos, fitoterápicos, vitaminas, minerais, neurotransmissores (ex: homocisteína) ou patógenos, SEJA NO MODO NEUROLÓGICO OU INTEGRATIVO!
+         - Extraia SEMPRE o 'checklist_integrativo' se houver menção a suplementos, fitoterápicos, vitaminas, minerais, neurotransmissores (ex: homocisteína) ou patógenos, SEJA NO MODO NEUROLÓGICO, INTEGRATIVO OU ODONTOLÓGICO!
          - Chaves permitidas apenas do schema. Se o item não foi citado, NÃO inclua a chave. Se foi citado com dosagem/valor (ex: "100 mg", "10.000 UI", "15.8 µmol/L"), use o valor exato como string. Se citado sem valor, use "Sinalizado".
-      6. CORREÇÃO DE TRANSCRIÇÃO:
+      6. ODONTOLOGIA BIOLÓGICA (DRA. LUCY) & ODONTOGRAMA:
+         - Se o relato for de Odontologia Biológica (ou se o modo for 'biological_dentistry' ou houver dentes/amálgama/implantes/NICO citados), preencha OBRIGATORIAMENTE o objeto 'dados_especialidade' com os campos e o 'odontograma':
+           * 'amalgama_ativo': true se houver amálgama; 'amalgama_elementos': "16, 46" (números FDI dos dentes com amálgama separados por vírgula).
+           * 'smart_dique_nitrilo', 'smart_oxigenio_nasal', 'smart_exaustor_vapor', 'smart_irrigacao_alta', 'smart_carvao_chlorella', 'smart_quelacao_vitc': true se citados ou se for protocolo SMART.
+           * 'implante_zirconia_ativo': true se houver indicação/planejamento de implante cerâmico; 'implante_elementos': "36" (dentes a implantar); 'implante_prf_ienxerto': true se citar PRF/L-PRF/I-PRF/Enxerto; 'implante_tipo_sistema': "Cerâmico Zircônia Metal-Free" (ou sistema citado).
+           * 'focos_cavitacao_ativo': true se houver cavitação/NICO/FDOK/osteonecrose; 'focos_descricao': texto descrevendo o foco; 'focos_tomografia_cbct': achados tomográficos (ex: "Área hipodensa trabecular em região de 38/48").
+           * 'terapia_neural_ativo': true se indicada; 'terapia_neural_locais': texto dos locais (ex: "Polos retromolares e foco 38 com Procaína 0,7%"); 'ozonioterapia_ativo': true se indicada; 'ozonio_modalidades': ["Insuflação Cavitacional", "Água Ozonizada (Irrigação)"]; 'atm_bruxismo_ativo': true se citado.
+           * 'suplemento_vit_d3_k2': true/false, 'suplemento_vit_c': true/false, 'suplemento_zinco_mg': true/false, 'suplemento_arnica_homeo': true/false, 'suplemento_coenzima_q10': true/false.
+           * 'observacoes_odonto_biologica': texto detalhado do planejamento cirúrgico e integrativo.
+           * 'odontograma': { "teeth": { [numeroDenteFDI]: { "id": number, "status": "amalgam"|"zirconia_implant"|"titanium_implant"|"endodontic"|"cavitation_nico"|"missing"|"caries"|"ceramic_crown"|"healthy", "notes": string, "biologicalPlan": string, "neuralTherapy": boolean } } }.
+             Exemplo: Dentes 16 e 46 amálgama -> { "16": { "id": 16, "status": "amalgam", "notes": "Amálgama oclusal - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" }, "46": { "id": 46, "status": "amalgam", "notes": "Amálgama extenso - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" } }.
+             Dente 36 ausente / implante zircônia -> { "36": { "id": 36, "status": "zirconia_implant", "notes": "Implante cerâmico Zircônia", "biologicalPlan": "Implante Cerâmico Metal-Free + PRF" } }.
+             Dente 38 siso extraído / foco NICO -> { "38": { "id": 38, "status": "cavitation_nico", "notes": "Cavitação NICO / FDOK", "biologicalPlan": "Curetagem + Ozonioterapia + Terapia Neural", "neuralTherapy": true } }.
+      7. CORREÇÃO DE TRANSCRIÇÃO:
          - Gere todos os textos em português médico impecável, formal e gramaticalmente perfeito.
 
       Extraia em formato JSON com a seguinte estrutura:
@@ -581,52 +595,54 @@ app.post("/api/process-clinical", async (req, res) => {
         "paciente_data_nascimento": "YYYY-MM-DD se mencionada",
         "resumo_formatado": "Resumo clínico estruturado e detalhado da consulta",
         "queixa_principal": "Queixa principal do paciente",
-        "exame_fisico": "Descrição textual detalhada do exame físico e neurológico",
+        "exame_fisico": "Descrição textual detalhada do exame físico e odontológico/neurológico",
         "hipotese_diagnostica": "Hipótese diagnóstica estruturada",
-        "conduta_plano_terapeutico": "Conduta médica, exames solicitados e orientações",
+        "conduta_plano_terapeutico": "Conduta clínica, exames solicitados e orientações",
         "prescricao": "Receituário formatado EXCLUSIVO de medicamentos/suplementos para o paciente tomar com horários e doses (NUNCA incluir resultados de exames laboratoriais aqui)",
         "sugestao_conduta": "Resumo executivo da conduta",
         "alertas_copiloto": ["Alertas clínicos ou interações"],
-        "especialidade": "Especialidade médica sugerida",
+        "especialidade": "Odontologia Biológica | Neurologia | Integrativa | Clínica Geral",
         "paciente_status": "Estável",
         "vitals": { "bpm": 75, "spo2": 98, "resp": 16, "pressao": "120/80" },
         "resumo_clinico": "Breve justificativa dos sinais vitais",
-        "mapeamento_corporal": [
-          { "x": 50, "y": 15, "side": "back", "label": "Dor Cervical" },
-          { "x": 80, "y": 55, "side": "front", "label": "Parestesia C6 D" }
-        ],
-        "dados_especialidade": {},
-        "exame_neurologico": {
-          "fascia": "típica",
-          "atitude": "ativa",
-          "dominancia": "D",
-          "marcha": "normal",
-          "escala_glasgow": 15,
-          "fluencia_verbal": "45-60",
-          "cognitivo": { "orient_temp": "Preservado", "orient_esp": "Preservado", "mem_imed": "Preservado", "calculo": "Preservado", "mem_evoc": "Preservado", "nomeacao": "Preservado", "repeticao": "Preservado", "leitura": "Preservado", "comando": "Preservado", "total_score": "" },
-          "nervos_cranianos": { "ii": "Preservado", "iii": "Preservado", "iv": "Preservado", "vi": "Preservado", "v": "Preservado", "vii": "Preservado", "viii": "Preservado", "ix": "Preservado", "x": "Preservado", "xi": "Preservado", "xii": "Preservado", "pupilas_d": "Isocórica", "pupilas_e": "Isocórica", "fundo_olho": "normal", "campo": "Preservado" },
-          "coordenacao": { "status": "normal", "lado": null, "index_nariz": false, "romberg": false, "calcanhar_joelho": false, "diadococinesia": false },
-          "reflexos_wexler": {
-            "biceps_d": "3+", "biceps_e": "2+", "estiloradial_d": "3+", "estiloradial_e": "2+", "patelar_d": "2+", "patelar_e": "2+", "aquileu_d": "2+", "aquileu_e": "2+", "axiais_face": "0", "grasping": "0", "groping": "0", "hoffmann": "0", "palmo_mentoniano": "0", "wartenberg": "0"
-          },
-          "dermatomos_marcardos": { "C6": "hipoestesia" },
-          "forca_muscular": {
-            "face": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
-            "lingua": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
-            "msd": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
-            "mse": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
-            "mid": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
-            "mie": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
-            "coluna": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" }
-          },
-          "sensibilidade": {
-            "cabeca": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
-            "torax": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
-            "mmss": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Hipoestesia C6 à D" },
-            "abdome": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
-            "mmii": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" }
+        "mapeamento_corporal": [],
+        "dados_especialidade": {
+          "amalgama_ativo": true,
+          "amalgama_elementos": "16, 46",
+          "smart_dique_nitrilo": true,
+          "smart_oxigenio_nasal": true,
+          "smart_exaustor_vapor": true,
+          "smart_irrigacao_alta": true,
+          "smart_carvao_chlorella": true,
+          "smart_quelacao_vitc": true,
+          "implante_zirconia_ativo": true,
+          "implante_elementos": "36",
+          "implante_prf_ienxerto": true,
+          "implante_tipo_sistema": "Cerâmico Zircônia Metal-Free",
+          "focos_cavitacao_ativo": true,
+          "focos_descricao": "Foco cavitacional NICO em região retromolar 38",
+          "focos_tomografia_cbct": "Área hipodensa trabecular em 38",
+          "terapia_neural_ativo": true,
+          "terapia_neural_locais": "Polos retromolares e dente 38 com Procaína 0,7%",
+          "ozonioterapia_ativo": true,
+          "ozonio_modalidades": ["Insuflação Cavitacional", "Água Ozonizada (Irrigação)"],
+          "atm_bruxismo_ativo": false,
+          "suplemento_vit_d3_k2": true,
+          "suplemento_vit_c": true,
+          "suplemento_zinco_mg": true,
+          "suplemento_arnica_homeo": true,
+          "suplemento_coenzima_q10": true,
+          "observacoes_odonto_biologica": "Protocolo SMART para amálgamas 16 e 46. Implante de Zircônia no 36 com PRF. Curetagem e ozônio no NICO 38 com Terapia Neural.",
+          "odontograma": {
+            "teeth": {
+              "16": { "id": 16, "status": "amalgam", "notes": "Amálgama oclusal - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" },
+              "46": { "id": 46, "status": "amalgam", "notes": "Amálgama extenso - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" },
+              "36": { "id": 36, "status": "zirconia_implant", "notes": "Ausência dental - Implante Zircônia", "biologicalPlan": "Implante Cerâmico Metal-Free + PRF" },
+              "38": { "id": 38, "status": "cavitation_nico", "notes": "Biointerferência NICO / FDOK", "biologicalPlan": "Curetagem + Ozonioterapia + Terapia Neural", "neuralTherapy": true }
+            }
           }
         },
+        "exame_neurologico": {},
         "checklist_integrativo": {
           "suplementos": { "coenzima_q10": "100 mg", "acido_folico": "400 mcg", "vit_b3_b6": "1.000 mcg" },
           "vitaminas_minerais": { "vit_d3": "10.000 UI", "ca_mg_zn": "250 mg" },
