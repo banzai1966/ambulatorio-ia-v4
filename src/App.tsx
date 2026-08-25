@@ -75,6 +75,7 @@ import PatientDossierView from './components/PatientDossierView';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
 import { SPECIALTIES } from './constants/specialties';
+import { getActiveClinicConfig } from './constants/clinicProfiles';
 import { 
   getOfflineRecords, 
   saveRecordLocally, 
@@ -290,39 +291,6 @@ export default function App() {
     }
     return false;
   });
-  const [clinicInfo, setClinicInfo] = useState<any>(null);
-  const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setCurrentHash(window.location.hash + window.location.search);
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('popstate', handleHashChange);
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-      window.removeEventListener('popstate', handleHashChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const loadClinicInfo = () => {
-      const saved = localStorage.getItem('clinic_info');
-      if (saved) {
-        setClinicInfo(JSON.parse(saved));
-      }
-    };
-    loadClinicInfo();
-    window.addEventListener('clinic_info_updated', loadClinicInfo);
-    return () => window.removeEventListener('clinic_info_updated', loadClinicInfo);
-  }, []);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showManageTeam, setShowManageTeam] = useState(savedActiveTab === 'equipe');
-  const [showFinancial, setShowFinancial] = useState(savedActiveTab === 'financeiro');
-  const [showDashboard, setShowDashboard] = useState(!savedActiveTab || savedActiveTab === 'dashboard');
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
-
   // Inicializa sessão de usuário a partir do localStorage para manter logado ao alternar abas (ex: n8n)
   const [user, setUser] = useState<{ email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string; avatar_url?: string } | null>(() => {
     if (typeof window !== 'undefined') {
@@ -344,6 +312,38 @@ export default function App() {
     }
     return null;
   });
+
+  const [clinicInfo, setClinicInfo] = useState<any>(null);
+  const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash + window.location.search);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadClinicInfo = () => {
+      const config = getActiveClinicConfig(user);
+      setClinicInfo(config);
+    };
+    loadClinicInfo();
+    window.addEventListener('clinic_info_updated', loadClinicInfo);
+    return () => window.removeEventListener('clinic_info_updated', loadClinicInfo);
+  }, [user]);
+
+  const [showHelp, setShowHelp] = useState(false);
+  const [showManageTeam, setShowManageTeam] = useState(savedActiveTab === 'equipe');
+  const [showFinancial, setShowFinancial] = useState(savedActiveTab === 'financeiro');
+  const [showDashboard, setShowDashboard] = useState(!savedActiveTab || savedActiveTab === 'dashboard');
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     // Ao voltar para a aba do Ambulatório vindo do n8n ou outra janela, restaura a sessão imediatamente
@@ -3426,7 +3426,7 @@ export default function App() {
 
               {/* Corpo com Scroll Suave */}
               <div className="p-6 sm:p-8 overflow-y-auto flex-1">
-                <ClinicSettings onClose={() => setShowClinicSettings(false)} />
+                <ClinicSettings currentUser={user} onClose={() => setShowClinicSettings(false)} />
               </div>
             </motion.div>
           </div>
@@ -3469,7 +3469,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
               >
-                <FinancialModule />
+                <FinancialModule currentUser={user} />
               </motion.div>
             ) : showDashboard ? (
               <motion.div

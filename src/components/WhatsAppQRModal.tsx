@@ -18,6 +18,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getActiveClinicConfig } from '../constants/clinicProfiles';
 
 interface WhatsAppQRModalProps {
   isOpen: boolean;
@@ -37,21 +38,34 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
+  const getEffectiveConfig = () => {
+    if (evolutionConfig && (evolutionConfig.instance || evolutionConfig.url)) {
+      return evolutionConfig;
+    }
+    const active = getActiveClinicConfig();
+    return {
+      url: active.evolution_url,
+      instance: active.evolution_instance,
+      apikey: active.evolution_apikey
+    };
+  };
+
   const getQueryParams = () => {
-    if (!evolutionConfig) return '';
+    const config = getEffectiveConfig();
     const params = new URLSearchParams();
-    if (evolutionConfig.url) params.append('evolution_url', evolutionConfig.url);
-    if (evolutionConfig.instance) params.append('evolution_instance', evolutionConfig.instance);
-    if (evolutionConfig.apikey) params.append('evolution_apikey', evolutionConfig.apikey);
+    if (config.url) params.append('evolution_url', config.url);
+    if (config.instance) params.append('evolution_instance', config.instance);
+    if (config.apikey) params.append('evolution_apikey', config.apikey);
     const str = params.toString();
     return str ? `?${str}` : '';
   };
 
   const getRequestBody = () => {
+    const config = getEffectiveConfig();
     return {
-      evolution_url: evolutionConfig?.url,
-      evolution_instance: evolutionConfig?.instance,
-      evolution_apikey: evolutionConfig?.apikey
+      evolution_url: config.url,
+      evolution_instance: config.instance,
+      evolution_apikey: config.apikey
     };
   };
 

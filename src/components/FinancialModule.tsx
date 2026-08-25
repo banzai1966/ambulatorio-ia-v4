@@ -1,26 +1,34 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   DollarSign, 
   TrendingUp, 
   TrendingDown, 
   Plus, 
-  FileText, 
-  Filter, 
   Calendar, 
   CreditCard, 
   CheckCircle, 
   Clock, 
   Printer, 
-  Download, 
   Trash2, 
   Search,
-  PieChart,
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  X
+  X,
+  AlertTriangle,
+  Sparkles,
+  Building2,
+  Stethoscope,
+  Brain,
+  ShieldAlert,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { 
+  getActiveClinicConfig, 
+  resolveDoctorKey, 
+  CLINIC_PROFILES_CONFIG 
+} from '../constants/clinicProfiles';
 
 export interface Transaction {
   id: string;
@@ -34,76 +42,31 @@ export interface Transaction {
   status: 'paid' | 'pending';
   date: string; // YYYY-MM-DD
   doctorName?: string;
+  doctorCouncil?: string;
+  doctorKey?: string;
   notes?: string;
 }
 
-const INITIAL_TRANSACTIONS: Transaction[] = [
-  {
-    id: '1',
-    type: 'income',
-    description: 'Consulta Neurológica de Rotina',
-    patientName: 'Carlos Eduardo Silva',
-    patientCpf: '123.456.789-00',
-    amount: 450.00,
-    category: 'Consulta Especializada',
-    paymentMethod: 'pix',
-    status: 'paid',
-    date: new Date().toISOString().split('T')[0],
-    doctorName: 'Dr. Marco Duarte',
-    notes: 'Pagamento via PIX no ato do atendimento.'
-  },
-  {
-    id: '2',
-    type: 'income',
-    description: 'Consulta de Medicina Integrativa',
-    patientName: 'Ana Maria Santos',
-    patientCpf: '987.654.321-11',
-    amount: 500.00,
-    category: 'Consulta Integrativa',
-    paymentMethod: 'credit_card',
-    status: 'paid',
-    date: new Date().toISOString().split('T')[0],
-    doctorName: 'Dra. Lucy Duarte'
-  },
-  {
-    id: '3',
-    type: 'income',
-    description: 'Atendimento Convênio SulAmérica',
-    patientName: 'Roberto Oliveira',
-    patientCpf: '456.789.123-22',
-    amount: 220.00,
-    category: 'Convênio Médico',
-    paymentMethod: 'health_insurance',
-    status: 'pending',
-    date: new Date().toISOString().split('T')[0],
-    doctorName: 'Dr. Marco Duarte'
-  },
-  {
-    id: '4',
-    type: 'expense',
-    description: 'Insumos Médicos e Material de Descarte',
-    amount: 680.00,
-    category: 'Insumos',
-    paymentMethod: 'pix',
-    status: 'paid',
-    date: new Date().toISOString().split('T')[0]
-  },
-  {
-    id: '5',
-    type: 'expense',
-    description: 'Licença do Sistema / Software Clínico',
-    amount: 350.00,
-    category: 'Tecnologia',
-    paymentMethod: 'credit_card',
-    status: 'paid',
-    date: new Date().toISOString().split('T')[0]
-  }
-];
+interface FinancialModuleProps {
+  currentUser?: any;
+}
 
-export default function FinancialModule() {
+export default function FinancialModule({ currentUser }: FinancialModuleProps) {
+  const activeDoctorKey = useMemo(() => resolveDoctorKey(currentUser), [currentUser]);
+  const activeClinic = useMemo(() => getActiveClinicConfig(currentUser), [currentUser]);
+
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('ambulatorio_financial_transactions');
-    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ambulatorio_financial_transactions');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Erro ao ler transações salvas:', e);
+        }
+      }
+    }
+    return [];
   });
 
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
@@ -118,19 +81,34 @@ export default function FinancialModule() {
   const [newPatientName, setNewPatientName] = useState('');
   const [newPatientCpf, setNewPatientCpf] = useState('');
   const [newAmount, setNewAmount] = useState('');
-  const [newCategory, setNewCategory] = useState('Consulta Especializada');
+  const [newCategory, setNewCategory] = useState(
+    activeDoctorKey === 'dra_lucy' ? 'Odontologia Biológica' : 'Consulta Especializada'
+  );
   const [newPaymentMethod, setNewPaymentMethod] = useState<'pix' | 'credit_card' | 'debit_card' | 'cash' | 'health_insurance'>('pix');
   const [newStatus, setNewStatus] = useState<'paid' | 'pending'>('paid');
-  const [newDoctorName, setNewDoctorName] = useState('Dr. Marco Duarte');
+  const [newDoctorKey, setNewDoctorKey] = useState<string>(activeDoctorKey);
+
+  // In-UI Confirmation Modals (evita bloqueio de window.confirm em iframe)
+  const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
+  const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
 
   // Receipt Modal State
   const [selectedReceipt, setSelectedReceipt] = useState<Transaction | null>(null);
 
+  // Sincronização de persistência
   useEffect(() => {
-    localStorage.setItem('ambulatorio_financial_transactions', JSON.stringify(transactions));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ambulatorio_financial_transactions', JSON.stringify(transactions));
+    }
   }, [transactions]);
 
-  // Calculations
+  // Atualiza default do médico se currentUser mudar
+  useEffect(() => {
+    setNewDoctorKey(activeDoctorKey);
+    setNewCategory(activeDoctorKey === 'dra_lucy' ? 'Odontologia Biológica' : 'Consulta Especializada');
+  }, [activeDoctorKey]);
+
+  // Cálculos financeiros
   const filteredTransactions = transactions.filter(t => {
     const matchesMonth = t.date.startsWith(selectedMonth);
     const matchesType = filterType === 'all' || t.type === filterType;
@@ -138,7 +116,8 @@ export default function FinancialModule() {
     const matchesSearch = searchTerm === '' || 
       t.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.patientName && t.patientName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      t.category.toLowerCase().includes(searchTerm.toLowerCase());
+      t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.doctorName && t.doctorName.toLowerCase().includes(searchTerm.toLowerCase()));
     
     return matchesMonth && matchesType && matchesStatus && matchesSearch;
   });
@@ -164,28 +143,32 @@ export default function FinancialModule() {
       return;
     }
 
-    const val = parseFloat(newAmount.replace(',', '.'));
+    const val = parseFloat(newAmount.replace(/\./g, '').replace(',', '.'));
     if (isNaN(val) || val <= 0) {
-      toast.error('Informe um valor válido.');
+      toast.error('Informe um valor numérico válido.');
       return;
     }
 
+    const docConfig = CLINIC_PROFILES_CONFIG[newDoctorKey] || activeClinic;
+
     const item: Transaction = {
-      id: Date.now().toString(),
+      id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 7),
       type: newType,
-      description: newDesc,
-      patientName: newType === 'income' ? newPatientName : undefined,
-      patientCpf: newType === 'income' ? newPatientCpf : undefined,
+      description: newDesc.trim(),
+      patientName: newType === 'income' ? newPatientName.trim() : undefined,
+      patientCpf: newType === 'income' ? newPatientCpf.trim() : undefined,
       amount: val,
       category: newCategory,
       paymentMethod: newPaymentMethod,
       status: newStatus,
       date: new Date().toISOString().split('T')[0],
-      doctorName: newType === 'income' ? newDoctorName : undefined,
+      doctorName: newType === 'income' ? docConfig.professional_name : undefined,
+      doctorCouncil: newType === 'income' ? docConfig.council_badge : undefined,
+      doctorKey: newType === 'income' ? newDoctorKey : undefined,
     };
 
     setTransactions([item, ...transactions]);
-    toast.success(newType === 'income' ? 'Receita lançada com sucesso!' : 'Despesa registrada com sucesso!');
+    toast.success(newType === 'income' ? 'Receita registrada com sucesso!' : 'Despesa lançada com sucesso!');
     setIsAddModalOpen(false);
     resetForm();
   };
@@ -195,7 +178,7 @@ export default function FinancialModule() {
     setNewPatientName('');
     setNewPatientCpf('');
     setNewAmount('');
-    setNewCategory('Consulta Especializada');
+    setNewCategory(activeDoctorKey === 'dra_lucy' ? 'Odontologia Biológica' : 'Consulta Especializada');
     setNewPaymentMethod('pix');
     setNewStatus('paid');
   };
@@ -211,58 +194,94 @@ export default function FinancialModule() {
     }));
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este lançamento financeiro?')) {
-      setTransactions(transactions.filter(t => t.id !== id));
-      toast.success('Lançamento removido.');
+  // Confirmação e Exclusão Segura
+  const confirmDelete = () => {
+    if (!transactionToDelete) return;
+    setTransactions(prev => prev.filter(t => t.id !== transactionToDelete.id));
+    toast.success(`Lançamento "${transactionToDelete.description}" excluído.`);
+    setTransactionToDelete(null);
+  };
+
+  const confirmClearAll = () => {
+    setTransactions([]);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ambulatorio_financial_transactions', JSON.stringify([]));
     }
+    toast.success('Todos os lançamentos financeiros foram limpos.');
+    setIsClearAllModalOpen(false);
   };
 
   const getMethodLabel = (method: Transaction['paymentMethod']) => {
     switch(method) {
       case 'pix': return 'PIX';
-      case 'credit_card': return 'Cartão Crédito';
-      case 'debit_card': return 'Cartão Débito';
+      case 'credit_card': return 'Cartão de Crédito';
+      case 'debit_card': return 'Cartão de Débito';
       case 'cash': return 'Dinheiro';
       case 'health_insurance': return 'Convênio';
     }
   };
 
-  // Convert number to words in Portuguese (simple for receipts)
   const numberToWordsBrl = (num: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-2.5 bg-blue-100 text-blue-700 rounded-2xl">
-              <Wallet className="w-6 h-6" />
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className={`p-3 rounded-2xl text-white shadow-xs ${
+            activeDoctorKey === 'dra_lucy' ? 'bg-emerald-600' : 'bg-blue-600'
+          }`}>
+            <Wallet className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-black text-slate-800">Financeiro & Caixa</h1>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                activeDoctorKey === 'dra_lucy'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                  : 'bg-blue-50 border-blue-300 text-blue-800'
+              }`}>
+                {activeClinic.professional_name} ({activeClinic.council_badge})
+              </span>
             </div>
-            <div>
-              <h1 className="text-xl font-black text-slate-800">Módulo Financeiro & Caixa</h1>
-              <p className="text-xs text-slate-500">Gestão simplificada de recebimentos, despesas e emissão de recibos para convênio/I.R.</p>
-            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Gestão de receitas, despesas, convênios e emissão de recibos timbrados.
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-2xl">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Seletor de Mês */}
+          <div className="flex items-center gap-2 bg-slate-100/90 px-3.5 py-2 rounded-2xl border border-slate-200">
             <Calendar className="w-4 h-4 text-slate-500" />
             <input 
               type="month" 
               value={selectedMonth} 
               onChange={(e) => setSelectedMonth(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-700 outline-none"
+              className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer"
             />
           </div>
 
+          {/* Botão Limpar Tudo (se houver registros) */}
+          {transactions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsClearAllModalOpen(true)}
+              className="px-3.5 py-2.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-colors border border-slate-200 cursor-pointer"
+              title="Limpar todos os registros e zerar o caixa"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Limpar Caixa</span>
+            </button>
+          )}
+
+          {/* Botão Novo Lançamento */}
           <button
+            type="button"
             onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all hover:scale-105"
+            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>Novo Lançamento</span>
@@ -270,10 +289,10 @@ export default function FinancialModule() {
         </div>
       </div>
 
-      {/* Metric Cards */}
+      {/* Cards de Métricas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Entradas */}
-        <div className="p-5 bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 rounded-3xl relative overflow-hidden">
+        <div className="p-5 bg-gradient-to-br from-sky-50 to-blue-50/70 border border-sky-100 rounded-3xl relative overflow-hidden">
           <div className="flex justify-between items-start mb-2">
             <span className="text-xs font-bold text-sky-900 uppercase tracking-wider">Receitas Recebidas</span>
             <div className="p-2 bg-sky-500/10 text-sky-600 rounded-xl">
@@ -284,13 +303,13 @@ export default function FinancialModule() {
             {totalIncome.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </div>
           <div className="text-[11px] text-sky-700 flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" />
+            <CheckCircle className="w-3 h-3 text-sky-600" />
             <span>Confirmado em caixa</span>
           </div>
         </div>
 
         {/* Despesas */}
-        <div className="p-5 bg-gradient-to-br from-rose-50 to-red-50 border border-rose-100 rounded-3xl relative overflow-hidden">
+        <div className="p-5 bg-gradient-to-br from-rose-50 to-red-50/70 border border-rose-100 rounded-3xl relative overflow-hidden">
           <div className="flex justify-between items-start mb-2">
             <span className="text-xs font-bold text-rose-800 uppercase tracking-wider">Despesas / Saídas</span>
             <div className="p-2 bg-rose-500/10 text-rose-600 rounded-xl">
@@ -307,14 +326,14 @@ export default function FinancialModule() {
         </div>
 
         {/* Saldo Líquido */}
-        <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl relative overflow-hidden shadow-xl">
+        <div className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-3xl relative overflow-hidden shadow-md">
           <div className="flex justify-between items-start mb-2">
             <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Saldo Líquido</span>
             <div className="p-2 bg-white/10 text-sky-400 rounded-xl">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
-          <div className={`text-2xl font-black mb-1 ${netBalance >= 0 ? 'text-sky-400' : 'text-rose-400'}`}>
+          <div className={`text-2xl font-black mb-1 ${netBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
             {netBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
           </div>
           <div className="text-[11px] text-slate-400">
@@ -323,7 +342,7 @@ export default function FinancialModule() {
         </div>
 
         {/* A Receber / Pendente */}
-        <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-100 rounded-3xl relative overflow-hidden">
+        <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50/70 border border-amber-100 rounded-3xl relative overflow-hidden">
           <div className="flex justify-between items-start mb-2">
             <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Pendente / A Receber</span>
             <div className="p-2 bg-amber-500/10 text-amber-600 rounded-xl">
@@ -340,50 +359,57 @@ export default function FinancialModule() {
         </div>
       </div>
 
-      {/* Filters & Table Section */}
-      <div className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm space-y-4">
+      {/* Tabela de Lançamentos & Filtros */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <div className="relative flex-1 md:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-              <input 
-                type="text" 
-                placeholder="Buscar paciente ou descrição..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              />
-            </div>
+          <div className="relative w-full md:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" 
+              placeholder="Buscar por paciente, descrição ou categoria..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-none"
+            />
           </div>
 
           <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto">
-            {/* Type filter */}
+            {/* Filtro de Tipo */}
             <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold">
               <button 
+                type="button"
                 onClick={() => setFilterType('all')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${filterType === 'all' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  filterType === 'all' ? 'bg-white text-slate-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
                 Todos
               </button>
               <button 
+                type="button"
                 onClick={() => setFilterType('income')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${filterType === 'income' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  filterType === 'income' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
                 Receitas
               </button>
               <button 
+                type="button"
                 onClick={() => setFilterType('expense')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${filterType === 'expense' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-500'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  filterType === 'expense' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
                 Despesas
               </button>
             </div>
 
-            {/* Status Filter */}
+            {/* Filtro de Status */}
             <select 
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="p-2 text-xs font-bold bg-slate-100 border-none rounded-xl text-slate-700 focus:outline-none"
+              className="px-3 py-2 text-xs font-bold bg-slate-100 border border-slate-200 rounded-xl text-slate-700 focus:outline-none cursor-pointer"
             >
               <option value="all">Todos os Status</option>
               <option value="paid">Confirmados / Pagos</option>
@@ -392,25 +418,29 @@ export default function FinancialModule() {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="overflow-x-auto">
+        {/* Tabela de Dados */}
+        <div className="overflow-x-auto rounded-2xl border border-slate-100">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-100">
-                <th className="p-3.5 rounded-l-xl">Data</th>
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+                <th className="p-3.5">Data</th>
                 <th className="p-3.5">Descrição / Paciente</th>
                 <th className="p-3.5">Categoria</th>
                 <th className="p-3.5">Forma</th>
                 <th className="p-3.5">Valor</th>
                 <th className="p-3.5">Status</th>
-                <th className="p-3.5 text-right rounded-r-xl">Ações</th>
+                <th className="p-3.5 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
-                    Nenhum lançamento encontrado para os filtros selecionados.
+                  <td colSpan={7} className="p-10 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <Wallet className="w-8 h-8 text-slate-300 stroke-1" />
+                      <p className="font-medium text-slate-500">Nenhum lançamento financeiro neste período.</p>
+                      <p className="text-[11px] text-slate-400">Clique em "Novo Lançamento" para registrar receitas ou despesas.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -423,14 +453,21 @@ export default function FinancialModule() {
                     <td className="p-3.5">
                       <div className="font-bold text-slate-800">{t.description}</div>
                       {t.patientName && (
-                        <div className="text-[11px] text-indigo-600 font-medium flex items-center gap-1">
-                          👤 {t.patientName} {t.patientCpf && `(${t.patientCpf})`}
+                        <div className="text-[11px] text-indigo-600 font-medium flex items-center gap-1 mt-0.5">
+                          <span>👤</span>
+                          <span>{t.patientName}</span>
+                          {t.patientCpf && <span className="text-slate-400">({t.patientCpf})</span>}
+                        </div>
+                      )}
+                      {t.doctorName && (
+                        <div className="text-[10px] text-slate-400">
+                          {t.doctorName} {t.doctorCouncil && `• ${t.doctorCouncil}`}
                         </div>
                       )}
                     </td>
 
                     <td className="p-3.5">
-                      <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-[11px] font-bold">
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold">
                         {t.category}
                       </span>
                     </td>
@@ -447,33 +484,38 @@ export default function FinancialModule() {
 
                     <td className="p-3.5">
                       <button
+                        type="button"
                         onClick={() => toggleStatus(t.id)}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition-transform hover:scale-105 ${
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 transition-transform hover:scale-105 cursor-pointer ${
                           t.status === 'paid'
                             ? 'bg-blue-50 text-blue-700 border border-blue-200'
                             : 'bg-amber-100 text-amber-800'
                         }`}
+                        title="Clique para alternar entre Pago e Pendente"
                       >
                         {t.status === 'paid' ? <CheckCircle className="w-3 h-3 text-blue-600" /> : <Clock className="w-3 h-3" />}
                         <span>{t.status === 'paid' ? 'Pago' : 'Pendente'}</span>
                       </button>
                     </td>
 
-                    <td className="p-3.5 text-right whitespace-nowrap space-x-1">
+                    <td className="p-3.5 text-right whitespace-nowrap space-x-1.5">
                       {t.type === 'income' && (
                         <button
+                          type="button"
                           onClick={() => setSelectedReceipt(t)}
-                          title="Emitir Recibo Médico em PDF / Imprimir"
-                          className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
+                          title="Emitir Recibo em PDF / Imprimir"
+                          className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
                         >
                           <Printer className="w-4 h-4" />
                         </button>
                       )}
 
+                      {/* Botão de Exclusão (Abre modal de confirmação no próprio app) */}
                       <button
-                        onClick={() => handleDelete(t.id)}
-                        title="Excluir"
-                        className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors"
+                        type="button"
+                        onClick={() => setTransactionToDelete(t)}
+                        title="Excluir Lançamento"
+                        className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -486,48 +528,78 @@ export default function FinancialModule() {
         </div>
       </div>
 
-      {/* Modal Novo Lançamento */}
+      {/* MODAL NOVO LANÇAMENTO */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-blue-600" />
                 Novo Lançamento Financeiro
               </h3>
               <button 
+                type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-full"
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddTransaction} className="space-y-3">
-              {/* Type toggle */}
+            <form onSubmit={handleAddTransaction} className="space-y-3.5">
+              {/* Toggle de Tipo */}
               <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-2xl text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setNewType('income')}
-                  className={`py-2 rounded-xl transition-all ${newType === 'income' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'}`}
+                  className={`py-2 rounded-xl transition-all cursor-pointer ${
+                    newType === 'income' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600'
+                  }`}
                 >
                   🔵 Receita / Entrada
                 </button>
                 <button
                   type="button"
                   onClick={() => setNewType('expense')}
-                  className={`py-2 rounded-xl transition-all ${newType === 'expense' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600'}`}
+                  className={`py-2 rounded-xl transition-all cursor-pointer ${
+                    newType === 'expense' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-600'
+                  }`}
                 >
                   🔴 Despesa / Saída
                 </button>
               </div>
+
+              {/* Seletor de Profissional Responsável */}
+              {newType === 'income' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Profissional / Atendimento</label>
+                  <select
+                    value={newDoctorKey}
+                    onChange={(e) => {
+                      const key = e.target.value;
+                      setNewDoctorKey(key);
+                      if (key === 'dra_lucy') setNewCategory('Odontologia Biológica');
+                      else if (key === 'dr_carlos') setNewCategory('Consulta Neurológica');
+                    }}
+                    className="w-full p-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  >
+                    <option value="dra_lucy">Dra. Lucy Morata (CRO/SP 98.412) - Odontologia Biológica</option>
+                    <option value="dr_carlos">Dr. Carlos Morato (CRM/SP 145.892) - Neurologia & Integrativa</option>
+                    <option value="marco_admin">Marco Duarte - Ambulatório Geral</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Descrição do Serviço / Conta *</label>
                 <input 
                   type="text" 
                   required
-                  placeholder={newType === 'income' ? "Ex: Consulta Neurológica de Avaliação" : "Ex: Conta de Luz / Material Médico"}
+                  placeholder={
+                    newType === 'income' 
+                      ? (newDoctorKey === 'dra_lucy' ? "Ex: Protocolo Remoção Amálgama SMART" : "Ex: Consulta Neurológica de Avaliação") 
+                      : "Ex: Insumos Odontológicos / Conta de Energia / Software"
+                  }
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -599,19 +671,22 @@ export default function FinancialModule() {
                   >
                     {newType === 'income' ? (
                       <>
+                        <option value="Odontologia Biológica">Odontologia Biológica</option>
+                        <option value="Cirurgia Cerâmica Zircônia">Cirurgia Cerâmica Zircônia</option>
+                        <option value="Remoção Segura SMART">Remoção Segura SMART</option>
+                        <option value="Terapia Neural & Ozônio">Terapia Neural & Ozônio</option>
                         <option value="Consulta Especializada">Consulta Especializada</option>
                         <option value="Consulta Integrativa">Consulta Integrativa</option>
                         <option value="Exame Neurológico">Exame Neurológico</option>
-                        <option value="Procedimento Odontológico">Procedimento Odontológico</option>
                         <option value="Convênio Médico">Convênio Médico</option>
                         <option value="Outros">Outros</option>
                       </>
                     ) : (
                       <>
-                        <option value="Insumos">Insumos Médicos</option>
+                        <option value="Insumos Odonto/Médicos">Insumos Odonto / Médicos</option>
                         <option value="Tecnologia">Tecnologia & Software</option>
                         <option value="Aluguel">Aluguel / Condomínio</option>
-                        <option value="Pessoal">Salários / Pessoal</option>
+                        <option value="Equipe">Salários / Pessoal</option>
                         <option value="Outros">Outras Despesas</option>
                       </>
                     )}
@@ -635,13 +710,13 @@ export default function FinancialModule() {
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-600/20 cursor-pointer"
                 >
                   Salvar Lançamento
                 </button>
@@ -651,30 +726,137 @@ export default function FinancialModule() {
         </div>
       )}
 
-      {/* Modal de Impressão de Recibo Médico */}
+      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO INDIVIDUAL */}
+      {transactionToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-3 bg-rose-100 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-800">Excluir Lançamento</h3>
+                <p className="text-xs text-slate-500">Confirmação de exclusão</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1 text-xs">
+              <p className="font-bold text-slate-800">{transactionToDelete.description}</p>
+              {transactionToDelete.patientName && (
+                <p className="text-slate-600">Paciente: {transactionToDelete.patientName}</p>
+              )}
+              <p className={`font-bold ${transactionToDelete.type === 'income' ? 'text-blue-600' : 'text-rose-600'}`}>
+                Valor: {numberToWordsBrl(transactionToDelete.amount)}
+              </p>
+              <p className="text-[11px] text-slate-400">Data: {new Date(transactionToDelete.date + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              Tem certeza de que deseja remover este registro financeiro? Esta ação não poderá ser desfeita.
+            </p>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setTransactionToDelete(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE LIMPAR TUDO / ZERAR CAIXA */}
+      {isClearAllModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="p-3 bg-amber-100 rounded-2xl">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-800">Limpar Todo o Caixa</h3>
+                <p className="text-xs text-slate-500">Zerar histórico financeiro</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Você está prestes a remover <strong>todos os lançamentos financeiros</strong> atuais do sistema para iniciar do zero. Deseja continuar?
+            </p>
+
+            <div className="flex gap-2 justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearAllModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmClearAll}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                Sim, Limpar Tudo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE IMPRESSÃO DE RECIBO PROFISSIONAL TIMBRADO */}
       {selectedReceipt && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl p-8 space-y-6 animate-in fade-in zoom-in-95 print:p-0 print:shadow-none print:w-full print:max-w-none">
             <div className="flex justify-between items-start border-b border-slate-200 pb-4 print:hidden">
               <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
                 <Printer className="w-5 h-5 text-indigo-600" />
-                Recibo Médico para Paciente
+                Recibo Profissional para Paciente
               </h3>
-              <button onClick={() => setSelectedReceipt(null)} className="p-1 text-slate-400 hover:text-slate-600">
+              <button 
+                type="button"
+                onClick={() => setSelectedReceipt(null)} 
+                className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Template do Recibo */}
+            {/* Template do Recibo Timbrado */}
             <div className="border-2 border-slate-800 p-8 rounded-2xl space-y-6 text-slate-800 bg-white">
               <div className="text-center border-b-2 border-slate-800 pb-4">
-                <h1 className="text-xl font-black uppercase tracking-wider">AMBULATÓRIO IA & SAÚDE INTEGRATIVA</h1>
-                <p className="text-xs text-slate-600 font-medium">Clínica Médica Especializada • Neurologia & Medicina Integrativa</p>
-                <p className="text-[10px] text-slate-500">Rua das Clínicas, 1000 - Centro • Tel: (11) 99999-8888</p>
+                <h1 className="text-xl font-black uppercase tracking-wider">
+                  {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
+                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].name
+                    : activeClinic.name}
+                </h1>
+                <p className="text-xs text-slate-600 font-medium">
+                  {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
+                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].slogan
+                    : activeClinic.slogan}
+                </p>
+                <p className="text-[10px] text-slate-500">
+                  {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
+                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].address
+                    : activeClinic.address} • Tel: {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
+                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].phone
+                    : activeClinic.phone}
+                </p>
               </div>
 
               <div className="text-center">
-                <span className="text-lg font-black underline tracking-widest uppercase">R E C I B O   M É D I C O</span>
+                <span className="text-lg font-black underline tracking-widest uppercase">
+                  R E C I B O
+                </span>
                 <div className="text-right text-xs font-bold mt-2">
                   VALOR: <span className="text-base font-black">{numberToWordsBrl(selectedReceipt.amount)}</span>
                 </div>
@@ -701,16 +883,21 @@ export default function FinancialModule() {
                 </p>
                 <div className="pt-10 flex flex-col items-center">
                   <div className="w-64 border-b border-slate-800 mb-1"></div>
-                  <p className="text-xs font-bold">{selectedReceipt.doctorName || 'Dr. Marco Antônio Duarte'}</p>
-                  <p className="text-[10px] text-slate-600">Médico Responsável • CRM/SP 123.456</p>
+                  <p className="text-xs font-bold">
+                    {selectedReceipt.doctorName || activeClinic.professional_name}
+                  </p>
+                  <p className="text-[10px] text-slate-600">
+                    Profissional Responsável • {selectedReceipt.doctorCouncil || activeClinic.council_badge}
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end gap-3 print:hidden">
               <button
+                type="button"
                 onClick={() => window.print()}
-                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-600/20 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Imprimir Recibo</span>
