@@ -18,6 +18,9 @@ const getGeminiKey = () => {
 export async function generateClinicalSummary(messages: any[]): Promise<ClinicalSummary> {
   try {
     const response = await axios.post('/api/generate-summary', { messages });
+    if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+      throw new Error("SPA Fallback returned HTML instead of API JSON");
+    }
     return response.data;
   } catch (error: any) {
     console.warn("[IA] Falha no backend, tentando processamento local (Frontend)...");
@@ -62,6 +65,9 @@ export async function processClinicalInput(
 ): Promise<any> {
   try {
     const response = await axios.post('/api/process-clinical', { input, examMode, reason, specialtyContext });
+    if (typeof response.data === 'string' && response.data.trim().startsWith('<')) {
+      throw new Error("SPA Fallback returned HTML instead of API JSON");
+    }
     return response.data;
   } catch (error: any) {
     console.warn("[IA] Falha no backend, tentando processamento local (Frontend)...");
