@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import axios from "axios";
 import { createProxyMiddleware } from "http-proxy-middleware";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 dotenv.config();
 
@@ -121,16 +121,19 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
   const key = getGeminiKey();
   if (!key) throw new Error("API_KEY_MISSING");
 
-  const genAI = new GoogleGenerativeAI(key);
+  const ai = new GoogleGenAI({ 
+    apiKey: key,
+    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+  });
   
   const searchDoctorsTool = {
     name: "searchDoctors",
     description: "Busca médicos disponíveis no sistema por especialidade ou nome.",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        specialty: { type: "STRING", description: "A especialidade médica." },
-        name: { type: "STRING", description: "O nome do médico (opcional)." }
+        specialty: { type: Type.STRING, description: "A especialidade médica." },
+        name: { type: Type.STRING, description: "O nome do médico (opcional)." }
       }
     }
   };
@@ -139,10 +142,10 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
     name: "getAvailableSlots",
     description: "Busca horários disponíveis para um médico específico.",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        doctorId: { type: "STRING", description: "O ID único do médico." },
-        date: { type: "STRING", description: "Formato YYYY-MM-DD" }
+        doctorId: { type: Type.STRING, description: "O ID único do médico." },
+        date: { type: Type.STRING, description: "Formato YYYY-MM-DD" }
       },
       required: ["doctorId", "date"]
     }
@@ -152,15 +155,15 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
     name: "requestAppointment",
     description: "Registra uma solicitação de agendamento.",
     parameters: {
-      type: "OBJECT",
+      type: Type.OBJECT,
       properties: {
-        patientName: { type: "STRING" },
-        phone: { type: "STRING" },
-        doctorId: { type: "STRING" },
-        doctorName: { type: "STRING" },
-        date: { type: "STRING" },
-        time: { type: "STRING" },
-        specialty: { type: "STRING" }
+        patientName: { type: Type.STRING },
+        phone: { type: Type.STRING },
+        doctorId: { type: Type.STRING },
+        doctorName: { type: Type.STRING },
+        date: { type: Type.STRING },
+        time: { type: Type.STRING },
+        specialty: { type: Type.STRING }
       },
       required: ["patientName", "phone", "doctorId", "doctorName", "date", "time", "specialty"]
     }
@@ -170,25 +173,28 @@ async function runAnalyzeIntent(message: string, history: any[] = []) {
   Seu objetivo é auxiliar a equipe médica e de recepção, analisando solicitações de pacientes e organizando informações.
   REGRAS ABSOLUTAS: 1. Você NÃO responde diretamente ao paciente. 2. Analise a intenção e use ferramentas. 3. Sugestões curtas e profissionais.`;
 
-  const model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-pro",
-    systemInstruction,
-    tools: [{ 
-      functionDeclarations: [
-        searchDoctorsTool as any, 
-        getAvailableSlotsTool as any, 
-        requestAppointmentTool as any
-      ] 
-    }]
-  });
+  const contents: any[] = history.length > 0 
+    ? history 
+    : [{ role: 'user', parts: [{ text: message }] }];
 
-  const contents = history.length > 0 ? history : [{ role: 'user', parts: [{ text: message }] }];
-  const result = await model.generateContent({ contents });
-  const response = result.response;
+  const response = await ai.models.generateContent({
+    model: "gemini-3.7-flash",
+    contents,
+    config: {
+      systemInstruction,
+      tools: [{ 
+        functionDeclarations: [
+          searchDoctorsTool as any, 
+          getAvailableSlotsTool as any, 
+          requestAppointmentTool as any
+        ] 
+      }]
+    }
+  });
   
   return {
-    text: response.text() || "",
-    functionCalls: response.functionCalls() || [],
+    text: response.text || "",
+    functionCalls: response.functionCalls || [],
   };
 }
 
@@ -667,10 +673,9 @@ app.post("/api/process-clinical", async (req, res) => {
       return res.status(500).json({ error: "API_KEY_MISSING" });
     }
 
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      generationConfig: { responseMimeType: "application/json" }
+    const ai = new GoogleGenAI({ 
+      apiKey: key,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
     const now = new Date();
@@ -804,21 +809,41 @@ app.post("/api/process-clinical", async (req, res) => {
       Schema Checklist Disponível:
       ${checklistSchema}`;
 
-    let parts: any[];
+    let contents: any;
     if (typeof input === 'string') {
-      parts = [{ text: `${basePrompt}\n\nRelato:\n${input}` }];
+      contents = [{ parts: [{ text: `${basePrompt}\n\nRelato:\n${input}` }] }];
+    } else if (input && input.data) {
+      contents = [{
+        parts: [
+          { text: basePrompt },
+          { 
+            inlineData: {
+              data: input.data,
+              mimeType: input.mimeType || 'audio/webm'
+            } 
+          }
+        ]
+      }];
     } else {
-      parts = [
-        { text: basePrompt },
-        { inlineData: input }
-      ];
+      return res.status(400).json({ error: "Entrada inválida" });
     }
 
-    const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
-    const response = result.response;
-    const responseText = response.text() || "{}";
-    console.log("[GEMINI] Resposta bruta:", responseText);
-    res.json(JSON.parse(responseText));
+    const response = await ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const responseText = response.text || "{}";
+    const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
+    console.log("[GEMINI] Resposta gerada:", cleaned.slice(0, 150));
+    let parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) {
+      parsed = parsed.length > 0 ? parsed[0] : {};
+    }
+    res.json(parsed);
   } catch (err: any) {
     console.error("[GEMINI] ❌ Erro no processamento:", err.message);
     res.status(500).json({ error: err.message });
@@ -834,14 +859,13 @@ app.post("/api/generate-summary", async (req, res) => {
       return res.status(500).json({ error: "API_KEY_MISSING" });
     }
 
-    const genAI = new GoogleGenerativeAI(key);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash-lite",
-      generationConfig: { responseMimeType: "application/json" }
+    const ai = new GoogleGenAI({ 
+      apiKey: key,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     });
 
     // Prepara a conversa em texto
-    const conversationText = messages
+    const conversationText = (messages || [])
       .map((m: any) => `${m.direcao === 'recebida' ? 'Paciente' : 'Médico'}: ${m.mensagem || (m.audioData ? '[Áudio enviado]' : '[Mídia]')}`)
       .join('\n');
 
@@ -864,7 +888,7 @@ app.post("/api/generate-summary", async (req, res) => {
     ];
 
     // Adiciona os áudios como partes multimodais
-    messages.forEach((m: any) => {
+    (messages || []).forEach((m: any) => {
       if (m.audioData && m.mimeType) {
         parts.push({
           inlineData: {
@@ -875,9 +899,21 @@ app.post("/api/generate-summary", async (req, res) => {
       }
     });
 
-    const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
-    const response = result.response;
-    res.json(JSON.parse(response.text() || "{}"));
+    const response = await ai.models.generateContent({
+      model: "gemini-3.7-flash",
+      contents: [{ parts }],
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const responseText = response.text || "{}";
+    const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
+    let parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) {
+      parsed = parsed.length > 0 ? parsed[0] : {};
+    }
+    res.json(parsed);
   } catch (err: any) {
     console.error("[GEMINI] ❌ Erro no resumo:", err.message);
     res.status(500).json({ error: err.message });

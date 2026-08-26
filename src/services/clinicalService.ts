@@ -37,7 +37,7 @@ export async function generateClinicalSummary(messages: any[]): Promise<Clinical
       const prompt = `Analise a conversa e gere um JSON com as chaves: queixaPrincipal, sintomas (lista), medicamentos (lista), alergias (lista), historicoFamiliar, sugestaoConduta, prescricao.\n\nConversa:\n${conversationText}`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.7-flash",
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
@@ -212,7 +212,7 @@ export async function processClinicalInput(
       }
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3.7-flash",
         contents,
         config: { responseMimeType: "application/json" }
       });
