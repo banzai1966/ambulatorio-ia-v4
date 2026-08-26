@@ -382,6 +382,15 @@ export default function App() {
         if (newUser.avatar_url && newUser.email) {
           localStorage.setItem(`ambulatorio_user_avatar_${newUser.email.toLowerCase().trim()}`, newUser.avatar_url);
         }
+        // Sincroniza imediatamente o modo clínico correto conforme o profissional
+        const docKey = resolveDoctorKey(newUser.email, newUser.full_name);
+        if (docKey === 'dr_carlos') {
+          localStorage.setItem('clinic_active_doctor_id', 'dr_carlos');
+          setExamMode('neurological');
+        } else if (docKey === 'dra_lucy') {
+          localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+          setExamMode('biological_dentistry');
+        }
       } else {
         localStorage.removeItem('ambulatorio_user_session');
       }
@@ -410,7 +419,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [isWebView, setIsWebView] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
-  const [examMode, setExamMode] = useState<string>('standard');
+  const [examMode, setExamMode] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedDoc = localStorage.getItem('clinic_active_doctor_id');
+      if (savedDoc === 'dra_lucy') return 'biological_dentistry';
+      if (savedDoc === 'dr_carlos') return 'neurological';
+    }
+    return 'neurological';
+  });
   const [specialtyData, setSpecialtyData] = useState<any>({});
   const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
   const [clinicalSummary, setClinicalSummary] = useState<ClinicalSummary | null>(null);
@@ -735,12 +751,18 @@ export default function App() {
           // Só atualiza se houver mudança real para evitar loops
           if (!user || user.id !== authUser.id || user.role !== role || user.status !== status) {
             console.log("Atualizando estado do usuário no React...");
+            const resolvedName = profile?.full_name || (
+              authUser.email === 'carvalhomorato@gmail.com' ? 'Dr. Carlos Morato' :
+              authUser.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte (Admin)' :
+              (authUser.email?.includes('lucy') || authUser.email === 'dra.lucy.morata@gmail.com') ? 'Dra. Lucy Morata' :
+              authUser.email
+            );
             updateUserState({ 
               email: authUser.email || '', 
               id: authUser.id, 
               role: role,
               status: status,
-              full_name: profile?.full_name || authUser.email
+              full_name: resolvedName
             });
           }
           if (role === 'admin') fetchPendingCount();
@@ -1240,12 +1262,19 @@ export default function App() {
           
           const profile = profiles && profiles.length > 0 ? profiles[0] : null;
           
+          const resolvedName = profile?.full_name || (
+            data.user.email === 'carvalhomorato@gmail.com' ? 'Dr. Carlos Morato' :
+            data.user.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte (Admin)' :
+            (data.user.email?.includes('lucy') || data.user.email === 'dra.lucy.morata@gmail.com') ? 'Dra. Lucy Morata' :
+            data.user.email
+          );
+
           updateUserState({ 
             email: data.user.email || '', 
             id: data.user.id, 
             role: isAdminEmail ? 'admin' : (profile?.role || 'doctor'),
             status: 'approved',
-            full_name: profile?.full_name || (data.user.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : data.user.email)
+            full_name: resolvedName
           });
         }
       } else {

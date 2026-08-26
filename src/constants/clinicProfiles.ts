@@ -120,7 +120,7 @@ export function resolveDoctorKey(userOrEmail?: any, name?: string): 'dra_lucy' |
     return 'dra_lucy';
   }
 
-  return 'dra_lucy'; // Padrão seguro
+  return 'dr_carlos'; // Padrão seguro
 }
 
 export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): ClinicProfileConfig {

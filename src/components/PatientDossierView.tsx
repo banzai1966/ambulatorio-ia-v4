@@ -50,6 +50,7 @@ import { initialIntegrativeData } from '../types/integrativeChecklist';
 import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { processClinicalInput } from '../services/clinicalService';
+import { resolveDoctorKey } from '../constants/clinicProfiles';
 
 interface ClinicalDoctorProfile {
   id: string;
@@ -61,18 +62,18 @@ interface ClinicalDoctorProfile {
 
 const DEFAULT_DOCTOR_PROFILES: ClinicalDoctorProfile[] = [
   {
-    id: 'dra_lucy',
-    full_name: 'Dra. Lucy Morata',
-    especialidade: 'Odontologia Biológica & Saúde Integrativa',
-    crm_cro: 'CRO/SP 98.412',
-    default_mode: 'biological_dentistry',
-  },
-  {
     id: 'dr_carlos',
     full_name: 'Dr. Carlos Morato',
     especialidade: 'Neurologia & Medicina Integrativa',
     crm_cro: 'CRM/SP 145.892',
     default_mode: 'neurological',
+  },
+  {
+    id: 'dra_lucy',
+    full_name: 'Dra. Lucy Morata',
+    especialidade: 'Odontologia Biológica & Saúde Integrativa',
+    crm_cro: 'CRO/SP 98.412',
+    default_mode: 'biological_dentistry',
   },
   {
     id: 'dr_marco',
@@ -346,42 +347,22 @@ export default function PatientDossierView({
 
   // Identificação do profissional responsável ativo
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
-    // 1. Se o usuário logado for um profissional específico (não master admin)
-    if (currentUser?.email || currentUser?.full_name) {
+    // 1. Se houver usuário logado (Dr. Carlos, Dra. Lucy ou outro profissional)
+    if (currentUser) {
+      const docKey = resolveDoctorKey(currentUser);
+      if (docKey === 'dr_carlos') return 'dr_carlos';
+      if (docKey === 'dra_lucy') return 'dra_lucy';
+      
       const email = (currentUser.email || '').toLowerCase().trim();
       const name = (currentUser.full_name || '').toLowerCase().trim();
-
-      if (!isMasterAdmin) {
-        if (email.includes('lucy') || name.includes('lucy') || name.includes('morata')) {
-          return 'dra_lucy';
-        }
-        if (email.includes('carlos') || name.includes('carlos') || name.includes('morato')) {
-          return 'dr_carlos';
-        }
-        const match = allDoctorProfiles.find(d => 
-          (name && (d.full_name.toLowerCase().includes(name) || name.includes(d.full_name.toLowerCase()))) ||
-          (email && d.full_name.toLowerCase().includes(email.split('@')[0]))
-        );
-        if (match) return match.id;
-      }
-    }
-
-    // 2. Se o modo inicial for Odontologia Biológica
-    if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.toLowerCase().includes('odonto') || currentRecord?.especialidade?.toLowerCase().includes('biol')) {
-      const dentalDoc = allDoctorProfiles.find(d => d.default_mode === 'biological_dentistry' || d.id === 'dra_lucy');
-      if (dentalDoc) return dentalDoc.id;
-    }
-
-    // 3. Se for médico logado (não admin), fixa compulsoriamente no perfil dele
-    if (currentUser && currentUser.role === 'doctor') {
       const match = allDoctorProfiles.find(d => 
-        (currentUser.full_name && (d.full_name.toLowerCase().includes(currentUser.full_name.toLowerCase()) || currentUser.full_name.toLowerCase().includes(d.full_name.toLowerCase()))) ||
-        (currentUser.email && d.full_name.toLowerCase().includes(currentUser.email.split('@')[0].toLowerCase()))
+        (name && (d.full_name.toLowerCase().includes(name) || name.includes(d.full_name.toLowerCase()))) ||
+        (email && d.full_name.toLowerCase().includes(email.split('@')[0]))
       );
-      if (match) return match.id;
+      if (match && match.id !== 'dr_marco') return match.id;
     }
 
-    // 4. Se o prontuário já tiver médico responsável registrado
+    // 2. Se o prontuário atual tiver médico responsável registrado
     if (currentRecord?.profissional_responsavel) {
       const match = allDoctorProfiles.find(d => 
         d.full_name.toLowerCase().includes(currentRecord.profissional_responsavel.toLowerCase()) ||
@@ -390,60 +371,57 @@ export default function PatientDossierView({
       if (match) return match.id;
     }
 
-    // 5. Se a especialidade for Neurologia
+    // 3. Se o modo de exame inicial estiver explícito
+    if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.toLowerCase().includes('odonto') || currentRecord?.especialidade?.toLowerCase().includes('biol')) {
+      return 'dra_lucy';
+    }
     if (examMode === 'neurological' || currentRecord?.especialidade?.toLowerCase().includes('neuro')) {
-      const neuroDoc = allDoctorProfiles.find(d => d.default_mode === 'neurological' || d.id === 'dr_carlos');
-      if (neuroDoc) return neuroDoc.id;
+      return 'dr_carlos';
     }
 
-    // 6. Se houver usuário logado
-    if (currentUser?.full_name) {
-      const match = allDoctorProfiles.find(d => 
-        d.full_name.toLowerCase().includes(currentUser.full_name.toLowerCase()) ||
-        currentUser.full_name.toLowerCase().includes(d.full_name.toLowerCase())
-      );
-      if (match) return match.id;
-    }
-
-    const saved = localStorage.getItem('clinic_active_doctor_id');
+    // 4. Se for Marco Admin ou recuperação do localStorage
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('clinic_active_doctor_id') : null;
     if (saved && allDoctorProfiles.some(d => d.id === saved)) return saved;
 
-    return (examMode === 'biological_dentistry') ? 'dra_lucy' : (allDoctorProfiles[0]?.id || 'dra_lucy');
+    return 'dr_carlos';
   });
 
   // Garante sincronização imediata caso o usuário logado seja um médico específico
   useEffect(() => {
-    if (currentUser && !isMasterAdmin) {
-      const email = (currentUser.email || '').toLowerCase().trim();
-      const name = (currentUser.full_name || '').toLowerCase().trim();
-      if (email.includes('lucy') || name.includes('lucy') || name.includes('morata')) {
-        if (selectedDoctorId !== 'dra_lucy') {
-          setSelectedDoctorId('dra_lucy');
-          setExamMode('biological_dentistry');
-        }
-      } else if (email.includes('carlos') || name.includes('carlos') || name.includes('morato')) {
-        if (selectedDoctorId !== 'dr_carlos') {
-          setSelectedDoctorId('dr_carlos');
-          setExamMode('neurological');
-        }
+    if (!currentUser) return;
+    const docKey = resolveDoctorKey(currentUser);
+    if (docKey === 'dr_carlos') {
+      if (selectedDoctorId !== 'dr_carlos') {
+        setSelectedDoctorId('dr_carlos');
+      }
+      if (examMode !== 'neurological' && examMode !== 'integrative') {
+        setExamMode('neurological');
+      }
+    } else if (docKey === 'dra_lucy') {
+      if (selectedDoctorId !== 'dra_lucy') {
+        setSelectedDoctorId('dra_lucy');
+      }
+      if (examMode !== 'biological_dentistry') {
+        setExamMode('biological_dentistry');
       }
     }
-  }, [currentUser, isMasterAdmin, selectedDoctorId, setExamMode]);
+  }, [currentUser]);
 
   // Sincroniza profissional quando o modo de exame alternar externamente
   useEffect(() => {
+    const userDocKey = currentUser ? resolveDoctorKey(currentUser) : null;
     if (examMode === 'biological_dentistry') {
       const dentalDoc = allDoctorProfiles.find(d => d.default_mode === 'biological_dentistry' || d.id === 'dra_lucy');
-      if (dentalDoc && selectedDoctorId !== dentalDoc.id) {
+      if (dentalDoc && selectedDoctorId !== dentalDoc.id && userDocKey !== 'dr_carlos') {
         setSelectedDoctorId(dentalDoc.id);
       }
-    } else if (examMode === 'neurological') {
+    } else if (examMode === 'neurological' || examMode === 'integrative') {
       const neuroDoc = allDoctorProfiles.find(d => d.default_mode === 'neurological' || d.id === 'dr_carlos');
-      if (neuroDoc && selectedDoctorId !== neuroDoc.id) {
+      if (neuroDoc && selectedDoctorId !== neuroDoc.id && userDocKey !== 'dra_lucy') {
         setSelectedDoctorId(neuroDoc.id);
       }
     }
-  }, [examMode, allDoctorProfiles]);
+  }, [examMode, allDoctorProfiles, currentUser, selectedDoctorId]);
 
   const activeDoctor = useMemo(() => {
     return allDoctorProfiles.find(d => d.id === selectedDoctorId) || allDoctorProfiles[0];
