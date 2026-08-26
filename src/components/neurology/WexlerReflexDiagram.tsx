@@ -18,7 +18,22 @@ const WEXLER_SCORES = [
 
 export default function WexlerReflexDiagram({ data = {}, onChange, onBatchChange }: Props) {
   const getScore = (key: string) => {
-    return (data as any)?.[key] || (data as any)?.reflexos_wexler?.[key] || '2+';
+    const raw = (data as any)?.[key] || 
+                (data as any)?.reflexos_wexler?.[key] ||
+                (key === 'estiloradial_d' ? ((data as any)?.estilorradial_d || (data as any)?.reflexos_wexler?.estilorradial_d) : undefined) ||
+                (key === 'estiloradial_e' ? ((data as any)?.estilorradial_e || (data as any)?.reflexos_wexler?.estilorradial_e) : undefined);
+    if (!raw) return '2+';
+    const s = String(raw).trim();
+    if (s === '0' || s === '1+' || s === '2+' || s === '3+' || s === '4+') return s;
+    if (s === '1' || s === '+') return '1+';
+    if (s === '2' || s === '++') return '2+';
+    if (s === '3' || s === '+++') return '3+';
+    if (s === '4' || s === '++++') return '4+';
+    if (s.toLowerCase().includes('clonus') || s.toLowerCase().includes('clônus')) return '4+';
+    if (s.toLowerCase().includes('hiper')) return '3+';
+    if (s.toLowerCase().includes('hipo')) return '1+';
+    if (s.toLowerCase().includes('arre') || s === '0+') return '0';
+    return '2+';
   };
 
   const cycleScore = (key: string) => {

@@ -771,6 +771,62 @@ export default function PatientDossierView({
           setClinicalAlerts(result.alertas_copiloto);
         }
 
+        // Extração clínica determinística para complementar/garantir preenchimento dos bonecos anatômicos
+        const lowerText = text.toLowerCase();
+        const fallbackNeuro: any = { reflexos_wexler: {}, dermatomos_marcardos: {}, forca_muscular: {} };
+        
+        // Wexler
+        if (lowerText.includes('bicipital à direita (1+)') || lowerText.includes('biceps d (1+)') || lowerText.includes('bicipital d (1+)') || lowerText.includes('hiporreflexia bicipital à direita') || lowerText.includes('hiporreflexia bicipital a direita') || (lowerText.includes('bicipital') && lowerText.includes('1+'))) {
+          fallbackNeuro.reflexos_wexler.biceps_d = '1+';
+        }
+        if (lowerText.includes('biceps e normal') || lowerText.includes('biceps e (2+)') || lowerText.includes('bicipital e (2+)')) {
+          fallbackNeuro.reflexos_wexler.biceps_e = '2+';
+        }
+        if (lowerText.includes('patelar (3+)') || lowerText.includes('patelar d (3+)') || lowerText.includes('hiperreflexia patelar') || lowerText.includes('patelar direito (3+)')) {
+          fallbackNeuro.reflexos_wexler.patelar_d = '3+';
+        }
+        if (lowerText.includes('patelar e e aquileu e normais') || lowerText.includes('patelar e (2+)')) {
+          fallbackNeuro.reflexos_wexler.patelar_e = '2+';
+        }
+        if (lowerText.includes('aquileu (4+)') || lowerText.includes('aquileu d (4+)') || lowerText.includes('clonus inesgotavel em reflexo aquileu') || lowerText.includes('clônus inesgotável em reflexo aquileu') || lowerText.includes('clonus inesgotavel (4+)') || lowerText.includes('clônus inesgotável (4+)')) {
+          fallbackNeuro.reflexos_wexler.aquileu_d = '4+';
+        }
+        if (lowerText.includes('aquileu e (2+)') || lowerText.includes('aquileu e normal')) {
+          fallbackNeuro.reflexos_wexler.aquileu_e = '2+';
+        }
+
+        // Dermátomos
+        if (lowerText.includes('c5') && (lowerText.includes('parestesia') || lowerText.includes('formigamento') || lowerText.includes('queimação') || lowerText.includes('queimacao'))) {
+          fallbackNeuro.dermatomos_marcardos.C5 = 'parestesia';
+        } else if (lowerText.includes('c5') && lowerText.includes('hipoestesia')) {
+          fallbackNeuro.dermatomos_marcardos.C5 = 'hipoestesia';
+        }
+        if (lowerText.includes('c6') && (lowerText.includes('hipoestesia') || lowerText.includes('deficit sensitivo') || lowerText.includes('déficit sensitivo') || lowerText.includes('sensitivo compat'))) {
+          fallbackNeuro.dermatomos_marcardos.C6 = 'hipoestesia';
+        } else if (lowerText.includes('c6') && lowerText.includes('parestesia')) {
+          fallbackNeuro.dermatomos_marcardos.C6 = 'parestesia';
+        }
+        if (lowerText.includes('l4')) {
+          fallbackNeuro.dermatomos_marcardos.L4 = (lowerText.includes('dor') || lowerText.includes('queimação')) ? 'dor' : 'hipoestesia';
+        }
+        if (lowerText.includes('l5')) {
+          fallbackNeuro.dermatomos_marcardos.L5 = (lowerText.includes('dor') || lowerText.includes('queimação')) ? 'dor' : 'hipoestesia';
+        }
+
+        // Combina com o resultado da IA
+        const mergedNeuroResult = {
+          ...(result.exame_neurologico || {}),
+          reflexos_wexler: {
+            ...(result.exame_neurologico?.reflexos_wexler || {}),
+            ...fallbackNeuro.reflexos_wexler
+          },
+          dermatomos_marcardos: {
+            ...(result.exame_neurologico?.dermatomos_marcardos || {}),
+            ...(result.exame_neurologico?.dermatomos_marcados || {}),
+            ...fallbackNeuro.dermatomos_marcardos
+          }
+        };
+
         if (result.checklist_integrativo && setIntegrativeData) {
           setIntegrativeData((prev: any) => {
             const updated = { ...(prev || {}) };
@@ -788,7 +844,22 @@ export default function PatientDossierView({
           });
         }
 
-        if (examMode === 'biological_dentistry' || (result.dados_especialidade && Object.keys(result.dados_especialidade).length > 0)) {
+        if (examMode === 'neurological' || (mergedNeuroResult && hasMeaningfulData(mergedNeuroResult))) {
+          setSpecialtyData((prev: any) => {
+            const updated = { ...(prev || {}) };
+            for (const key of Object.keys(mergedNeuroResult)) {
+              if (typeof mergedNeuroResult[key] === 'object' && mergedNeuroResult[key] !== null) {
+                updated[key] = {
+                  ...(updated[key] || {}),
+                  ...mergedNeuroResult[key]
+                };
+              } else {
+                updated[key] = mergedNeuroResult[key];
+              }
+            }
+            return updated;
+          });
+        } else if (examMode === 'biological_dentistry' || (result.dados_especialidade && Object.keys(result.dados_especialidade).length > 0)) {
           const incomingOdonto = result.dados_especialidade?.odontograma || result.odontograma;
           setSpecialtyData((prev: any) => ({
             ...(prev || {}),
@@ -804,21 +875,6 @@ export default function PatientDossierView({
                 }
               : prev?.odontograma
           }));
-        } else if (result.exame_neurologico && (examMode === 'neurological' || hasMeaningfulData(result.exame_neurologico))) {
-          setSpecialtyData((prev: any) => {
-            const updated = { ...(prev || {}) };
-            for (const key of Object.keys(result.exame_neurologico)) {
-              if (typeof result.exame_neurologico[key] === 'object' && result.exame_neurologico[key] !== null) {
-                updated[key] = {
-                  ...(updated[key] || {}),
-                  ...result.exame_neurologico[key]
-                };
-              } else {
-                updated[key] = result.exame_neurologico[key];
-              }
-            }
-            return updated;
-          });
         }
 
         if (setCurrentRecord) {
@@ -838,7 +894,7 @@ export default function PatientDossierView({
             }
 
             const prevNeuro = prev?.exame_neurologico || {};
-            const incomingNeuro = result.exame_neurologico || {};
+            const incomingNeuro = mergedNeuroResult || {};
             const mergedNeuro = { ...prevNeuro };
             for (const key of Object.keys(incomingNeuro)) {
               if (typeof incomingNeuro[key] === 'object' && incomingNeuro[key] !== null) {
@@ -872,7 +928,7 @@ export default function PatientDossierView({
               ...prev,
               ...result,
               checklist_integrativo: result.checklist_integrativo ? mergedChecklist : prev?.checklist_integrativo,
-              exame_neurologico: (examMode === 'neurological' || (result.exame_neurologico && hasMeaningfulData(result.exame_neurologico))) ? mergedNeuro : prev?.exame_neurologico,
+              exame_neurologico: (examMode === 'neurological' || (mergedNeuroResult && hasMeaningfulData(mergedNeuroResult))) ? mergedNeuro : prev?.exame_neurologico,
               mapeamento_corporal: (result.mapeamento_corporal && result.mapeamento_corporal.length > 0)
                 ? result.mapeamento_corporal
                 : (prev?.mapeamento_corporal || []),

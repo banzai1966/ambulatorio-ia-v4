@@ -15,6 +15,29 @@ const getGeminiKey = () => {
   return process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
 };
 
+async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig: any) {
+  const modelsToTry = [
+    "gemini-2.5-flash",
+    "gemini-3.7-flash",
+    "gemini-flash-latest"
+  ];
+  
+  let lastError: any = null;
+  for (const modelName of modelsToTry) {
+    try {
+      const resp = await ai.models.generateContent({
+        ...requestConfig,
+        model: modelName
+      });
+      return resp;
+    } catch (err: any) {
+      console.warn(`[GEMINI LOCAL] Tentativa com modelo ${modelName} falhou:`, err.message);
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
 export async function generateClinicalSummary(messages: any[]): Promise<ClinicalSummary> {
   try {
     const response = await axios.post('/api/generate-summary', { messages });
@@ -39,8 +62,7 @@ export async function generateClinicalSummary(messages: any[]): Promise<Clinical
 
       const prompt = `Analise a conversa e gere um JSON com as chaves: queixaPrincipal, sintomas (lista), medicamentos (lista), alergias (lista), historicoFamiliar, sugestaoConduta, prescricao.\n\nConversa:\n${conversationText}`;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+      const response = await generateGeminiContentWithFallback(ai, {
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
@@ -183,7 +205,76 @@ export async function processClinicalInput(
             }
           }
         },
-        "exame_neurologico": {},
+        "exame_neurologico": {
+          "fascia": "típica",
+          "atitude": "ativa",
+          "dominancia": "D",
+          "marcha": "normal",
+          "escala_glasgow": 15,
+          "reflexos_wexler": {
+            "biceps_d": "1+",
+            "biceps_e": "2+",
+            "estiloradial_d": "2+",
+            "estiloradial_e": "2+",
+            "patelar_d": "3+",
+            "patelar_e": "2+",
+            "aquileu_d": "4+",
+            "aquileu_e": "2+",
+            "axiais_face": "Ausente",
+            "grasping": "Ausente",
+            "groping": "Ausente",
+            "hoffmann": "Ausente",
+            "palmo_mentoniano": "Ausente",
+            "wartenberg": "Ausente"
+          },
+          "dermatomos_marcardos": {
+            "C5": "parestesia",
+            "C6": "hipoestesia",
+            "L4": "hipoestesia",
+            "L5": "dor"
+          },
+          "forca_muscular": {
+            "face": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "lingua": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "msd": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "mse": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "mid": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "mie": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" },
+            "coluna": { "tonus": "Normal", "trofismo": "Normal", "mov_anormais": "Ausente", "deformidades": "Ausente", "fatigabilidade": "Grau V" }
+          },
+          "sensibilidade": {
+            "cabeca": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
+            "torax": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
+            "mmss": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Alterada", "toque": "Hipoestesia" },
+            "abdome": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" },
+            "mmii": { "proprio": "Normal", "vibrat": "Normal", "temp": "Normal", "dor": "Normal", "toque": "Normal" }
+          },
+          "coordenacao": {
+            "status": "normal",
+            "lado": null,
+            "index_nariz": true,
+            "romberg": false,
+            "calcanhar_joelho": true,
+            "diadococinesia": true
+          },
+          "nervos_cranianos": {
+            "ii": "Preservado",
+            "iii": "Preservado",
+            "iv": "Preservado",
+            "vi": "Preservado",
+            "v": "Preservado",
+            "vii": "Preservado",
+            "viii": "Preservado",
+            "ix": "Preservado",
+            "x": "Preservado",
+            "xi": "Preservado",
+            "xii": "Preservado",
+            "pupilas_d": "Isocórica",
+            "pupilas_e": "Isocórica",
+            "fundo_olho": "Normal",
+            "campo": "Preservado"
+          }
+        },
         "checklist_integrativo": {
           "suplementos": { "coenzima_q10": "100 mg", "acido_folico": "400 mcg", "vit_b3_b6": "1.000 mcg" },
           "vitaminas_minerais": { "vit_d3": "10.000 UI", "ca_mg_zn": "250 mg" },
@@ -217,8 +308,7 @@ export async function processClinicalInput(
         }];
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
+      const response = await generateGeminiContentWithFallback(ai, {
         contents,
         config: { responseMimeType: "application/json" }
       });

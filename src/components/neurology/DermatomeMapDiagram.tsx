@@ -36,9 +36,17 @@ export default function DermatomeMapDiagram({ data = {}, onChange, onBatchChange
     }
   }, [data]);
 
-  const activeData = { ...localMap, ...(data || {}) };
+  const rawSource = { ...localMap, ...(data || {}) };
+  const nested = (rawSource as any)?.dermatomos_marcardos || (rawSource as any)?.dermatomos_marcados || (rawSource as any)?.dermatomos_alterados || {};
+  const activeData: Record<string, DermatomeStatus> = { ...(typeof nested === 'object' ? nested : {}), ...rawSource };
 
-  const getDermatomeStatus = (code: string): DermatomeStatus => activeData[code] || 'normal';
+  const getDermatomeStatus = (code: string): DermatomeStatus => {
+    const direct = activeData[code] || activeData[code.toUpperCase()] || activeData[code.toLowerCase()];
+    if (direct && typeof direct === 'string' && (direct === 'hipoestesia' || direct === 'parestesia' || direct === 'hiperestesia' || direct === 'dor')) {
+      return direct;
+    }
+    return 'normal';
+  };
 
   const getGroupStatus = (items: string[]): DermatomeStatus => {
     for (const item of items) {

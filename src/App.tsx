@@ -2106,10 +2106,10 @@ export default function App() {
         if (newRecord.checklist_integrativo) {
           setIntegrativeData(newRecord.checklist_integrativo);
         }
-        if (examMode === 'biological_dentistry' || (newRecord.dados_especialidade && hasMeaningfulData(newRecord.dados_especialidade))) {
-          setSpecialtyData(newRecord.dados_especialidade);
-        } else if (newRecord.exame_neurologico && (examMode === 'neurological' || hasMeaningfulData(newRecord.exame_neurologico))) {
+        if (examMode === 'neurological' || (newRecord.exame_neurologico && hasMeaningfulData(newRecord.exame_neurologico))) {
           setSpecialtyData(newRecord.exame_neurologico);
+        } else if (examMode === 'biological_dentistry' || (newRecord.dados_especialidade && hasMeaningfulData(newRecord.dados_especialidade))) {
+          setSpecialtyData(newRecord.dados_especialidade);
         } else if (newRecord.dados_especialidade) {
           setSpecialtyData(newRecord.dados_especialidade);
         }
