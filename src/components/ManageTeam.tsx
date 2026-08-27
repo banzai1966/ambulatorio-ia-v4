@@ -251,10 +251,10 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
           cleanCrm = cleanCrm || 'CRM/SP 145.892';
         } else if (key.includes('luci') || key.includes('murata') || key === 'lucimurata@gmail.com' || idKey.includes('lucy')) {
           if (!cleanName || cleanName.toLowerCase() === 'médico' || cleanName.toLowerCase() === 'medico') {
-            cleanName = 'Dra. Luci Murata';
+            cleanName = 'Dra. Lucy Murata';
           }
           cleanSpecialty = cleanSpecialty || 'Odontologia Biológica & Saúde Integrativa';
-          cleanCrm = cleanCrm || 'CRO/SP 98.412';
+          cleanCrm = cleanCrm || 'CRO-SP: 69246';
         } else if (key === 'marco.agduarte22@gmail.com' || idKey.includes('marco')) {
           cleanName = 'Marco Duarte';
           cleanSpecialty = 'Gestor & Administrador Mestre';
@@ -298,10 +298,10 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         {
           id: 'dra-lucy-morata',
           email: 'lucimurata@gmail.com',
-          full_name: 'Dra. Luci Murata',
+          full_name: 'Dra. Lucy Murata',
           role: 'admin' as const,
           especialidade: 'Odontologia Biológica & Saúde Integrativa',
-          crm_cro: 'CRO/SP 98.412',
+          crm_cro: 'CRO-SP: 69246',
           status: 'approved' as const
         }
       ];

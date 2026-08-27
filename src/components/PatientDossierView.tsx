@@ -2093,6 +2093,10 @@ export default function PatientDossierView({
 
                 {/* 2. Formulário Clínico e Odontograma Interativo logo abaixo das imagens */}
                 <BiologicalDentistryForm
+                  patientName={effectiveName}
+                  patientPhone={patientPhone || currentRecord?.paciente_telefone}
+                  patientCpf={patientCpf || currentRecord?.paciente_cpf}
+                  patientDob={effectiveDob}
                   data={{
                     ...(currentRecord?.dados_especialidade || {}),
                     ...(specialtyData || {})

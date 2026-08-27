@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Sparkles, 
   ShieldCheck, 
@@ -13,10 +13,12 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Layers
+  Layers,
+  Printer
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import InteractiveOdontogram, { OdontogramData, ToothRecord, TOOTH_METADATA } from './InteractiveOdontogram';
+import BiologicalDossierModal from './BiologicalDossierModal';
 
 export interface BiologicalDentistryData {
   // Odontograma Interativo
@@ -80,9 +82,29 @@ export interface BiologicalDentistryData {
 interface Props {
   data: BiologicalDentistryData;
   onChange: (data: BiologicalDentistryData) => void;
+  patientName?: string;
+  patientPhone?: string;
+  patientCpf?: string;
+  patientDob?: string;
+  clinicInfo?: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    cnpj?: string;
+  };
 }
 
-export default function BiologicalDentistryForm({ data = {}, onChange }: Props) {
+export default function BiologicalDentistryForm({ 
+  data = {}, 
+  onChange,
+  patientName = '',
+  patientPhone = '',
+  patientCpf = '',
+  patientDob = '',
+  clinicInfo
+}: Props) {
+  const [showDossierModal, setShowDossierModal] = useState(false);
+
   const update = (patch: Partial<BiologicalDentistryData>) => {
     onChange({ ...data, ...patch });
   };
@@ -205,8 +227,17 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
           </p>
         </div>
 
-        {/* Botoes de Preenchimento Rápido / Presets */}
+        {/* Botoes de Preenchimento Rápido / Presets & Dossiê */}
         <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowDossierModal(true)}
+            className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-[11px] font-black tracking-tight transition-all shadow-sm flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            title="Gerar Dossiê de Odontologia Biológica em 2 Páginas (PDF / Impressão)"
+          >
+            <Printer size={13} className="text-blue-200" />
+            <span>✨ Dossiê Biológico (2 Págs)</span>
+          </button>
           <button
             type="button"
             onClick={applyPresetZirconia}
@@ -690,6 +721,18 @@ export default function BiologicalDentistryForm({ data = {}, onChange }: Props) 
           className="w-full p-3 rounded-2xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 bg-white shadow-xs"
         />
       </div>
+
+      {/* Dossiê Odontológico Biológico Modal (2 Páginas) */}
+      <BiologicalDossierModal
+        isOpen={showDossierModal}
+        onClose={() => setShowDossierModal(false)}
+        patientName={patientName || 'Paciente'}
+        patientPhone={patientPhone}
+        patientCpf={patientCpf}
+        patientDob={patientDob}
+        data={data}
+        clinicInfo={clinicInfo}
+      />
     </div>
   );
 }
