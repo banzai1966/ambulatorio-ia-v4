@@ -1239,6 +1239,7 @@ export default function App() {
                     status: 'approved',
                     full_name: fullName
                   });
+                  navigateToTab('dashboard');
                   toast.success(`Bem-vindo, ${fullName}!`);
                   return;
                 } else {
@@ -1250,6 +1251,7 @@ export default function App() {
                     status: 'approved',
                     full_name: fullName
                   });
+                  navigateToTab('dashboard');
                   toast.success(`Bem-vindo, ${fullName}! (Modo Seguro Ativado)`);
                   return;
                 }
@@ -1293,6 +1295,7 @@ export default function App() {
             status: 'approved',
             full_name: resolvedName
           });
+          navigateToTab('dashboard');
         }
       } else {
         if (!name.trim()) {
@@ -1336,6 +1339,7 @@ export default function App() {
             status: 'approved',
             full_name: name
           });
+          navigateToTab('dashboard');
         } else if (data.user && !data.session) {
           setError("Cadastro realizado! Verifique a caixa de entrada do seu e-mail para confirmar a conta antes de entrar.");
           setAuthMode('login'); // Volta para a tela de login
@@ -1358,7 +1362,16 @@ export default function App() {
     } catch (e) {
       console.warn("SignOut warning:", e);
     }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ambulatorio_active_tab', 'dashboard');
+    }
     updateUserState(null);
+    setShowDashboard(true);
+    setShowHistory(false);
+    setShowAgenda(false);
+    setShowMessageHistory(false);
+    setShowFinancial(false);
+    setShowManageTeam(false);
     setHistory([]);
     setCurrentRecord(null);
     setShowSecretControls(false);
