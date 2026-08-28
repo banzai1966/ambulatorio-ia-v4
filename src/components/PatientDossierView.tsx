@@ -270,6 +270,89 @@ function getActiveIntegrativeItems(data: any): { key: string; label: string; val
   return items;
 }
 
+// Extractor of longitudinal and accumulative timeline of medications and supplements across all consultations
+function getPatientCumulativeTimeline(historyList: any[], targetPatientName?: string) {
+  if (!historyList || !Array.isArray(historyList)) return [];
+  
+  const filtered = historyList.filter(rec => {
+    if (!targetPatientName || !targetPatientName.trim()) return true;
+    const cleanTarget = targetPatientName.toLowerCase().trim();
+    const cleanRecName = (rec.paciente_nome_completo || '').toLowerCase().trim();
+    return cleanRecName === cleanTarget;
+  }).sort((a, b) => {
+    const timeA = new Date(a.data_consulta || a.created_at || 0).getTime();
+    const timeB = new Date(b.data_consulta || b.created_at || 0).getTime();
+    return timeA - timeB; // Chronological: oldest to newest
+  });
+
+  const timelineWithEvolution: any[] = [];
+  let previousActiveItemNames = new Set<string>();
+
+  filtered.forEach((rec, idx) => {
+    const currentItems: { name: string; category: string; dose?: string }[] = [];
+
+    // 1. Check dados_especialidade (Dra. Lucy - Odontologia Biológica)
+    if (rec.dados_especialidade) {
+      if (rec.dados_especialidade.suplemento_vit_d3_k2) currentItems.push({ name: 'Vit D3 + K2 (MK-7)', category: 'Suplemento Sistêmico' });
+      if (rec.dados_especialidade.suplemento_vit_c) currentItems.push({ name: 'Vitamina C Altas Doses', category: 'Suplemento Sistêmico' });
+      if (rec.dados_especialidade.suplemento_zinco_mg) currentItems.push({ name: 'Zinco Quelato + Magnésio', category: 'Suplemento Sistêmico' });
+      if (rec.dados_especialidade.suplemento_arnica_homeo) currentItems.push({ name: 'Arnica Montana (Homeopatia)', category: 'Suplemento Sistêmico' });
+      if (rec.dados_especialidade.suplemento_coenzima_q10) currentItems.push({ name: 'Coenzima Q10', category: 'Suplemento Sistêmico' });
+      
+      // Procedures
+      if (rec.dados_especialidade.amalgama_ativo) currentItems.push({ name: `Protocolo SMART (${rec.dados_especialidade.amalgama_elementos || 'Ativo'})`, category: 'Procedimento Biológico' });
+      if (rec.dados_especialidade.implante_zirconia_ativo) currentItems.push({ name: `Implante Zircônia (${rec.dados_especialidade.implante_elementos || 'Ativo'})`, category: 'Procedimento Biológico' });
+      if (rec.dados_especialidade.focos_cavitacao_ativo) currentItems.push({ name: `NICO / FDOK (${rec.dados_especialidade.focos_descricao || 'Ativo'})`, category: 'Procedimento Biológico' });
+      if (rec.dados_especialidade.ozonioterapia_ativo) currentItems.push({ name: 'Ozonioterapia / Terapia Neural', category: 'Procedimento Biológico' });
+    }
+
+    // 2. Check checklist_integrativo (Dr. Carlos - Medicina Integrativa)
+    if (rec.checklist_integrativo) {
+      const activeIntegrative = getActiveIntegrativeItems(rec.checklist_integrativo);
+      activeIntegrative.forEach(item => {
+        currentItems.push({ name: item.label, category: 'Integrativo', dose: item.value });
+      });
+    }
+
+    const currentNames = new Set(currentItems.map(i => i.name));
+    
+    // Determine status:
+    const itemsWithStatus = currentItems.map(item => {
+      const isMaintained = previousActiveItemNames.has(item.name);
+      return {
+        ...item,
+        status: isMaintained ? ('mantido' as const) : ('iniciado' as const)
+      };
+    });
+
+    // Determine suspended items (present in previous consultation but missing in this one)
+    const suspendedItems: string[] = [];
+    if (idx > 0) {
+      previousActiveItemNames.forEach(prevName => {
+        if (!currentNames.has(prevName)) {
+          suspendedItems.push(prevName);
+        }
+      });
+    }
+
+    timelineWithEvolution.push({
+      record: rec,
+      index: idx + 1,
+      id: rec.id || `rec-${idx}`,
+      dateFormatted: rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : `Consulta ${idx + 1}`),
+      doctor: rec.profissional_responsavel || 'Profissional',
+      specialty: rec.especialidade || 'Consulta',
+      items: itemsWithStatus,
+      suspendedItems,
+      isLatest: idx === filtered.length - 1
+    });
+
+    previousActiveItemNames = currentNames;
+  });
+
+  return timelineWithEvolution;
+}
+
 export default function PatientDossierView({
   patientName,
   patientPhone = '',
@@ -2749,6 +2832,87 @@ export default function PatientDossierView({
                 </div>
               )}
 
+              {/* Odontologia Biológica - Suplementação e Procedimentos da Dra. Lucy */}
+              {selectedHistoryRecord.dados_especialidade && hasMeaningfulData(selectedHistoryRecord.dados_especialidade) && (
+                <div className="bg-blue-50/90 p-4 rounded-2xl border border-blue-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                      🦷 Odontologia Biológica & Suplementação ({selectedHistoryRecord.data_consulta ? (selectedHistoryRecord.data_consulta.includes('-') ? new Date(selectedHistoryRecord.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : selectedHistoryRecord.data_consulta) : 'Data do Prontuário'})
+                    </span>
+                    <span className="text-[10px] bg-blue-200/60 text-blue-900 font-extrabold px-2 py-0.5 rounded-md">
+                      Dra. Lucy Morata
+                    </span>
+                  </div>
+
+                  {/* Suplementação Sistêmica Pré/Pós-Cirúrgica */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold text-blue-900 uppercase">💊 Suplementação Sistêmica Ativa:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedHistoryRecord.dados_especialidade.suplemento_vit_d3_k2 && (
+                        <span className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-900 shadow-2xs">
+                          ☀️ Vit D3 + K2 (MK-7)
+                        </span>
+                      )}
+                      {selectedHistoryRecord.dados_especialidade.suplemento_vit_c && (
+                        <span className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-900 shadow-2xs">
+                          🍊 Vitamina C Altas Doses
+                        </span>
+                      )}
+                      {selectedHistoryRecord.dados_especialidade.suplemento_zinco_mg && (
+                        <span className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-900 shadow-2xs">
+                          ⚡ Zinco Quelato + Magnésio
+                        </span>
+                      )}
+                      {selectedHistoryRecord.dados_especialidade.suplemento_arnica_homeo && (
+                        <span className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-900 shadow-2xs">
+                          🌿 Arnica Montana (Homeopatia)
+                        </span>
+                      )}
+                      {selectedHistoryRecord.dados_especialidade.suplemento_coenzima_q10 && (
+                        <span className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-xs font-bold text-blue-900 shadow-2xs">
+                          ❤️ Coenzima Q10
+                        </span>
+                      )}
+                      {!selectedHistoryRecord.dados_especialidade.suplemento_vit_d3_k2 &&
+                       !selectedHistoryRecord.dados_especialidade.suplemento_vit_c &&
+                       !selectedHistoryRecord.dados_especialidade.suplemento_zinco_mg &&
+                       !selectedHistoryRecord.dados_especialidade.suplemento_arnica_homeo &&
+                       !selectedHistoryRecord.dados_especialidade.suplemento_coenzima_q10 && (
+                        <span className="text-xs text-slate-500 italic">Sem suplementação oral assinalada nesta data.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Procedimentos Biológicos Ativos */}
+                  <div className="pt-2 border-t border-blue-100 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {selectedHistoryRecord.dados_especialidade.amalgama_ativo && (
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <strong className="text-slate-900">🛡️ Protocolo SMART:</strong>
+                        <span className="text-slate-600 ml-1 font-medium">{selectedHistoryRecord.dados_especialidade.amalgama_elementos || 'Ativo'}</span>
+                      </div>
+                    )}
+                    {selectedHistoryRecord.dados_especialidade.implante_zirconia_ativo && (
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <strong className="text-slate-900">✨ Implante Zircônia (Metal-Free):</strong>
+                        <span className="text-slate-600 ml-1 font-medium">{selectedHistoryRecord.dados_especialidade.implante_elementos || 'Ativo'}</span>
+                      </div>
+                    )}
+                    {selectedHistoryRecord.dados_especialidade.focos_cavitacao_ativo && (
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <strong className="text-slate-900">🔍 Cavitações NICO:</strong>
+                        <span className="text-slate-600 ml-1 font-medium">{selectedHistoryRecord.dados_especialidade.focos_descricao || 'Detectado em CBCT'}</span>
+                      </div>
+                    )}
+                    {selectedHistoryRecord.dados_especialidade.ozonioterapia_ativo && (
+                      <div className="bg-white p-2 rounded-xl border border-blue-100">
+                        <strong className="text-slate-900">💧 Ozonioterapia / Terapia Neural:</strong>
+                        <span className="text-slate-600 ml-1 font-medium">Protocolo biológico aplicado</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Resumo Formatado se houver */}
               {selectedHistoryRecord.resumo_formatado && (
                 <div className="bg-slate-100 p-4 rounded-2xl border border-slate-200 space-y-1">
@@ -2758,6 +2922,120 @@ export default function PatientDossierView({
                   </p>
                 </div>
               )}
+
+              {/* Linha do Tempo & Comparativo Acumulativo de Suplementações & Medicamentos */}
+              {(() => {
+                const targetPatient = selectedHistoryRecord.paciente_nome_completo || patientName;
+                const timeline = getPatientCumulativeTimeline(history, targetPatient);
+                
+                if (timeline.length === 0) return null;
+
+                return (
+                  <div className="bg-gradient-to-br from-indigo-50/90 via-slate-50 to-sky-50/80 p-4 rounded-2xl border border-indigo-200/90 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100/80 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">📈</span>
+                        <div>
+                          <h4 className="text-xs font-black text-indigo-950 uppercase tracking-wider">
+                            Linha do Tempo Acumulativa & Evolução de Suplementos / Remédios
+                          </h4>
+                          <p className="text-[10px] text-slate-500 font-medium">
+                            Acompanhamento longitudinal de tudo o que a paciente tomou, iniciou ou suspendeu ao longo das consultas
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] bg-indigo-100 text-indigo-800 font-extrabold px-2.5 py-1 rounded-full border border-indigo-200">
+                        {timeline.length} {timeline.length === 1 ? 'Consulta Registrada' : 'Consultas na Linha do Tempo'}
+                      </span>
+                    </div>
+
+                    {/* Timeline Sequence */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+                      {timeline.map((step) => {
+                        const isCurrentSelected = step.record.id === selectedHistoryRecord.id || 
+                          (step.record.data_consulta && step.record.data_consulta === selectedHistoryRecord.data_consulta);
+
+                        return (
+                          <div 
+                            key={step.id} 
+                            onClick={() => setSelectedHistoryRecord(step.record)}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer space-y-2 ${
+                              isCurrentSelected 
+                                ? 'bg-white border-indigo-500 shadow-md ring-2 ring-indigo-400/30' 
+                                : 'bg-white/80 border-slate-200 hover:border-indigo-300 hover:bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 text-xs">
+                              <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                                📅 {step.dateFormatted}
+                              </span>
+                              {isCurrentSelected ? (
+                                <span className="text-[9px] bg-indigo-600 text-white font-black px-2 py-0.5 rounded-md">
+                                  Visualizando
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-indigo-600 hover:underline font-bold">
+                                  Ver Consulta ↗
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-[10px] text-slate-500 flex items-center justify-between font-semibold">
+                              <span>🩺 {step.doctor}</span>
+                              <span className="text-slate-400">({step.specialty})</span>
+                            </div>
+
+                            {/* Active Items in this date */}
+                            <div className="space-y-1 pt-1">
+                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
+                                Suplementos & Procedimentos Ativos:
+                              </span>
+                              {step.items.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {step.items.map((it: any, iIdx: number) => (
+                                    <span 
+                                      key={`${it.name}-${iIdx}`}
+                                      className={`text-[10px] px-2 py-0.5 rounded-md font-bold flex items-center gap-1 border ${
+                                        it.status === 'mantido'
+                                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                          : 'bg-sky-50 text-sky-800 border-sky-200'
+                                      }`}
+                                      title={it.status === 'mantido' ? 'Mantido da consulta anterior' : 'Novo / Iniciado nesta data'}
+                                    >
+                                      {it.status === 'mantido' ? '🟢' : '🔵'} {it.name} {it.dose ? `(${it.dose})` : ''}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">Sem itens ativos</span>
+                              )}
+                            </div>
+
+                            {/* Suspended Items if any */}
+                            {step.suspendedItems.length > 0 && (
+                              <div className="pt-1.5 border-t border-slate-100 space-y-1">
+                                <span className="text-[9px] font-black uppercase text-rose-500 tracking-wider block">
+                                  ⛔ Suspensos / Concluídos:
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                  {step.suspendedItems.map((sName: string, sIdx: number) => (
+                                    <span 
+                                      key={`susp-${sIdx}`}
+                                      className="text-[9px] px-1.5 py-0.5 rounded-md font-bold bg-rose-50 text-rose-700 border border-rose-200 line-through opacity-80"
+                                    >
+                                      🔴 {sName}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Footer */}
