@@ -318,10 +318,21 @@ export default function App() {
   const [clinicInfo, setClinicInfo] = useState<any>(null);
   const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
 
-  // Identificação do papel e médico atual
-  const isAdmin = user ? (user.role === 'admin' || user.email === 'marco.agduarte22@gmail.com' || user.email === 'carvalhomorato@gmail.com' || user.email?.includes('admin')) : true;
-  const isMasterAdmin = user ? (user.email === 'marco.agduarte22@gmail.com' || user.role === 'admin') : true;
+  // Identificação do papel e médico atual (Marco Duarte é o Master Admin exclusivo do projeto)
+  const isMasterAdmin = user ? (
+    user.email === 'marco.agduarte22@gmail.com' || 
+    user.id === 'master-admin-marco' || 
+    user.id === 'marco-duarte-admin' ||
+    (user.full_name?.toLowerCase().includes('marco') && user.full_name?.toLowerCase().includes('duarte'))
+  ) : false;
   const currentDoctorKey = user ? resolveDoctorKey(user.email, user.full_name) : null;
+  const isAdmin = isMasterAdmin;
+
+  useEffect(() => {
+    if (!isMasterAdmin && currentDoctorKey) {
+      setHistoryDoctorFilter(currentDoctorKey === 'dra_lucy' ? 'dra_lucy' : 'dr_carlos');
+    }
+  }, [isMasterAdmin, currentDoctorKey]);
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -4052,76 +4063,96 @@ export default function App() {
                 </div>
 
                 {/* Filtros por Especialidade e Profissional */}
-                <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/70">
-                  {isAdmin && (
-                  <button
-                    onClick={() => setHistoryDoctorFilter('all')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                      historyDoctorFilter === 'all'
-                        ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                    }`}
-                  >
-                    <span>📋 Todos os Prontuários</span>
-                    <span className="bg-slate-200/80 text-slate-700 text-[10px] px-2 py-0.5 rounded-full font-extrabold">
-                      {history.length}
-                    </span>
-                  </button>
-                  )}
+                {isMasterAdmin ? (
+                  <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/70">
+                    <button
+                      onClick={() => setHistoryDoctorFilter('all')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        historyDoctorFilter === 'all'
+                          ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      <span>📋 Todos os Prontuários</span>
+                      <span className="bg-slate-200/80 text-slate-700 text-[10px] px-2 py-0.5 rounded-full font-extrabold">
+                        {history.length}
+                      </span>
+                    </button>
 
-                  {(isAdmin || currentDoctorKey === 'dra_lucy') && (
-                  <button
-                    onClick={() => setHistoryDoctorFilter('dra_lucy')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                      historyDoctorFilter === 'dra_lucy'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                    }`}
-                  >
-                    <span>🦷 Dra. Lucy Murata (Odontologia Biológica)</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
-                      historyDoctorFilter === 'dra_lucy' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      {history.filter(r => {
-                        const d = detectRecordSpecialtyAndDoctor(r);
-                        return d.isDental;
-                      }).length}
-                    </span>
-                  </button>
-                  )}
+                    <button
+                      onClick={() => setHistoryDoctorFilter('dra_lucy')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        historyDoctorFilter === 'dra_lucy'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      <span>🦷 Dra. Lucy Murata (Odontologia Biológica)</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                        historyDoctorFilter === 'dra_lucy' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {history.filter(r => {
+                          const d = detectRecordSpecialtyAndDoctor(r);
+                          return d.isDental;
+                        }).length}
+                      </span>
+                    </button>
 
-                  {(isAdmin || currentDoctorKey === 'dr_carlos') && (
-                  <button
-                    onClick={() => setHistoryDoctorFilter('dr_carlos')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                      historyDoctorFilter === 'dr_carlos'
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                    }`}
-                  >
-                    <span>🧠 Dr. Carlos Morato (Neurologia & Integrativa)</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
-                      historyDoctorFilter === 'dr_carlos' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      {history.filter(r => {
-                        const d = detectRecordSpecialtyAndDoctor(r);
-                        return d.isNeuro || d.isIntegrative;
-                      }).length}
-                    </span>
-                  </button>
-                  )}
-                </div>
+                    <button
+                      onClick={() => setHistoryDoctorFilter('dr_carlos')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        historyDoctorFilter === 'dr_carlos'
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                      }`}
+                    >
+                      <span>🧠 Dr. Carlos Morato (Neurologia & Integrativa)</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                        historyDoctorFilter === 'dr_carlos' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {history.filter(r => {
+                          const d = detectRecordSpecialtyAndDoctor(r);
+                          return d.isNeuro || d.isIntegrative;
+                        }).length}
+                      </span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    {currentDoctorKey === 'dra_lucy' ? (
+                      <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-blue-50 border border-blue-200/80 rounded-2xl text-xs font-bold text-blue-900 shadow-2xs">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
+                        <span>🦷 Prontuários: <strong>Dra. Lucy Morata (Odontologia Biológica)</strong></span>
+                        <span className="bg-blue-200/80 text-blue-900 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold ml-1">
+                          {history.filter(r => detectRecordSpecialtyAndDoctor(r).isDental).length} atendimentos
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-purple-50 border border-purple-200/80 rounded-2xl text-xs font-bold text-purple-900 shadow-2xs">
+                        <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
+                        <span>🧠 Prontuários: <strong>Dr. Carlos Morato (Neurologia & Integrativa)</strong></span>
+                        <span className="bg-purple-200/80 text-purple-900 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold ml-1">
+                          {history.filter(r => {
+                            const d = detectRecordSpecialtyAndDoctor(r);
+                            return d.isNeuro || d.isIntegrative;
+                          }).length} atendimentos
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid gap-4">
                   {(() => {
                     const cleanTerm = searchTerm.toLowerCase().trim();
                     const cleanDigits = cleanTerm.replace(/\D/g, '');
+                    const activeFilter = isMasterAdmin ? historyDoctorFilter : (currentDoctorKey || 'all');
                     const filtered = history.filter((record) => {
                       // Filtro por profissional / especialidade
                       const detected = detectRecordSpecialtyAndDoctor(record);
-                      if (historyDoctorFilter === 'dra_lucy' && !detected.isDental) return false;
-                      if (historyDoctorFilter === 'dr_carlos' && !(detected.isNeuro || detected.isIntegrative)) return false;
-                      if (historyDoctorFilter === 'offline' && !(record.is_offline_pending || record.offline_id)) return false;
+                      if (activeFilter === 'dra_lucy' && !detected.isDental) return false;
+                      if (activeFilter === 'dr_carlos' && !(detected.isNeuro || detected.isIntegrative)) return false;
+                      if (activeFilter === 'offline' && !(record.is_offline_pending || record.offline_id)) return false;
 
                       if (!cleanTerm) return true;
                       const nameMatch = record.paciente_nome_completo?.toLowerCase().includes(cleanTerm);

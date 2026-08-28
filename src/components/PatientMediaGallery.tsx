@@ -67,6 +67,51 @@ const DEFAULT_SAMPLE_MEDIA: MediaItem[] = [
   }
 ];
 
+// Helper para obter chave de persistência de anexos do paciente
+function getPatientMediaStorageKey(patientName: string): string {
+  const clean = (patientName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
+  return `ambulatorio_media_gallery_${clean || 'geral'}`;
+}
+
+// Compressão inteligente de imagem para não estourar o limite de armazenamento
+async function compressImageForStorage(dataUrl: string, maxWidth = 1200, quality = 0.85): Promise<string> {
+  return new Promise((resolve) => {
+    // Se for URL externa, não precisa comprimir
+    if (dataUrl.startsWith('http')) {
+      return resolve(dataUrl);
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = dataUrl;
+    img.onload = () => {
+      let w = img.width;
+      let h = img.height;
+      if (w > maxWidth || h > maxWidth) {
+        if (w > h) {
+          h = Math.round((h * maxWidth) / w);
+          w = maxWidth;
+        } else {
+          w = Math.round((w * maxWidth) / h);
+          h = maxWidth;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return resolve(dataUrl);
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        const compressed = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressed);
+      } catch {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => resolve(dataUrl);
+  });
+}
+
 export default function PatientMediaGallery({ 
   patientName, 
   onClose,
@@ -80,8 +125,27 @@ export default function PatientMediaGallery({
   onOdontogramChange?: (data: OdontogramData) => void;
   hideEmbeddedOdontogram?: boolean;
 }) {
-  const [items, setItems] = useState<MediaItem[]>(DEFAULT_SAMPLE_MEDIA);
-  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(DEFAULT_SAMPLE_MEDIA[0]);
+  const storageKey = getPatientMediaStorageKey(patientName);
+
+  // Inicializa com dados persistidos do paciente se existirem
+  const [items, setItems] = useState<MediaItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar galeria salva:', err);
+      }
+    }
+    return DEFAULT_SAMPLE_MEDIA;
+  });
+
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(() => items[0] || DEFAULT_SAMPLE_MEDIA[0]);
   const [activeTab, setActiveTab] = useState<'all' | 'tomography' | 'radiograph' | 'photo'>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAnnotateModal, setShowAnnotateModal] = useState(false);
@@ -93,6 +157,40 @@ export default function PatientMediaGallery({
       38: { id: 38, status: 'cavitation_nico', cbctFindings: 'Área hipodensa NICO em leito de siso extraído', biologicalPlan: 'Curetagem + Ozônio + Terapia Neural', neuralTherapy: true }
     }
   });
+
+  // Recarrega galeria quando o paciente selecionado mudar
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setItems(parsed);
+            setSelectedItem(parsed[0] || null);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao sincronizar galeria do paciente:', err);
+      }
+      setItems(DEFAULT_SAMPLE_MEDIA);
+      setSelectedItem(DEFAULT_SAMPLE_MEDIA[0]);
+    }
+  }, [patientName, storageKey]);
+
+  // Salva no localStorage sempre que os itens mudarem
+  const persistItems = (newItems: MediaItem[]) => {
+    setItems(newItems);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(newItems));
+      } catch (err) {
+        console.warn('Aviso: Limite de armazenamento atingido ao salvar imagens no navegador:', err);
+        toast.error('Armazenamento local cheio. Recomendamos usar imagens mais leves.');
+      }
+    }
+  };
 
   const handleOdontoUpdate = (newOdonto: OdontogramData) => {
     setLocalOdontogram(newOdonto);
@@ -162,13 +260,17 @@ export default function PatientMediaGallery({
     }
   };
 
-  const handleAddMedia = (e: React.FormEvent) => {
+  const handleAddMedia = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalUrl = uploadedFileDataUrl || newUrl || 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=1000';
+    const rawUrl = uploadedFileDataUrl || newUrl || 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=1000';
     if (!newTitle) {
       toast.error('Informe o título do anexo');
       return;
     }
+    
+    // Otimização e compressão para salvar no PC / navegador com segurança
+    const finalUrl = rawUrl.startsWith('data:image') ? await compressImageForStorage(rawUrl, 1400, 0.85) : rawUrl;
+
     const newItem: MediaItem = {
       id: Date.now().toString(),
       title: newTitle,
@@ -177,13 +279,14 @@ export default function PatientMediaGallery({
       date: new Date().toLocaleDateString('pt-BR'),
       description: 'Anexo adicionado ao prontuário do paciente'
     };
-    setItems([newItem, ...items]);
+    const updated = [newItem, ...items];
+    persistItems(updated);
     setSelectedItem(newItem);
     setNewTitle('');
     setNewUrl('');
     setUploadedFileDataUrl(null);
     setShowUploadModal(false);
-    toast.success('Imagem / Exame anexado com sucesso!');
+    toast.success('Imagem / Exame anexado e salvo com sucesso!');
   };
 
   // Canvas Initialization for Drawing (Two layers: bgCanvas for image, drawingCanvas for pen/eraser strokes)
@@ -297,7 +400,7 @@ export default function PatientMediaGallery({
     ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
   };
 
-  const handleSaveAnnotatedImage = () => {
+  const handleSaveAnnotatedImage = async () => {
     const bgCanvas = bgCanvasRef.current;
     const drawingCanvas = drawingCanvasRef.current;
     if (!bgCanvas || !drawingCanvas || !selectedItem) return;
@@ -313,7 +416,8 @@ export default function PatientMediaGallery({
     mergedCtx.drawImage(bgCanvas, 0, 0);
     mergedCtx.drawImage(drawingCanvas, 0, 0);
 
-    const dataUrl = mergedCanvas.toDataURL('image/png');
+    const rawDataUrl = mergedCanvas.toDataURL('image/jpeg', 0.88);
+    const dataUrl = await compressImageForStorage(rawDataUrl, 1400, 0.85);
 
     const annotatedItem: MediaItem = {
       id: Date.now().toString(),
@@ -324,7 +428,8 @@ export default function PatientMediaGallery({
       description: `Anotação/Risco médico feito em ${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
     };
 
-    setItems([annotatedItem, ...items]);
+    const updated = [annotatedItem, ...items];
+    persistItems(updated);
     setSelectedItem(annotatedItem);
     setShowAnnotateModal(false);
     toast.success('Imagem anotada salva com sucesso na galeria!');
@@ -333,7 +438,7 @@ export default function PatientMediaGallery({
   const handleDeleteItem = (id: string) => {
     if (window.confirm('Deseja realmente remover este exame da galeria do paciente?')) {
       const next = items.filter(i => i.id !== id);
-      setItems(next);
+      persistItems(next);
       setSelectedItem(next[0] || null);
       toast.success('Exame removido com sucesso.');
     }
