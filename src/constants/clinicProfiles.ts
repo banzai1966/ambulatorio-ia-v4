@@ -1,3 +1,5 @@
+import { LUCY_LOGO_DATA_URL } from './lucyLogoBase64';
+
 export interface ClinicProfileConfig {
   id: 'dra_lucy' | 'dr_carlos' | 'marco_admin' | string;
   professional_name: string;
@@ -9,6 +11,7 @@ export interface ClinicProfileConfig {
   email: string;
   website: string;
   slogan: string;
+  logo_url?: string;
   prescription_footer?: string;
   whatsapp_message_template?: string;
   evolution_url: string;
@@ -28,6 +31,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     email: 'lucimurata@gmail.com',
     website: 'www.dralucymurata.com.br',
     slogan: 'Odontologia Biológica, Cirurgia Zircônia & Saúde Integrativa',
+    logo_url: LUCY_LOGO_DATA_URL,
     prescription_footer: 'Receituário odontológico & integrativo emitido em conformidade com as normas do CFO/CRO. Válido em território nacional.',
     whatsapp_message_template: 'Olá {paciente}, segue a sua receita / orientação odontológica emitida pela Dra. Lucy Murata.',
     evolution_url: 'https://api.makprojetosmake.com.br',
@@ -69,6 +73,156 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     evolution_apikey: 'E6247913DB92-48B4-8B54-5C7449EA639B'
   }
 };
+
+export function detectRecordSpecialtyAndDoctor(record: any, allDoctorProfiles?: any[]): {
+  mode: 'biological_dentistry' | 'neurological' | 'integrative' | 'standard';
+  doctorId: 'dra_lucy' | 'dr_carlos' | 'marco_admin' | string;
+  doctorName: string;
+  specialtyLabel: string;
+  councilBadge: string;
+  isDental: boolean;
+  isNeuro: boolean;
+  isIntegrative: boolean;
+} {
+  if (!record) {
+    return {
+      mode: 'neurological',
+      doctorId: 'dr_carlos',
+      doctorName: 'Dr. Carlos Morato',
+      specialtyLabel: 'Neurologia & Medicina Integrativa',
+      councilBadge: 'CRM/SP 145.892',
+      isDental: false,
+      isNeuro: true,
+      isIntegrative: false
+    };
+  }
+
+  const spec = (record.especialidade || '').toLowerCase();
+  const prof = (record.profissional_responsavel || '').toLowerCase();
+  const medicoId = (record.medico_id || '').toLowerCase();
+  const dados = record.dados_especialidade || {};
+
+  // Detecção de Odontologia Biológica (Dra. Lucy Murata)
+  const isDental = Boolean(
+    spec.includes('odonto') ||
+    spec.includes('dent') ||
+    spec.includes('dente') ||
+    spec.includes('biol') ||
+    medicoId === 'dra_lucy' ||
+    medicoId.includes('lucy') ||
+    medicoId.includes('luci') ||
+    prof.includes('lucy') ||
+    prof.includes('luci') ||
+    prof.includes('murata') ||
+    prof.includes('morata') ||
+    dados.odontograma ||
+    dados.amalgama_ativo !== undefined ||
+    dados.implante_zirconia_ativo !== undefined ||
+    dados.focos_cavitacao_ativo !== undefined ||
+    dados.terapia_neural_ativo !== undefined
+  );
+
+  if (isDental) {
+    return {
+      mode: 'biological_dentistry',
+      doctorId: 'dra_lucy',
+      doctorName: 'Dra. Lucy Murata',
+      specialtyLabel: 'Odontologia Biológica & Saúde Integrativa',
+      councilBadge: 'CRO-SP 69246',
+      isDental: true,
+      isNeuro: false,
+      isIntegrative: false
+    };
+  }
+
+  // Detecção de Neurologia (Dr. Carlos Morato)
+  const isNeuro = Boolean(
+    spec.includes('neuro') ||
+    medicoId === 'dr_carlos' ||
+    medicoId.includes('carlos') ||
+    prof.includes('carlos') ||
+    (record.exame_neurologico && Object.keys(record.exame_neurologico).length > 0) ||
+    (dados.exame_neurologico && Object.keys(dados.exame_neurologico).length > 0)
+  );
+
+  if (isNeuro) {
+    return {
+      mode: 'neurological',
+      doctorId: 'dr_carlos',
+      doctorName: 'Dr. Carlos Morato',
+      specialtyLabel: 'Neurologia',
+      councilBadge: 'CRM/SP 145.892',
+      isDental: false,
+      isNeuro: true,
+      isIntegrative: false
+    };
+  }
+
+  // Detecção de Medicina Integrativa pura (Dr. Carlos Morato)
+  const isIntegrative = Boolean(
+    spec.includes('integrat') ||
+    (record.checklist_integrativo && Object.keys(record.checklist_integrativo).length > 0)
+  );
+
+  if (isIntegrative) {
+    return {
+      mode: 'integrative',
+      doctorId: 'dr_carlos',
+      doctorName: 'Dr. Carlos Morato',
+      specialtyLabel: 'Medicina Integrativa',
+      councilBadge: 'CRM/SP 145.892',
+      isDental: false,
+      isNeuro: false,
+      isIntegrative: true
+    };
+  }
+
+  // Detecção de Marco Duarte (Admin / Gestor)
+  if (
+    prof.includes('marco') ||
+    medicoId === 'marco_admin' ||
+    medicoId === 'master-admin-marco'
+  ) {
+    return {
+      mode: 'standard',
+      doctorId: 'marco_admin',
+      doctorName: 'Marco Duarte',
+      specialtyLabel: 'Gestor & Administrador',
+      councilBadge: 'Gestão Master',
+      isDental: false,
+      isNeuro: false,
+      isIntegrative: false
+    };
+  }
+
+  // Fallback padrão se houver perfil em allDoctorProfiles
+  if (allDoctorProfiles && allDoctorProfiles.length > 0 && record.medico_id) {
+    const matchedProfile = allDoctorProfiles.find(d => d.id === record.medico_id || d.full_name?.toLowerCase().includes(prof));
+    if (matchedProfile) {
+      return {
+        mode: matchedProfile.default_mode || 'standard',
+        doctorId: matchedProfile.id,
+        doctorName: matchedProfile.full_name,
+        specialtyLabel: matchedProfile.especialidade,
+        councilBadge: matchedProfile.crm_cro || 'CRM/CRO',
+        isDental: matchedProfile.default_mode === 'biological_dentistry',
+        isNeuro: matchedProfile.default_mode === 'neurological',
+        isIntegrative: matchedProfile.default_mode === 'integrative'
+      };
+    }
+  }
+
+  return {
+    mode: 'standard',
+    doctorId: 'dr_carlos',
+    doctorName: 'Dr. Carlos Morato',
+    specialtyLabel: record.especialidade || 'Clínica Geral',
+    councilBadge: 'CRM/SP 145.892',
+    isDental: false,
+    isNeuro: false,
+    isIntegrative: false
+  };
+}
 
 export function resolveDoctorKey(userOrEmail?: any, name?: string): 'dra_lucy' | 'dr_carlos' | 'marco_admin' {
   const email = (typeof userOrEmail === 'string' ? userOrEmail : (userOrEmail?.email || '')).toLowerCase().trim();

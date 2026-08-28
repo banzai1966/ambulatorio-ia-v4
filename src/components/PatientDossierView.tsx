@@ -50,7 +50,7 @@ import { initialIntegrativeData } from '../types/integrativeChecklist';
 import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { processClinicalInput } from '../services/clinicalService';
-import { resolveDoctorKey } from '../constants/clinicProfiles';
+import { resolveDoctorKey, detectRecordSpecialtyAndDoctor } from '../constants/clinicProfiles';
 
 interface ClinicalDoctorProfile {
   id: string;
@@ -70,9 +70,9 @@ const DEFAULT_DOCTOR_PROFILES: ClinicalDoctorProfile[] = [
   },
   {
     id: 'dra_lucy',
-    full_name: 'Dra. Lucy Morata',
+    full_name: 'Dra. Lucy Murata',
     especialidade: 'Odontologia Biológica & Saúde Integrativa',
-    crm_cro: 'CRO/SP 98.412',
+    crm_cro: 'CRO-SP: 69246',
     default_mode: 'biological_dentistry',
   },
   {
@@ -347,7 +347,13 @@ export default function PatientDossierView({
 
   // Identificação do profissional responsável ativo
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
-    // 1. Se houver usuário logado (Dr. Carlos, Dra. Lucy ou outro profissional)
+    // 1. Se o prontuário atual estiver definido, detecta sua especialidade e profissional exatos
+    if (currentRecord) {
+      const detected = detectRecordSpecialtyAndDoctor(currentRecord, allDoctorProfiles);
+      if (detected.doctorId) return detected.doctorId;
+    }
+
+    // 2. Se houver usuário logado (Dr. Carlos, Dra. Lucy ou outro profissional)
     if (currentUser) {
       const docKey = resolveDoctorKey(currentUser);
       if (docKey === 'dr_carlos') return 'dr_carlos';
@@ -362,20 +368,11 @@ export default function PatientDossierView({
       if (match && match.id !== 'dr_marco') return match.id;
     }
 
-    // 2. Se o prontuário atual tiver médico responsável registrado
-    if (currentRecord?.profissional_responsavel) {
-      const match = allDoctorProfiles.find(d => 
-        d.full_name.toLowerCase().includes(currentRecord.profissional_responsavel.toLowerCase()) ||
-        currentRecord.profissional_responsavel.toLowerCase().includes(d.full_name.toLowerCase())
-      );
-      if (match) return match.id;
-    }
-
     // 3. Se o modo de exame inicial estiver explícito
-    if (examMode === 'biological_dentistry' || currentRecord?.especialidade?.toLowerCase().includes('odonto') || currentRecord?.especialidade?.toLowerCase().includes('biol')) {
+    if (examMode === 'biological_dentistry') {
       return 'dra_lucy';
     }
-    if (examMode === 'neurological' || currentRecord?.especialidade?.toLowerCase().includes('neuro')) {
+    if (examMode === 'neurological' || examMode === 'integrative') {
       return 'dr_carlos';
     }
 
@@ -949,6 +946,22 @@ export default function PatientDossierView({
   const handleSaveRecord = (e?: React.FormEvent) => {
     if (e && e.preventDefault) e.preventDefault();
 
+    const isDental = examMode === 'biological_dentistry' || activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.especialidade && activeDoctor.especialidade.toLowerCase().includes('odonto'));
+    const isNeuro = examMode === 'neurological' || activeDoctor.default_mode === 'neurological' || (activeDoctor.especialidade && activeDoctor.especialidade.toLowerCase().includes('neuro'));
+    const isIntegrative = examMode === 'integrative';
+
+    const assignedDoctor = isDental 
+      ? (allDoctorProfiles.find(d => d.id === 'dra_lucy') || activeDoctor)
+      : (isNeuro || isIntegrative 
+          ? (allDoctorProfiles.find(d => d.id === 'dr_carlos') || activeDoctor)
+          : activeDoctor);
+
+    const assignedSpecialty = isDental
+      ? 'Odontologia Biológica & Saúde Integrativa'
+      : (isIntegrative 
+          ? 'Medicina Integrativa' 
+          : (isNeuro ? 'Neurologia' : (assignedDoctor.especialidade || 'Clínica Geral')));
+
     const recordToSave = {
       ...currentRecord,
       paciente_nome_completo: patientName || currentRecord?.paciente_nome_completo || "PACIENTE",
@@ -960,18 +973,16 @@ export default function PatientDossierView({
       hipotese_diagnostica: hipoteseDiag,
       conduta_plano_terapeutico: condutaPlano,
       prescricao: prescricaoText,
-      checklist_integrativo: integrativeData || currentRecord?.checklist_integrativo,
-      exame_neurologico: currentRecord?.exame_neurologico || (examMode === 'neurological' ? specialtyData : undefined),
+      checklist_integrativo: isIntegrative ? (integrativeData || currentRecord?.checklist_integrativo) : currentRecord?.checklist_integrativo,
+      exame_neurologico: isNeuro ? (specialtyData?.exame_neurologico || currentRecord?.exame_neurologico || specialtyData) : currentRecord?.exame_neurologico,
       dados_especialidade: {
         ...specialtyData,
         mapeamento_corporal: currentRecord?.mapeamento_corporal || specialtyData?.mapeamento_corporal || []
       },
       mapeamento_corporal: currentRecord?.mapeamento_corporal || specialtyData?.mapeamento_corporal || [],
-      especialidade: examMode === 'biological_dentistry'
-        ? 'Odontologia Biológica' 
-        : (examMode === 'integrative' ? 'Integrativa' : (examMode === 'neurological' ? 'Neurologia' : (activeDoctor.especialidade || currentRecord?.especialidade || 'Geral'))),
-      profissional_responsavel: activeDoctor.full_name,
-      medico_id: activeDoctor.id,
+      especialidade: assignedSpecialty,
+      profissional_responsavel: assignedDoctor.full_name,
+      medico_id: assignedDoctor.id,
       resumo_formatado: currentRecord?.resumo_formatado || queixaPrincipal
     };
 
@@ -1025,32 +1036,53 @@ export default function PatientDossierView({
     if (rec.conduta_plano_terapeutico) setCondutaPlano(rec.conduta_plano_terapeutico);
     if (rec.prescricao || rec.conduta_plano_terapeutico) setPrescricaoText(rec.prescricao || rec.conduta_plano_terapeutico);
     
-    // Sincroniza o profissional do prontuário histórico
-    if (rec.profissional_responsavel) {
-      const match = allDoctorProfiles.find(d => 
-        d.full_name.toLowerCase().includes(rec.profissional_responsavel.toLowerCase()) ||
-        rec.profissional_responsavel.toLowerCase().includes(d.full_name.toLowerCase())
-      );
-      if (match) setSelectedDoctorId(match.id);
-    }
-
-    if (rec.especialidade?.toLowerCase().includes('neuro') || (rec.exame_neurologico && hasMeaningfulData(rec.exame_neurologico))) {
-      setExamMode('neurological');
-    } else if (rec.especialidade?.toLowerCase().includes('integrativa') || (rec.checklist_integrativo && hasMeaningfulData(rec.checklist_integrativo))) {
-      setExamMode('integrative');
-    } else if (rec.especialidade?.toLowerCase().includes('odontologia') || rec.especialidade?.toLowerCase().includes('biolog')) {
+    // Sincroniza o profissional e modo com base na análise do prontuário
+    const detected = detectRecordSpecialtyAndDoctor(rec, allDoctorProfiles);
+    if (detected.isDental) {
+      setSelectedDoctorId('dra_lucy');
       setExamMode('biological_dentistry');
+      setActiveTab('especialidade');
+      toast.success('Prontuário Odontológico carregado • Dra. Lucy Murata');
+    } else if (detected.isNeuro) {
+      setSelectedDoctorId('dr_carlos');
+      setExamMode('neurological');
+      setActiveTab('especialidade');
+      toast.success('Prontuário Neurológico carregado • Dr. Carlos Morato');
+    } else if (detected.isIntegrative) {
+      setSelectedDoctorId('dr_carlos');
+      setExamMode('integrative');
+      setActiveTab('especialidade');
+      toast.success('Prontuário Integrativo carregado • Dr. Carlos Morato');
     } else {
-      setExamMode('standard');
+      setSelectedDoctorId(detected.doctorId);
+      setExamMode(detected.mode);
+      toast.success(`Prontuário carregado • ${detected.doctorName}`);
     }
 
     setSelectedHistoryRecord(null);
-    toast.success('Atendimento histórico carregado no editor principal!');
   };
 
   // Keep state synced when currentRecord changes
   useEffect(() => {
     if (currentRecord) {
+      const detected = detectRecordSpecialtyAndDoctor(currentRecord, allDoctorProfiles);
+      if (detected.isDental) {
+        setSelectedDoctorId('dra_lucy');
+        if (examMode !== 'biological_dentistry') {
+          setExamMode('biological_dentistry');
+        }
+      } else if (detected.isNeuro) {
+        setSelectedDoctorId('dr_carlos');
+        if (examMode !== 'neurological' && examMode !== 'integrative') {
+          setExamMode('neurological');
+        }
+      } else if (detected.isIntegrative) {
+        setSelectedDoctorId('dr_carlos');
+        if (examMode !== 'integrative' && examMode !== 'neurological') {
+          setExamMode('integrative');
+        }
+      }
+
       if (currentRecord.queixa_principal !== undefined) setQueixaPrincipal(currentRecord.queixa_principal || '');
       if (currentRecord.exame_fisico !== undefined) setExameFisico(currentRecord.exame_fisico || '');
       if (currentRecord.hipotese_diagnostica !== undefined) {

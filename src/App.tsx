@@ -76,7 +76,7 @@ import PatientDossierView from './components/PatientDossierView';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
 import { SPECIALTIES } from './constants/specialties';
-import { getActiveClinicConfig, resolveDoctorKey } from './constants/clinicProfiles';
+import { getActiveClinicConfig, resolveDoctorKey, detectRecordSpecialtyAndDoctor } from './constants/clinicProfiles';
 import { 
   getOfflineRecords, 
   saveRecordLocally, 
@@ -276,6 +276,7 @@ export default function App() {
   const [preselectedChatPhone, setPreselectedChatPhone] = useState<string | null>(null);
   const [history, setHistory] = useState<ClinicalRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [historyDoctorFilter, setHistoryDoctorFilter] = useState<'all' | 'dra_lucy' | 'dr_carlos' | 'offline'>('all');
   
   // Persistência de Aba Ativa
   const savedActiveTab = typeof window !== 'undefined' ? localStorage.getItem('ambulatorio_active_tab') : null;
@@ -316,6 +317,11 @@ export default function App() {
 
   const [clinicInfo, setClinicInfo] = useState<any>(null);
   const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
+
+  // Identificação do papel e médico atual
+  const isAdmin = user ? (user.role === 'admin' || user.email === 'marco.agduarte22@gmail.com' || user.email === 'carvalhomorato@gmail.com' || user.email?.includes('admin')) : true;
+  const isMasterAdmin = user ? (user.email === 'marco.agduarte22@gmail.com' || user.role === 'admin') : true;
+  const currentDoctorKey = user ? resolveDoctorKey(user.email, user.full_name) : null;
 
   useEffect(() => {
     const handleHashChange = () => {
@@ -918,10 +924,10 @@ export default function App() {
         body: JSON.stringify({
           email: lucyEmail,
           password: lucyPassword,
-          full_name: 'Dra. Lucy Morata',
+          full_name: 'Dra. Lucy Murata',
           role: 'doctor',
           especialidade: 'Odontologia Biológica & Saúde Integrativa',
-          crm_cro: 'CRO/SP 98.412'
+          crm_cro: 'CRO-SP: 69246'
         })
       }).catch(e => console.warn("Backend auth sync aviso:", e));
 
@@ -936,9 +942,9 @@ export default function App() {
           id: data.user.id,
           role: 'doctor',
           status: 'approved',
-          full_name: 'Dra. Lucy Morata'
+          full_name: 'Dra. Lucy Murata'
         });
-        toast.success("Bem-vinda, Dra. Lucy Morata!");
+        toast.success("Bem-vinda, Dra. Lucy Murata!");
         return;
       }
 
@@ -948,10 +954,10 @@ export default function App() {
           password: lucyPassword,
           options: {
             data: {
-              full_name: 'Dra. Lucy Morata',
+              full_name: 'Dra. Lucy Murata',
               role: 'doctor',
               especialidade: 'Odontologia Biológica & Saúde Integrativa',
-              crm_cro: 'CRO/SP 98.412'
+              crm_cro: 'CRO-SP: 69246'
             }
           }
         });
@@ -961,7 +967,7 @@ export default function App() {
             email: lucyEmail,
             role: 'doctor',
             status: 'approved',
-            full_name: 'Dra. Lucy Morata',
+            full_name: 'Dra. Lucy Murata',
             especialidade: 'Odontologia Biológica & Saúde Integrativa'
           }, { onConflict: 'email' });
           updateUserState({
@@ -969,9 +975,9 @@ export default function App() {
             id: signUpData.user.id,
             role: 'doctor',
             status: 'approved',
-            full_name: 'Dra. Lucy Morata'
+            full_name: 'Dra. Lucy Murata'
           });
-          toast.success("Bem-vinda, Dra. Lucy Morata!");
+          toast.success("Bem-vinda, Dra. Lucy Murata!");
           return;
         }
       }
@@ -981,9 +987,9 @@ export default function App() {
         id: 'dra-lucy-morata-id',
         role: 'doctor',
         status: 'approved',
-        full_name: 'Dra. Lucy Morata'
+        full_name: 'Dra. Lucy Murata'
       });
-      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata!");
+      toast.success("🦷 Acesso Liberado: Dra. Lucy Murata!");
     } catch (err: any) {
       console.warn("Acesso Lucy Fallback:", err);
       updateUserState({
@@ -991,9 +997,9 @@ export default function App() {
         id: 'dra-lucy-morata-id',
         role: 'doctor',
         status: 'approved',
-        full_name: 'Dra. Lucy Morata'
+        full_name: 'Dra. Lucy Murata'
       });
-      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata!");
+      toast.success("🦷 Acesso Liberado: Dra. Lucy Murata!");
     } finally {
       setAuthLoading(false);
     }
@@ -2903,7 +2909,7 @@ export default function App() {
       doc.setFont('helvetica', 'bold');
       
       const isDental = record.especialidade?.toLowerCase().includes('odonto') || record.especialidade?.toLowerCase().includes('biol') || examMode === 'biological_dentistry';
-      const fallbackDoc = isDental ? 'Dra. Lucy Morata' : (examMode === 'neurological' ? 'Dr. Carlos Morato' : 'Dr. Marco Duarte');
+      const fallbackDoc = isDental ? 'Dra. Lucy Murata' : (examMode === 'neurological' ? 'Dr. Carlos Morato' : 'Dr. Marco Duarte');
       const docName = record.profiles?.full_name || record.profissional_responsavel || fallbackDoc;
       const prefix = (docName.toLowerCase().startsWith('dr.') || docName.toLowerCase().startsWith('dra.') || docName.toLowerCase().startsWith('dr ') || docName.toLowerCase().startsWith('dra ')) ? '' : 'Dr(a). ';
       doc.text(`${prefix}${docName}`, pageWidth / 2, footerY + 6, { align: 'center' });
@@ -2911,7 +2917,7 @@ export default function App() {
       doc.setFontSize(8.5);
       doc.setTextColor(80, 80, 80);
       doc.setFont('helvetica', 'normal');
-      const councilText = isDental ? 'CRO/SP 98.412 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Medicina Integrativa';
+      const councilText = isDental ? 'CRO-SP: 69246 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Medicina Integrativa';
       doc.text(councilText, pageWidth / 2, footerY + 11, { align: 'center' });
 
       doc.setFontSize(7.5);
@@ -3965,9 +3971,9 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-clinical-border shadow-sm">
                   <div>
                     <h2 className="text-2xl font-bold text-slate-800">Histórico de Atendimentos</h2>
-                    <p className="text-slate-500 text-sm">Gerencie e visualize todos os prontuários salvos.</p>
+                    <p className="text-slate-500 text-sm">Gerencie, filtre e visualize os prontuários por profissional e especialidade.</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                       <input 
@@ -4045,11 +4051,78 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Filtros por Especialidade e Profissional */}
+                <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/70">
+                  {isAdmin && (
+                  <button
+                    onClick={() => setHistoryDoctorFilter('all')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      historyDoctorFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <span>📋 Todos os Prontuários</span>
+                    <span className="bg-slate-200/80 text-slate-700 text-[10px] px-2 py-0.5 rounded-full font-extrabold">
+                      {history.length}
+                    </span>
+                  </button>
+                  )}
+
+                  {(isAdmin || currentDoctorKey === 'dra_lucy') && (
+                  <button
+                    onClick={() => setHistoryDoctorFilter('dra_lucy')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      historyDoctorFilter === 'dra_lucy'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <span>🦷 Dra. Lucy Murata (Odontologia Biológica)</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                      historyDoctorFilter === 'dra_lucy' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {history.filter(r => {
+                        const d = detectRecordSpecialtyAndDoctor(r);
+                        return d.isDental;
+                      }).length}
+                    </span>
+                  </button>
+                  )}
+
+                  {(isAdmin || currentDoctorKey === 'dr_carlos') && (
+                  <button
+                    onClick={() => setHistoryDoctorFilter('dr_carlos')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                      historyDoctorFilter === 'dr_carlos'
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <span>🧠 Dr. Carlos Morato (Neurologia & Integrativa)</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                      historyDoctorFilter === 'dr_carlos' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {history.filter(r => {
+                        const d = detectRecordSpecialtyAndDoctor(r);
+                        return d.isNeuro || d.isIntegrative;
+                      }).length}
+                    </span>
+                  </button>
+                  )}
+                </div>
+
                 <div className="grid gap-4">
                   {(() => {
                     const cleanTerm = searchTerm.toLowerCase().trim();
                     const cleanDigits = cleanTerm.replace(/\D/g, '');
                     const filtered = history.filter((record) => {
+                      // Filtro por profissional / especialidade
+                      const detected = detectRecordSpecialtyAndDoctor(record);
+                      if (historyDoctorFilter === 'dra_lucy' && !detected.isDental) return false;
+                      if (historyDoctorFilter === 'dr_carlos' && !(detected.isNeuro || detected.isIntegrative)) return false;
+                      if (historyDoctorFilter === 'offline' && !(record.is_offline_pending || record.offline_id)) return false;
+
                       if (!cleanTerm) return true;
                       const nameMatch = record.paciente_nome_completo?.toLowerCase().includes(cleanTerm);
                       const cpfMatch = (cleanDigits.length > 0 && record.paciente_cpf?.replace(/\D/g, '').includes(cleanDigits)) || record.paciente_cpf?.toLowerCase().includes(cleanTerm);
@@ -4064,12 +4137,15 @@ export default function App() {
                       return (
                         <div className="text-center py-12 bg-white rounded-3xl border border-clinical-border">
                           <FileText size={48} className="mx-auto text-slate-300 mb-3" />
-                          <p className="text-slate-500 font-medium">Nenhum prontuário encontrado para "{searchTerm}".</p>
+                          <p className="text-slate-500 font-medium">Nenhum prontuário encontrado.</p>
                         </div>
                       );
                     }
 
-                    return filtered.map((record) => (
+                    return filtered.map((record) => {
+                      const detected = detectRecordSpecialtyAndDoctor(record);
+
+                      return (
                       <motion.div 
                         key={record.id}
                         layout
@@ -4079,28 +4155,30 @@ export default function App() {
                       >
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                           <div className="flex items-start gap-4">
-                            <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-clinical-blue/10 group-hover:text-clinical-blue transition-colors">
-                              <FileText size={24} />
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-colors ${
+                              detected.isDental 
+                                ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white' 
+                                : 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
+                            }`}>
+                              {detected.isDental ? '🦷' : '🧠'}
                             </div>
                             <div>
-                              <div className="flex items-center gap-3 mb-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1">
                                 <h3 className="font-bold text-slate-800">{record.paciente_nome_completo}</h3>
                                 <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border", getStatusColor(record.paciente_status))}>
                                   {record.paciente_status}
                                 </span>
-                                {(record.especialidade?.toLowerCase().includes('neuro') || (record.exame_neurologico && hasMeaningfulData(record.exame_neurologico))) && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-purple-100 bg-purple-50 text-purple-600">
-                                    NEUROLÓGICO
+                                {detected.isDental ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-blue-200 bg-blue-50 text-blue-700">
+                                    🦷 DRA. LUCY • ODONTOLOGIA BIOLÓGICA
                                   </span>
-                                )}
-                                {(record.especialidade?.toLowerCase().includes('integrativa') || (record.checklist_integrativo && hasMeaningfulData(record.checklist_integrativo))) && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-sky-200 bg-sky-50 text-sky-700">
-                                    INTEGRATIVA
+                                ) : detected.isIntegrative ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-sky-200 bg-sky-50 text-sky-700">
+                                    🌿 DR. CARLOS • INTEGRATIVA
                                   </span>
-                                )}
-                                {(record.especialidade?.toLowerCase().includes('odontologia') || record.especialidade?.toLowerCase().includes('biológica') || record.especialidade?.toLowerCase().includes('biologica')) && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border border-blue-100 bg-blue-50 text-blue-700">
-                                    ODONTOLOGIA BIOLÓGICA
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-purple-200 bg-purple-50 text-purple-700">
+                                    🧠 DR. CARLOS • NEUROLOGIA
                                   </span>
                                 )}
                                 {(record.is_offline_pending || record.offline_id) && (
@@ -4122,11 +4200,11 @@ export default function App() {
                                 )}
                                 <span className="flex items-center gap-1.5">
                                   <Activity size={14} className="text-slate-300" />
-                                  {record.especialidade}
+                                  {record.especialidade || detected.specialtyLabel}
                                 </span>
-                                <span className="flex items-center gap-1.5">
-                                  <Stethoscope size={14} className="text-slate-300" />
-                                  {record.profiles?.full_name || record.profissional_responsavel || 'Não informado'}
+                                <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+                                  <Stethoscope size={14} className="text-slate-400" />
+                                  {record.profissional_responsavel || detected.doctorName}
                                 </span>
                               </div>
                             </div>
@@ -4151,34 +4229,39 @@ export default function App() {
                             </button>
                             <button 
                               onClick={() => {
-                              const sanitizedRecord = {
+                                const detected = detectRecordSpecialtyAndDoctor(record);
+                                const sanitizedRecord = {
                                   ...record,
                                   checklist_integrativo: record.checklist_integrativo ? {
                                     ...initialIntegrativeData,
                                     ...record.checklist_integrativo
                                   } : undefined,
-                                  // Garantia de carga do mapeamento e vitals via raiz ou do "baú" dados_especialidade
                                   mapeamento_corporal: (record.mapeamento_corporal && record.mapeamento_corporal.length > 0)
                                     ? record.mapeamento_corporal 
                                     : (record.dados_especialidade?.mapeamento_corporal || []),
                                   vitals: record.vitals || record.dados_especialidade?.vitals || undefined,
                                 };
-                                console.log("LOG_VERSAO: 3.2 - Carregando mapeamento:", sanitizedRecord.mapeamento_corporal);
+
                                 setCurrentRecord(sanitizedRecord);
                                 setShowHistory(false);
-                                if (record.especialidade?.toLowerCase().includes('neuro') || (record.exame_neurologico && hasMeaningfulData(record.exame_neurologico))) {
-                                  setExamMode('neurological');
-                                } else if (record.especialidade?.toLowerCase().includes('integrativa') || (record.checklist_integrativo && hasMeaningfulData(record.checklist_integrativo))) {
-                                  setExamMode('integrative');
-                                } else if (record.especialidade?.toLowerCase().includes('odontologia') || record.especialidade?.toLowerCase().includes('biolog')) {
-                                  setExamMode('biological_dentistry');
-                                } else {
-                                  setExamMode('standard');
-                                }
                                 setShowDashboard(false);
+
+                                if (detected.isDental) {
+                                  setExamMode('biological_dentistry');
+                                  toast.success('Prontuário Odontológico carregado • Dra. Lucy Murata');
+                                } else if (detected.isNeuro) {
+                                  setExamMode('neurological');
+                                  toast.success('Prontuário Neurológico carregado • Dr. Carlos Morato');
+                                } else if (detected.isIntegrative) {
+                                  setExamMode('integrative');
+                                  toast.success('Prontuário Integrativo carregado • Dr. Carlos Morato');
+                                } else {
+                                  setExamMode(detected.mode);
+                                  toast.success(`Prontuário carregado • ${detected.doctorName}`);
+                                }
                               }}
                               className="p-2.5 text-slate-400 hover:text-clinical-blue hover:bg-clinical-blue/5 rounded-xl transition-all"
-                              title="Visualizar"
+                              title="Visualizar e Editar no Prontuário"
                             >
                               <Eye size={20} />
                             </button>
@@ -4206,7 +4289,8 @@ export default function App() {
                           </div>
                         </div>
                       </motion.div>
-                    ));
+                    );
+                    });
                   })()}
                 </div>
               </motion.div>

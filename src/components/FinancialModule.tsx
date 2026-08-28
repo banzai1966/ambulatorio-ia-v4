@@ -583,7 +583,7 @@ export default function FinancialModule({ currentUser }: FinancialModuleProps) {
                     }}
                     className="w-full p-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
-                    <option value="dra_lucy">Dra. Lucy Morata (CRO/SP 98.412) - Odontologia Biológica</option>
+                    <option value="dra_lucy">Dra. Lucy Murata (CRO-SP 69246) - Odontologia Biológica</option>
                     <option value="dr_carlos">Dr. Carlos Morato (CRM/SP 145.892) - Neurologia & Integrativa</option>
                     <option value="marco_admin">Marco Duarte - Ambulatório Geral</option>
                   </select>
@@ -834,23 +834,32 @@ export default function FinancialModule({ currentUser }: FinancialModuleProps) {
             {/* Template do Recibo Timbrado */}
             <div className="border-2 border-slate-800 p-8 rounded-2xl space-y-6 text-slate-800 bg-white">
               <div className="text-center border-b-2 border-slate-800 pb-4">
-                <h1 className="text-xl font-black uppercase tracking-wider">
-                  {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
-                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].name
-                    : activeClinic.name}
-                </h1>
-                <p className="text-xs text-slate-600 font-medium">
-                  {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
-                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].slogan
-                    : activeClinic.slogan}
-                </p>
-                <p className="text-[10px] text-slate-500">
-                  {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
-                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].address
-                    : activeClinic.address} • Tel: {selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
-                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey].phone
-                    : activeClinic.phone}
-                </p>
+                {(() => {
+                  const docConfig = selectedReceipt.doctorKey && CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
+                    ? CLINIC_PROFILES_CONFIG[selectedReceipt.doctorKey]
+                    : activeClinic;
+                  return (
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      {docConfig?.logo_url && (
+                        <img 
+                          src={docConfig.logo_url} 
+                          alt="Logo da Clínica" 
+                          referrerPolicy="no-referrer"
+                          className="h-14 w-auto object-contain mx-auto mb-1 max-w-[150px]"
+                        />
+                      )}
+                      <h1 className="text-xl font-black uppercase tracking-wider">
+                        {docConfig.name}
+                      </h1>
+                      <p className="text-xs text-slate-600 font-medium">
+                        {docConfig.slogan}
+                      </p>
+                      <p className="text-[10px] text-slate-500">
+                        {docConfig.address} • Tel: {docConfig.phone}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="text-center">

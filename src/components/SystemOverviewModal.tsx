@@ -423,7 +423,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                           <FileText size={15} className="text-emerald-700" /> Emissão de Recibo Timbrado
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Ao confirmar a receita, o sistema gera o recibo com cabeçalho oficial do consultório da <strong>Dra. Lucy (CRO/SP 98.412)</strong> ou do <strong>Dr. Carlos (CRM/SP 145.892)</strong> pronto para impressão ou WhatsApp.
+                          Ao confirmar a receita, o sistema gera o recibo com cabeçalho oficial do consultório da <strong>Dra. Lucy (CRO-SP 69246)</strong> ou do <strong>Dr. Carlos (CRM/SP 145.892)</strong> pronto para impressão ou WhatsApp.
                         </p>
                       </div>
                     </div>

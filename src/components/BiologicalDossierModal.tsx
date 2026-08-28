@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   X, 
   Printer, 
@@ -18,11 +18,14 @@ import {
   FileText, 
   Zap, 
   AlertCircle,
-  FileSignature
+  FileSignature,
+  Loader2
 } from 'lucide-react';
 import { TOOTH_METADATA, STATUS_CONFIG, ToothRecord, OdontogramData } from './InteractiveOdontogram';
 import { BiologicalDentistryData } from './BiologicalDentistryForm';
 import { toast } from 'react-hot-toast';
+import { LUCY_LOGO_DATA_URL } from '../constants/lucyLogoBase64';
+import { generateBiologicalDossierDirectPDF } from '../lib/biologicalDossierPdfGenerator';
 
 interface Props {
   isOpen: boolean;
@@ -51,6 +54,8 @@ export default function BiologicalDossierModal({
   clinicInfo
 }: Props) {
   const printContainerRef = useRef<HTMLDivElement>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -64,8 +69,112 @@ export default function BiologicalDossierModal({
   const endos = identifiedTeeth.filter(t => t.status === 'endodontic');
   const ceramics = identifiedTeeth.filter(t => t.status === 'ceramic_crown');
 
+  // Função para baixar arquivo PDF diretamente
+  const handleDownloadPDF = () => {
+    if (isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    const toastId = toast.loading('Gerando Dossiê em PDF de 2 páginas...');
+    
+    try {
+      const doc = generateBiologicalDossierDirectPDF({
+        patientName,
+        patientPhone,
+        patientCpf,
+        patientDob,
+        data,
+        clinicInfo
+      });
+
+      const safeName = (patientName || 'Paciente').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+      doc.save(`Dossie_Biologico_${safeName}_Dra_Lucy_Murata.pdf`);
+      toast.success('Dossiê baixado com sucesso em PDF!', { id: toastId });
+    } catch (err: any) {
+      console.error('Erro ao gerar PDF:', err);
+      toast.error('Erro ao gerar PDF. Abrindo janela de impressão...', { id: toastId });
+      handlePrint();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  // Função para impressão nativa direta e sem cortes
   const handlePrint = () => {
-    window.print();
+    setIsPrinting(true);
+    const page1 = document.getElementById('dossier-print-page-1');
+    const page2 = document.getElementById('dossier-print-page-2');
+
+    if (!page1 || !page2) {
+      window.print();
+      setIsPrinting(false);
+      return;
+    }
+
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        window.print();
+        setIsPrinting(false);
+        return;
+      }
+
+      const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+        .map(el => el.outerHTML)
+        .join('\n');
+
+      printWindow.document.open();
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Dossiê Odontológico Biológico - ${patientName || 'Paciente'}</title>
+            ${styles}
+            <style>
+              @page {
+                size: A4 portrait;
+                margin: 8mm;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              }
+              .dossier-page-print {
+                width: 100%;
+                box-sizing: border-box;
+                page-break-after: always;
+                page-break-inside: avoid;
+                margin-bottom: 20px;
+              }
+              .dossier-page-print:last-child {
+                page-break-after: auto;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="dossier-page-print">${page1.innerHTML}</div>
+            <div class="dossier-page-print">${page2.innerHTML}</div>
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.focus();
+                  window.print();
+                }, 300);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      setIsPrinting(false);
+    } catch (e) {
+      console.warn("Fallback print:", e);
+      setIsPrinting(false);
+      window.print();
+    }
   };
 
   const handleShareWhatsApp = () => {
@@ -99,7 +208,7 @@ export default function BiologicalDossierModal({
             <div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 bg-blue-500/30 text-blue-300 text-[10px] font-black uppercase rounded-md tracking-wider border border-blue-400/30">
-                  Dra. Lucy Morata
+                  Dra. Lucy Murata
                 </span>
                 <h3 className="font-extrabold text-base tracking-tight text-white">
                   Dossiê Odontológico Biológico (2 Páginas)
@@ -114,23 +223,51 @@ export default function BiologicalDossierModal({
           <div className="flex items-center gap-2">
             <button
               onClick={handleShareWhatsApp}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
               title="Compartilhar resumo via WhatsApp"
             >
               <Share2 size={15} />
               <span className="hidden sm:inline">WhatsApp</span>
             </button>
             <button
-              onClick={handlePrint}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95"
-              title="Imprimir ou Salvar em PDF"
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPdf}
+              className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/30 active:scale-95 cursor-pointer"
+              title="Baixar arquivo PDF de 2 páginas no seu computador"
             >
-              <Printer size={15} />
-              <span>Imprimir / Salvar PDF</span>
+              {isGeneratingPdf ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  <span>Gerando PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={15} />
+                  <span>Salvar PDF (A4)</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={handlePrint}
+              disabled={isPrinting}
+              className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95 cursor-pointer"
+              title="Imprimir o Dossiê na impressora"
+            >
+              {isPrinting ? (
+                <>
+                  <Loader2 size={15} className="animate-spin" />
+                  <span>Preparando...</span>
+                </>
+              ) : (
+                <>
+                  <Printer size={15} />
+                  <span>Imprimir</span>
+                </>
+              )}
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
               title="Fechar"
             >
               <X size={20} />
@@ -144,28 +281,35 @@ export default function BiologicalDossierModal({
           {/* ========================================================================= */}
           {/* PÁGINA 1: MAPA INTEGRATIVO & CORRELAÇÃO DENTE-ÓRGÃO                      */}
           {/* ========================================================================= */}
-          <div className="bg-white rounded-2xl p-6 sm:p-10 border border-slate-200 shadow-sm max-w-4xl mx-auto min-h-[1050px] flex flex-col justify-between print:border-none print:shadow-none print:p-8 print:m-0 print:min-h-screen print:page-break-after-always">
+          <div 
+            id="dossier-print-page-1"
+            className="bg-white rounded-2xl p-6 sm:p-10 border border-slate-200 shadow-sm max-w-4xl mx-auto min-h-[1050px] flex flex-col justify-between print:border-none print:shadow-none print:p-8 print:m-0 print:min-h-screen print:page-break-after-always"
+          >
             
             <div className="space-y-6">
               {/* Header Timbrado */}
-              <div className="flex items-start justify-between border-b-2 border-blue-900/20 pb-5">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-blue-600"></span>
+              <div className="flex items-center justify-between border-b-2 border-blue-900/20 pb-5 gap-4">
+                <div className="flex items-center gap-4">
+                  <img 
+                    src={LUCY_LOGO_DATA_URL} 
+                    alt="Logo Dra. Lucy Murata" 
+                    className="h-16 w-auto object-contain shrink-0 max-w-[150px]"
+                  />
+                  <div className="space-y-1">
                     <h1 className="text-xl font-black tracking-tight text-slate-900 uppercase">
                       Consultório Dra. Lucy Murata
                     </h1>
+                    <h2 className="text-sm font-bold text-blue-700">
+                      Odontologia Biológica & Saúde Integrativa • Reabilitação Metal-Free
+                    </h2>
+                    <p className="text-[11px] text-slate-500">
+                      Torre II - Praça Maastricht, 200 - Sl 103, Jardim Sao Jose, Bragança Paulista - SP, 12917-021 • Tel/WhatsApp: (11) 91031-5626
+                    </p>
                   </div>
-                  <h2 className="text-sm font-bold text-blue-700">
-                    Odontologia Biológica & Saúde Integrativa • Reabilitação Metal-Free
-                  </h2>
-                  <p className="text-[11px] text-slate-500">
-                    Torre II - Praça Maastricht, 200 - Sl 103, Jardim Sao Jose, Bragança Paulista - SP, 12917-021 • Tel/WhatsApp: (11) 91031-5626
-                  </p>
                 </div>
 
-                <div className="text-right">
-                  <div className="inline-block bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-xl text-right">
+                <div className="text-right shrink-0">
+                  <div className="inline-block bg-blue-50 border border-blue-200 px-3.5 py-2 rounded-xl text-right">
                     <p className="text-xs font-extrabold text-blue-900">Dra. Lucy Murata</p>
                     <p className="text-[10px] font-semibold text-blue-700">CRO-SP: 69246 • IAOMT Member</p>
                     <p className="text-[9px] text-slate-500">Odontologia Biológica</p>
@@ -338,7 +482,7 @@ export default function BiologicalDossierModal({
 
             {/* Rodapé Página 1 */}
             <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
-              <span>Ambulatório IA • Protocolo Dra. Lucy Morata</span>
+              <span>Ambulatório IA • Protocolo Dra. Lucy Murata</span>
               <span>Página 1 de 2 (Continua no verso)</span>
             </div>
           </div>
@@ -347,20 +491,30 @@ export default function BiologicalDossierModal({
           {/* ========================================================================= */}
           {/* PÁGINA 2: CRONOGRAMA DE TRATAMENTO & PRESCRIÇÃO SISTÊMICA                 */}
           {/* ========================================================================= */}
-          <div className="bg-white rounded-2xl p-6 sm:p-10 border border-slate-200 shadow-sm max-w-4xl mx-auto min-h-[1050px] flex flex-col justify-between print:border-none print:shadow-none print:p-8 print:m-0 print:min-h-screen">
+          <div 
+            id="dossier-print-page-2"
+            className="bg-white rounded-2xl p-6 sm:p-10 border border-slate-200 shadow-sm max-w-4xl mx-auto min-h-[1050px] flex flex-col justify-between print:border-none print:shadow-none print:p-8 print:m-0 print:min-h-screen"
+          >
             
             <div className="space-y-6">
               {/* Header Timbrado Pg 2 */}
-              <div className="flex items-start justify-between border-b-2 border-blue-900/20 pb-4">
-                <div className="space-y-0.5">
-                  <h1 className="text-base font-black tracking-tight text-slate-900 uppercase">
-                    Ambulatório IA • Plano Terapêutico Biológico
-                  </h1>
-                  <p className="text-xs font-bold text-blue-700">
-                    Cronograma Sequencial em 4 Fases & Protocolo de Suplementação
-                  </p>
+              <div className="flex items-center justify-between border-b-2 border-blue-900/20 pb-4 gap-4">
+                <div className="flex items-center gap-3">
+                  <img 
+                    src={LUCY_LOGO_DATA_URL} 
+                    alt="Logo Dra. Lucy Murata" 
+                    className="h-11 w-auto object-contain shrink-0 max-w-[110px]"
+                  />
+                  <div className="space-y-0.5">
+                    <h1 className="text-base font-black tracking-tight text-slate-900 uppercase">
+                      Consultório Dra. Lucy Murata • Plano Terapêutico Biológico
+                    </h1>
+                    <p className="text-xs font-bold text-blue-700">
+                      Cronograma Sequencial em 4 Fases & Protocolo de Suplementação
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right text-xs">
+                <div className="text-right text-xs shrink-0">
                   <p className="font-extrabold text-slate-800">{patientName}</p>
                   <p className="text-[10px] text-slate-500">Dossiê • Página 2 de 2</p>
                 </div>

@@ -151,7 +151,7 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                 <Sparkles size={16} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold truncate">Dra. Lucy Morata</p>
+                <p className="text-xs font-bold truncate">Dra. Lucy Murata</p>
                 <p className="text-[10px] text-emerald-700 font-mono font-medium">Instância: luci</p>
               </div>
             </button>
@@ -492,6 +492,37 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
                 placeholder="Ex: Neurologia Clínica e Medicina Integrativa"
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Globe size={15} className="text-slate-400" />
+                  URL do Logotipo / Imagem da Empresa
+                </span>
+                {info.logo_url && (
+                  <span className="text-[10px] text-emerald-600 font-semibold">✓ Logotipo Ativo</span>
+                )}
+              </label>
+              <div className="flex gap-2 items-center">
+                <input 
+                  type="text"
+                  value={info.logo_url || ''}
+                  onChange={(e) => setInfo({...info, logo_url: e.target.value})}
+                  className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
+                  placeholder="https://i.postimg.cc/... (URL direta da imagem png/jpg)"
+                />
+                {info.logo_url && (
+                  <div className="w-10 h-10 p-1 bg-white border border-slate-200 rounded-xl flex items-center justify-center shrink-0 shadow-xs overflow-hidden">
+                    <img 
+                      src={info.logo_url} 
+                      alt="Preview Logo" 
+                      referrerPolicy="no-referrer"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-1.5">
