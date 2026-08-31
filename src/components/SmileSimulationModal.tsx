@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
+import { simulateSmileAI } from '../services/clinicalService';
 
 interface Props {
   isOpen: boolean;
@@ -185,46 +186,20 @@ export default function SmileSimulationModal({
     setProcessingStep('🔍 Analisando anatomia labial e proporção áurea...');
 
     try {
-      // 1. Chama backend com Gemini
-      const response = await fetch('/api/simulate-smile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: beforeImage,
-          goals: selectedGoals,
-          patientName,
-          notes: clinicalNotes
-        })
+      setProcessingStep('💎 Aplicando cerâmicas de zircônia e clareamento biológico...');
+      const result = await simulateSmileAI({
+        image: beforeImage,
+        goals: selectedGoals,
+        patientName,
+        notes: clinicalNotes
       });
 
-      setProcessingStep('💎 Aplicando cerâmicas de zircônia e clareamento biológico...');
-      const data = await response.json();
-
-      if (data.simulatedImage) {
-        setAfterImage(data.simulatedImage);
-      } else {
-        // Fallback inteligente com Canvas de Alta Definição (Filtro e restauração bio)
-        const img = new window.Image();
-        img.src = beforeImage;
-        await new Promise((resolve) => { img.onload = resolve; });
-
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          // Realce e refinamento de luminosidade estética
-          ctx.globalCompositeOperation = 'screen';
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.globalCompositeOperation = 'source-over';
-          setAfterImage(canvas.toDataURL('image/jpeg', 0.95));
-        }
+      if (result.simulatedImage) {
+        setAfterImage(result.simulatedImage);
       }
 
-      if (data.clinicalAnalysis) {
-        setAnalysisResult(data.clinicalAnalysis);
+      if (result.clinicalAnalysis) {
+        setAnalysisResult(result.clinicalAnalysis);
       }
 
       toast.success('Simulação de sorriso gerada com sucesso!');

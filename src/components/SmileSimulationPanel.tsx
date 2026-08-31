@@ -25,6 +25,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { cn } from '../lib/utils';
 import { loadDsdStudies, saveDsdStudies, optimizeImageBase64 } from '../lib/dsdStorage';
+import { simulateSmileAI } from '../services/clinicalService';
 
 interface Props {
   patientName?: string;
@@ -265,173 +266,41 @@ export default function SmileSimulationPanel({
     setProcessingStep('🔍 Analisando proporções faciais, linha média e zênites gengivais com IA Gemini...');
 
     try {
-      // 1. Chamada à API de IA Generativa do Gemini
-      const response = await fetch('/api/simulate-smile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image: beforeImage,
-          goals: selectedGoals,
-          patientName,
-          notes: 'Transformação estética de alta fidelidade: reconstruir falhas/espaços com cerâmica pura de zircônia, facetas estéticas e harmonização da curvatura do sorriso.'
-        })
+      setProcessingStep('💎 Reconstruindo anatomia dental, aplicando cerâmica pura e alinhamento biomimético...');
+
+      const result = await simulateSmileAI({
+        image: beforeImage,
+        goals: selectedGoals,
+        patientName,
+        notes: 'Transformação estética e biológica de alta fidelidade: reconstruir falhas com cerâmica pura de zircônia, facetas estéticas e clareamento biomimético.'
       });
 
-      setProcessingStep('💎 Reconstruindo falhas dentárias, aplicando cerâmica de zircônia e alinhamento biomimético...');
+      if (result.simulatedImage) {
+        setAfterImage(result.simulatedImage);
+        setSliderPos(50);
+      }
 
-      if (response.ok) {
-        const data = await response.json();
-
-        if (data.simulatedImage) {
-          setAfterImage(data.simulatedImage);
-          setSliderPos(50);
-        } else {
-          // Fallback Canvas de Alta Definição caso a IA retorne apenas texto
-          await applyCanvasFallbackTransformation();
-        }
-
-        if (data.clinicalAnalysis) {
-          setAnalysisResult({
-            harmoniaScore: data.clinicalAnalysis.aestheticScoreAfter || 96,
-            corSugerida: data.clinicalAnalysis.teethShadeAfter || 'Shade Vita Bleach BL2 / A1',
-            biomimeticRating: 'Grau A (Metal-Free)',
-            proporcaoAurea: '1.618 : 1.0 (Harmonizado)',
-            planoTratamento: data.clinicalAnalysis.planoTratamento || [
-              'Etapa 1: Descontaminação biológica e Clareamento Biológico integrativo de alta eficácia.',
-              'Etapa 2: Reconstrução anatômica e instalação de cerâmica pura metal-free/zircônia.',
-              'Etapa 3: Harmonização da curvatura incisal e proporção áurea do sorriso.'
-            ]
-          });
-        }
-      } else {
-        // Fallback local caso ocorra erro no servidor
-        await applyCanvasFallbackTransformation();
+      if (result.clinicalAnalysis) {
+        setAnalysisResult({
+          harmoniaScore: result.clinicalAnalysis.aestheticScoreAfter || 96,
+          corSugerida: result.clinicalAnalysis.teethShadeAfter || 'Shade Vita Bleach BL2 / A1',
+          biomimeticRating: 'Grau A (Metal-Free)',
+          proporcaoAurea: '1.618 : 1.0 (Harmonizado)',
+          planoTratamento: result.clinicalAnalysis.planoTratamento || [
+            'Etapa 1: Descontaminação biológica e Clareamento Biológico integrativo de alta eficácia.',
+            'Etapa 2: Reconstrução anatômica e instalação de cerâmica pura metal-free/zircônia.',
+            'Etapa 3: Harmonização da curvatura incisal e proporção áurea do sorriso.'
+          ]
+        });
       }
 
       toast.success('✨ Simulação do Sorriso gerada com sucesso pela IA da Dra. Lucy!');
     } catch (err: any) {
-      console.warn('Simulação via API falhou, aplicando renderizador biológico:', err);
-      await applyCanvasFallbackTransformation();
-      toast.success('✨ Simulação do Sorriso aplicada com sucesso!');
+      console.error('Erro na simulação do sorriso:', err);
+      toast.error('Não foi possível concluir a simulação estética.');
     } finally {
       setIsProcessing(false);
       setProcessingStep('');
-    }
-  };
-
-  // Fallback de Processamento Visual no Canvas (Garante que nunca fique sem imagem)
-  const applyCanvasFallbackTransformation = async () => {
-    if (!beforeImage) return;
-    try {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.src = beforeImage;
-
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = () => reject(new Error('Erro ao carregar imagem no canvas.'));
-      });
-
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (!ctx) return;
-
-      canvas.width = img.naturalWidth || img.width || 1200;
-      canvas.height = img.naturalHeight || img.height || 900;
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      try {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        const totalPixels = data.length;
-
-        const isWhitening = selectedGoals.includes('Clareamento Biológico (Shade A1)');
-        const isVeneers = selectedGoals.includes('Facetas Cerâmicas & Lentes de Contato');
-        const isZirconia = selectedGoals.includes('Implantes Cerâmicos de Zircônia Metal-Free');
-        const isSmartAmalgam = selectedGoals.includes('Troca de Amálgama por Cerâmica (SMART)');
-        const isGumHarmony = selectedGoals.includes('Harmonia da Linha do Sorriso & Gengiva');
-
-        const intensityMultiplier = (isVeneers || isZirconia) ? 1.4 : 1.25;
-
-        for (let i = 0; i < totalPixels; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-
-          const isGingivaOrLip = (r > g + 28 && r > b + 35) || (r > 130 && g < 95 && b < 95);
-          const isDarkCavity = (r + g + b) < 130;
-          const isToothEnamel = !isGingivaOrLip && !isDarkCavity && r > 90 && g > 80 && b > 45 && (r >= g || Math.abs(r - g) < 20);
-
-          if (isToothEnamel) {
-            const brightness = (r + g + b) / 3;
-            const yellowChroma = Math.max(0, (r + g) / 2 - b);
-            const enamelWeight = Math.min(1.0, Math.max(0.35, (brightness / 200) * (yellowChroma / 40 + 0.4)));
-
-            const targetB = Math.min(255, (g * 0.98 + r * 0.94) / 2);
-            let newB = b + (targetB - b) * 0.85 * enamelWeight;
-
-            const boost = 42 * enamelWeight * intensityMultiplier;
-            let newR = Math.min(255, r * 1.14 + boost * 0.88);
-            let newG = Math.min(255, g * 1.16 + boost * 0.94);
-            newB = Math.min(255, newB * 1.25 + boost * 1.08);
-
-            if (isVeneers || isZirconia || isWhitening) {
-              const lum = 0.299 * newR + 0.587 * newG + 0.114 * newB;
-              newR = newR * 0.68 + lum * 0.32;
-              newG = newG * 0.66 + lum * 0.34;
-              newB = newB * 0.63 + lum * 0.37;
-            }
-
-            data[i] = Math.round(newR);
-            data[i + 1] = Math.round(newG);
-            data[i + 2] = Math.round(newB);
-          } else if (isSmartAmalgam && !isGingivaOrLip) {
-            const isAmalgamStain = r < 110 && g < 110 && b < 115 && Math.abs(r - g) < 15 && Math.abs(g - b) < 15;
-            if (isAmalgamStain) {
-              data[i] = 205;
-              data[i + 1] = 202;
-              data[i + 2] = 198;
-            }
-          } else if (isGumHarmony && isGingivaOrLip) {
-            data[i] = Math.min(255, r * 1.04);
-            data[i + 1] = Math.min(255, g * 1.02);
-            data[i + 2] = Math.min(255, b * 1.02);
-          }
-        }
-        ctx.putImageData(imageData, 0, 0);
-      } catch (_) {}
-
-      const glowGrad = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height * 0.52, canvas.width * 0.05,
-        canvas.width / 2, canvas.height * 0.52, canvas.width * 0.42
-      );
-      glowGrad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
-      glowGrad.addColorStop(0.5, 'rgba(240, 248, 255, 0.08)');
-      glowGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      
-      ctx.fillStyle = glowGrad;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const generatedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-      setAfterImage(generatedDataUrl);
-      setSliderPos(50);
-
-      if (!analysisResult) {
-        setAnalysisResult({
-          harmoniaScore: 96,
-          corSugerida: 'Shade Vita Bleach BL2 / A1',
-          biomimeticRating: 'Grau A (Metal-Free)',
-          proporcaoAurea: '1.618 : 1.0 (Harmonizado)',
-          planoTratamento: [
-            'Etapa 1: Descontaminação biológica, profilaxia com protocolo guiado e Clareamento Biológico integrativo.',
-            'Etapa 2: Planejamento Digital do Sorriso (DSD), mock-up diagnóstico e alinhamento gengival.',
-            'Etapa 3: Instalação de cerâmicas e lentes de contato metal-free com acabamento biocompatível.',
-            'Etapa 4: Ajuste oclusal biomimético e protocolo de proteção noturna.'
-          ]
-        });
-      }
-    } catch (e) {
-      console.error('Erro no fallback canvas:', e);
     }
   };
 

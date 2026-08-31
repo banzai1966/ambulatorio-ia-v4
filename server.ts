@@ -1124,8 +1124,7 @@ Retorne em formato JSON:
 
     // 2. Tentativa de Geração/Edição da Imagem Simulada com Gemini Image
     let simulatedImage: string | null = null;
-    try {
-      const imgEditPrompt = `High-end aesthetic biological dentistry simulation and Digital Smile Design (DSD).
+    const imgEditPrompt = `High-end aesthetic biological dentistry simulation and Digital Smile Design (DSD).
 Transform the teeth and smile with maximum photorealism:
 1. MISSING TEETH & IMPLANTS: If there are any missing teeth, gaps, or edentulous spaces (e.g. missing lateral incisor or canine), reconstruct them with a beautiful, natural ceramic porcelain/zirconia crown that seamlessly fills the space.
 2. COLOR MATCHING & SHADE: The reconstructed and restored teeth MUST perfectly match the bright, translucent natural white color (Vita Bleach BL2 / Shade A1) of the adjacent central teeth. No yellowish tint, no greyish tones, no dullness.
@@ -1134,24 +1133,29 @@ Transform the teeth and smile with maximum photorealism:
 5. GINGIVAL HARMONY: Create a natural, healthy pink festooned gingival margin (zenith) with proper biological contours.
 6. IDENTITY PRESERVATION: Keep the rest of the face, skin texture, lips, and facial expression 100% identical to the original photo. Only transform the teeth and intraoral smile aesthetics.`;
 
-      const imgResp = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-image',
-        contents: {
-          parts: [
-            { inlineData: { data: base64Data, mimeType } },
-            { text: imgEditPrompt }
-          ]
-        }
-      });
+    const imgModels = ['gemini-3.1-flash-lite-image', 'gemini-3.1-flash-image'];
+    for (const mName of imgModels) {
+      try {
+        const imgResp = await ai.models.generateContent({
+          model: mName,
+          contents: {
+            parts: [
+              { inlineData: { data: base64Data, mimeType } },
+              { text: imgEditPrompt }
+            ]
+          }
+        });
 
-      for (const part of imgResp.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData && part.inlineData.data) {
-          simulatedImage = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-          break;
+        for (const part of imgResp.candidates?.[0]?.content?.parts || []) {
+          if (part.inlineData && part.inlineData.data) {
+            simulatedImage = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+            break;
+          }
         }
+        if (simulatedImage) break;
+      } catch (imgErr: any) {
+        console.warn(`[SIMULATE-SMILE] Aviso no modelo ${mName}:`, imgErr.message);
       }
-    } catch (imgErr: any) {
-      console.warn("[SIMULATE-SMILE] Aviso na geração direta de imagem IA (usando simulação aprimorada):", imgErr.message);
     }
 
     return res.json({
