@@ -231,7 +231,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                       <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
                         <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
                           <span className="p-1.5 bg-blue-600 text-white rounded-lg"><History size={14} /></span>
-                          5. Histórico de Prontuários (Dossiê)
+                          5. Histórico de Prontuários
                         </div>
                         <p className="text-xs text-slate-600 leading-relaxed">
                           <strong>O que é:</strong> Arquivo clínico perpétuo e seguro da clínica.<br />
@@ -436,7 +436,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                         <History size={22} />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">2. Histórico de Prontuários & Dossiê Clínico Perpétuo</h3>
+                        <h3 className="text-lg font-bold text-slate-800">2. Histórico de Prontuários & Evolução Clínica Perpétua</h3>
                         <p className="text-xs text-slate-500">Como localizar qualquer paciente e consultar a evolução completa ao longo do tempo</p>
                       </div>
                     </div>
@@ -451,7 +451,7 @@ export default function SystemOverviewModal({ isOpen, onClose, userId }: SystemO
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-center">📅 Data de Nascimento</div>
                       </div>
                       <p>
-                        Ao abrir o paciente, você tem acesso ao <strong>Dossiê Completo</strong>:
+                        Ao abrir o paciente, você tem acesso ao <strong>Prontuário Completo</strong>:
                       </p>
                       <ul className="list-disc list-inside space-y-1.5 pl-1">
                         <li><strong>Linha do Tempo:</strong> Todas as consultas anteriores organizadas por data e especialidade.</li>

@@ -2247,8 +2247,8 @@ export default function App() {
         recordToSave.vitals = rec.vitals;
       }
       
-      recordToSave.dados_especialidade = currentRecord.dados_especialidade || specialtyData;
-      recordToSave.exame_fisico = currentRecord.exame_fisico;
+      recordToSave.dados_especialidade = rec.dados_especialidade || currentRecord?.dados_especialidade || specialtyData;
+      recordToSave.exame_fisico = rec.exame_fisico || currentRecord?.exame_fisico || '';
 
       const trySaveRecord = async (data: any): Promise<{ error: any }> => {
         console.log("LOG_VERSAO: 3.1 - Início do salvamento");

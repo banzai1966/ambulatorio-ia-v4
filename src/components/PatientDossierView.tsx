@@ -39,6 +39,8 @@ import IntegrativeChecklistForm from './IntegrativeChecklistForm';
 import IntegrativeBodyMap from './IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './IntegrativeEvolution';
 import BiologicalDentistryForm from './BiologicalDentistryForm';
+import SmileSimulationPanel from './SmileSimulationPanel';
+import SmileSimulationModal from './SmileSimulationModal';
 import SpecialtyFields from './SpecialtyFields';
 import VitalMonitor from './VitalMonitor';
 import PrescriptionAnvisaModal from './PrescriptionAnvisaModal';
@@ -791,6 +793,7 @@ export default function PatientDossierView({
   };
 
   // Jornada do Paciente - Modais & Estados
+  const [showSmileSimulationModal, setShowSmileSimulationModal] = useState(false);
   const [isPrescriptionAnvisaOpen, setIsPrescriptionAnvisaOpen] = useState(false);
   const [isAnamneseModalOpen, setIsAnamneseModalOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
@@ -1500,26 +1503,7 @@ export default function PatientDossierView({
 
             {/* Abas Dinâmicas de acordo com o Profissional Selecionado */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
-              {/* Odonto Tab para Dra. Lucy / Odontologia Biológica */}
-              {(activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry') && (
-                <button
-                  type="button"
-                  id="tab-odontologia-biologica"
-                  onClick={() => {
-                    setExamMode('biological_dentistry');
-                    setActiveTab('especialidade');
-                  }}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                    activeTab === 'especialidade' && examMode === 'biological_dentistry'
-                      ? 'bg-slate-800 text-white shadow-xs'
-                      : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
-                  }`}
-                >
-                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-amber-300' : 'text-slate-500'} />
-                  Odontologia Biológica
-                </button>
-              )}
-
+              {/* 1. Evolução & Atendimento (SOAP) em Primeiro Lugar */}
               <button
                 type="button"
                 id="tab-evolucao-soap"
@@ -1538,6 +1522,26 @@ export default function PatientDossierView({
                 <Activity size={14} />
                 Evolução & Atendimento (SOAP)
               </button>
+
+              {/* 2. Odontologia Biológica para Dra. Lucy */}
+              {(activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry') && (
+                <button
+                  type="button"
+                  id="tab-odontologia-biologica"
+                  onClick={() => {
+                    setExamMode('biological_dentistry');
+                    setActiveTab('especialidade');
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'especialidade' && examMode === 'biological_dentistry'
+                      ? 'bg-slate-800 text-white shadow-xs'
+                      : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-amber-300' : 'text-slate-500'} />
+                  Odontologia Biológica
+                </button>
+              )}
 
               {/* Destaque Neurológico - Dr. Carlos ou Especialistas em Neuro */}
               {(activeDoctor.default_mode === 'neurological' || examMode === 'neurological') && (
@@ -1618,17 +1622,19 @@ export default function PatientDossierView({
                 Plano Terapêutico
               </button>
 
-              <button
-                type="button"
-                id="tab-anexos-imagens"
-                onClick={() => setActiveTab('anexos')}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  activeTab === 'anexos' ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
-                }`}
-              >
-                <Paperclip size={14} />
-                Exames & Imagens
-              </button>
+              {activeDoctor.default_mode !== 'biological_dentistry' && (
+                <button
+                  type="button"
+                  id="tab-anexos-imagens"
+                  onClick={() => setActiveTab('anexos')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'anexos' ? 'bg-slate-800 text-white shadow-xs' : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <Paperclip size={14} />
+                  Exames & Imagens
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2175,17 +2181,24 @@ export default function PatientDossierView({
 
             {examMode === 'biological_dentistry' && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between border-b pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
                   <div>
                     <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                      <Sparkles className="text-blue-600" size={22} />
+                      <Sparkles className="text-amber-500" size={22} />
                       Odontologia Biológica & Implantes Metal-Free (Zircônia)
                     </h3>
-                    <p className="text-xs text-slate-500">Módulo Dra. Lucy para planejamento de implantes cerâmicos, remoção segura de amálgama (SMART), cavitações e terapia neural.</p>
+                    <p className="text-xs text-slate-500">Módulo Dra. Lucy para planejamento de implantes cerâmicos, remoção segura de amálgama (SMART), cavitações, simulação DSD e terapia neural.</p>
                   </div>
                 </div>
 
-                {/* 1. Galeria de Exames Radiológicos e Tomografia CBCT no topo para análise clínica */}
+                {/* 1. Simulador de Sorriso & DSD (Antes & Depois Integrado Diretamente na Tela) */}
+                <SmileSimulationPanel
+                  patientName={effectiveName}
+                  patientPhone={patientPhone || currentRecord?.paciente_telefone}
+                  patientCpf={patientCpf || currentRecord?.paciente_cpf}
+                />
+
+                {/* 2. Galeria de Exames Radiológicos e Tomografia CBCT */}
                 <div className="bg-slate-50/80 p-4 rounded-3xl border border-slate-200/80 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -2206,7 +2219,7 @@ export default function PatientDossierView({
                   />
                 </div>
 
-                {/* 2. Formulário Clínico e Odontograma Interativo logo abaixo das imagens */}
+                {/* 3. Formulário Clínico e Odontograma Interativo logo abaixo das imagens */}
                 <BiologicalDentistryForm
                   patientName={effectiveName}
                   patientPhone={patientPhone || currentRecord?.paciente_telefone}
@@ -3117,6 +3130,12 @@ export default function PatientDossierView({
         patientName={patientName}
         patientPhone={patientPhone}
         onPromoterStatusChanged={(status) => setIsPromoter(status)}
+      />
+
+      <SmileSimulationModal
+        isOpen={showSmileSimulationModal}
+        onClose={() => setShowSmileSimulationModal(false)}
+        patientName={effectiveName}
       />
     </div>
   );

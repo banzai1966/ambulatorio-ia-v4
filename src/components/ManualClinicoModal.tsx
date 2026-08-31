@@ -424,7 +424,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
 
                           <div className="p-4 bg-purple-50/70 rounded-2xl border border-purple-200/80 space-y-1.5">
                             <strong className="text-purple-950 font-bold text-xs flex items-center gap-1.5">
-                              <Layers size={16} className="text-purple-600" /> Dossiê Completo
+                              <Layers size={16} className="text-purple-600" /> Prontuário Completo
                             </strong>
                             <p className="text-xs text-slate-600">
                               Linha do tempo permanente do paciente, comparação de consultas anteriores e emissão de receituários digitais Anvisa.

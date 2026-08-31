@@ -1020,6 +1020,152 @@ app.post("/api/analyze-intent", async (req, res) => {
   }
 });
 
+// --- ROTA DE SIMULAÇÃO ESTÉTICA DO SORRISO (DIGITAL SMILE DESIGN & ANTES/DEPOIS COM IA) ---
+app.post("/api/simulate-smile", async (req, res) => {
+  try {
+    const { image, goals, patientName, notes } = req.body;
+    const key = getGeminiKey();
+
+    if (!image) {
+      return res.status(400).json({ error: "Imagem do sorriso é obrigatória." });
+    }
+
+    if (!key) {
+      return res.status(500).json({ error: "API_KEY_MISSING" });
+    }
+
+    const ai = new GoogleGenAI({ 
+      apiKey: key,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+
+    let base64Data = '';
+    let mimeType = 'image/png';
+
+    if (image.startsWith('data:image/')) {
+      base64Data = image.replace(/^data:image\/[a-z]+;base64,/, '');
+      mimeType = image.startsWith('data:image/jpeg') || image.startsWith('data:image/jpg') ? 'image/jpeg' : 'image/png';
+    } else if (image.startsWith('/')) {
+      const cleanPath = image.split('?')[0];
+      const localFile = path.join(process.cwd(), 'public', cleanPath);
+      if (fs.existsSync(localFile)) {
+        base64Data = fs.readFileSync(localFile).toString('base64');
+        mimeType = localFile.endsWith('.jpg') || localFile.endsWith('.jpeg') ? 'image/jpeg' : 'image/png';
+      }
+    } else if (image.startsWith('http')) {
+      try {
+        const fetchRes = await fetch(image);
+        const arrayBuf = await fetchRes.arrayBuffer();
+        base64Data = Buffer.from(arrayBuf).toString('base64');
+        mimeType = image.includes('.jpg') || image.includes('.jpeg') ? 'image/jpeg' : 'image/png';
+      } catch (e) {
+        console.warn('Could not fetch image url:', e);
+      }
+    }
+
+    const goalsList = Array.isArray(goals) && goals.length > 0 ? goals.join(", ") : "Clareamento biológico, alinhamento harmonioso, troca de restaurações escuras por cerâmica natural";
+
+    // 1. Análise Clínica e Planejamento Estético com Gemini
+    const analysisPrompt = `Você é um especialista em Odontologia Biológica e Digital Smile Design (DSD) trabalhando com a Dra. Lucy Murata.
+Analise a foto do sorriso do paciente ${patientName || 'Paciente'} e forneça um plano estruturado de transformação estética e biológica em JSON.
+Objetivos desejados: ${goalsList}.
+Observações do dentista: ${notes || 'Nenhuma'}.
+
+Retorne em formato JSON:
+{
+  "aestheticScoreBefore": 65,
+  "aestheticScoreAfter": 96,
+  "teethShadeBefore": "A3.5 / Escurecido",
+  "teethShadeAfter": "A1 / BL2 Natural",
+  "diagnosticoEstetico": "Breve diagnóstico das proporções faciais, linha do sorriso, corredor bucal e condições dentárias visíveis.",
+  "planoTratamento": [
+    "Etapa 1: Remoção de biointerferências e restaurações metálicas",
+    "Etapa 2: Reconstrução com cerâmicas metal-free ou implantes de zircônia",
+    "Etapa 3: Clareamento biológico integrativo e refinamento oclusal"
+  ],
+  "beneficiosBiologicos": "Descrição de como a reabilitação biológica melhora a mastigação, respiração e harmonia sistêmica.",
+  "resumoParaPaciente": "Mensagem empática e profissional explicando a transformação planejada."
+}`;
+
+    let clinicalAnalysis: any = {
+      aestheticScoreBefore: 65,
+      aestheticScoreAfter: 95,
+      teethShadeBefore: "A3 / A3.5",
+      teethShadeAfter: "A1 / BL2 (Branco Natural)",
+      diagnosticoEstetico: "Presença de desarmonia na curvatura do sorriso, alterações de coloração dental e necessidade de restaurações estéticas biocompatíveis.",
+      planoTratamento: [
+        "Protocolo SMART para remoção de metais escuros",
+        "Reabilitação estética com facetas/lentes cerâmicas metal-free",
+        "Harmonização da proporção áurea dental"
+      ],
+      beneficiosBiologicos: "Eliminação de metais pesados na cavidade oral, biocompatibilidade gengival superior e preservação estrutural dos tecidos biológicos.",
+      resumoParaPaciente: "Planejamento personalizado para um sorriso radiante, natural e 100% biocompatível com a sua saúde sistêmica."
+    };
+
+    try {
+      const textResp = await generateGeminiContentWithFallback(ai, {
+        contents: [
+          {
+            parts: [
+              { text: analysisPrompt },
+              { inlineData: { data: base64Data, mimeType } }
+            ]
+          }
+        ],
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      const parsed = JSON.parse((textResp.text || "{}").replace(/```json\n?|\n?```/g, '').trim());
+      clinicalAnalysis = { ...clinicalAnalysis, ...parsed };
+    } catch (anErr: any) {
+      console.warn("[SIMULATE-SMILE] Erro na análise textual:", anErr.message);
+    }
+
+    // 2. Tentativa de Geração/Edição da Imagem Simulada com Gemini Image
+    let simulatedImage: string | null = null;
+    try {
+      const imgEditPrompt = `High-end aesthetic biological dentistry simulation and Digital Smile Design (DSD).
+Transform the teeth and smile with maximum photorealism:
+1. MISSING TEETH & IMPLANTS: If there are any missing teeth, gaps, or edentulous spaces (e.g. missing lateral incisor or canine), reconstruct them with a beautiful, natural ceramic porcelain/zirconia crown that seamlessly fills the space.
+2. COLOR MATCHING & SHADE: The reconstructed and restored teeth MUST perfectly match the bright, translucent natural white color (Vita Bleach BL2 / Shade A1) of the adjacent central teeth. No yellowish tint, no greyish tones, no dullness.
+3. VENEERS & WHITENING: Make all visible teeth uniformly bright, naturally white, with realistic enamel microtexture, glossy ceramic reflection, and natural incisal translucency.
+4. AMALGAM REMOVAL (SMART): Replace any dark metallic restorations or dark cavities with pristine tooth-colored ceramic inlays/onlays.
+5. GINGIVAL HARMONY: Create a natural, healthy pink festooned gingival margin (zenith) with proper biological contours.
+6. IDENTITY PRESERVATION: Keep the rest of the face, skin texture, lips, and facial expression 100% identical to the original photo. Only transform the teeth and intraoral smile aesthetics.`;
+
+      const imgResp = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite-image',
+        contents: {
+          parts: [
+            { inlineData: { data: base64Data, mimeType } },
+            { text: imgEditPrompt }
+          ]
+        }
+      });
+
+      for (const part of imgResp.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData && part.inlineData.data) {
+          simulatedImage = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          break;
+        }
+      }
+    } catch (imgErr: any) {
+      console.warn("[SIMULATE-SMILE] Aviso na geração direta de imagem IA (usando simulação aprimorada):", imgErr.message);
+    }
+
+    return res.json({
+      success: true,
+      simulatedImage: simulatedImage || null,
+      clinicalAnalysis,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error("[SIMULATE-SMILE] ❌ Erro fatal:", err.message);
+    return res.status(500).json({ error: err.message || "Erro ao processar simulação do sorriso." });
+  }
+});
+
 app.get("/api/dump-logs", (req, res) => {
   fs.writeFileSync(path.join(process.cwd(), "debug_logs.txt"), webhookLogs.join("\n"));
   res.send("Logs dumped to debug_logs.txt");

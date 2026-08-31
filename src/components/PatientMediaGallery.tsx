@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
+import SmileSimulationModal from './SmileSimulationModal';
 
 interface MediaItem {
   id: string;
@@ -42,28 +43,28 @@ interface MediaItem {
 
 const DEFAULT_SAMPLE_MEDIA: MediaItem[] = [
   {
-    id: '1',
-    title: 'Tomografia Computadorizada Maxilofacial / Coluna',
+    id: 'tc_cbct_1',
+    title: 'Tomografia Computadorizada Cone Beam (CBCT) - Maxilofacial',
     type: 'tomography',
-    url: 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=1000',
+    url: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=1200',
     date: '04/08/2026',
-    description: 'Documentação de Tomografia Computadorizada - Avaliação Óssea e Articular'
+    description: 'Documentação Tomográfica CBCT - Cortes Maxilares, Cavitações Ósseas NICO e Seios Maxilares'
   },
   {
-    id: '2',
-    title: 'Fotografia de Rosto & Análise Estética Facial',
+    id: 'rx_panoramica_1',
+    title: 'Radiografia Panorâmica Digital & Periapical',
+    type: 'radiograph',
+    url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&q=80&w=1200',
+    date: '16/06/2026',
+    description: 'Radiografia Panorâmica Digital - Avaliação de estruturas dentais, condutos e crista óssea'
+  },
+  {
+    id: 'foto_extraoral_1',
+    title: 'Fotografia Clínica Extraoral & Análise Facial',
     type: 'photo',
     url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=1000',
     date: '04/08/2026',
-    description: 'Análise Facial & Planejamento Integrativo'
-  },
-  {
-    id: '3',
-    title: 'Radiografia Panorâmica e Periapical (Raio-X)',
-    type: 'radiograph',
-    url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&q=80&w=1000',
-    date: '16/06/2026',
-    description: 'Avaliação de integridade radiográfica, raízes e estruturas anexas'
+    description: 'Registro Fotográfico Clínico Extraoral e Facial'
   }
 ];
 
@@ -127,7 +128,7 @@ export default function PatientMediaGallery({
 }) {
   const storageKey = getPatientMediaStorageKey(patientName);
 
-  // Inicializa com dados persistidos do paciente se existirem
+  // Inicializa com dados persistidos do paciente se existirem (filtrando duplicidades acidentais de simulações DSD)
   const [items, setItems] = useState<MediaItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -135,7 +136,15 @@ export default function PatientMediaGallery({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
+            // Remove registros indevidos de simulação DSD salvos na galeria radiológica
+            const cleaned = parsed.filter((item: any) => 
+              !item.id?.startsWith('dsd_') && 
+              !item.title?.toLowerCase().includes('simulação dsd') &&
+              !item.description?.toLowerCase().includes('planejamento digital do sorriso')
+            );
+            if (cleaned.length > 0) {
+              return cleaned;
+            }
           }
         }
       } catch (err) {
@@ -147,8 +156,33 @@ export default function PatientMediaGallery({
 
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(() => items[0] || DEFAULT_SAMPLE_MEDIA[0]);
   const [activeTab, setActiveTab] = useState<'all' | 'tomography' | 'radiograph' | 'photo'>('all');
+
+  // Troca de Aba com sincronização estrita do item selecionado correspondente
+  const handleTabChange = (tab: 'all' | 'tomography' | 'radiograph' | 'photo') => {
+    setActiveTab(tab);
+    setViewerZoom(1);
+    const targetItems = tab === 'all' ? items : items.filter(item => item.type === tab);
+    if (targetItems.length > 0) {
+      // Se o item selecionado atual não pertencer à nova categoria, seleciona o primeiro da categoria
+      if (!selectedItem || (tab !== 'all' && selectedItem.type !== tab)) {
+        setSelectedItem(targetItems[0]);
+      }
+    } else {
+      setSelectedItem(null);
+    }
+  };
+
+  // Garante que o selectedItem pertença à aba ativa caso itens mudem
+  useEffect(() => {
+    if (activeTab !== 'all' && selectedItem && selectedItem.type !== activeTab) {
+      const matching = items.filter(i => i.type === activeTab);
+      setSelectedItem(matching[0] || null);
+    }
+  }, [activeTab, items, selectedItem]);
+  const [itemToDelete, setItemToDelete] = useState<MediaItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAnnotateModal, setShowAnnotateModal] = useState(false);
+  const [showSmileSimulation, setShowSmileSimulation] = useState(false);
   const [showOdontogram, setShowOdontogram] = useState<boolean>(false);
   const [localOdontogram, setLocalOdontogram] = useState<OdontogramData>(initialOdontogram || {
     teeth: {
@@ -158,7 +192,7 @@ export default function PatientMediaGallery({
     }
   });
 
-  // Recarrega galeria quando o paciente selecionado mudar
+  // Recarrega galeria quando o paciente selecionado mudar e purga duplicatas de simulação DSD
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -166,8 +200,17 @@ export default function PatientMediaGallery({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setItems(parsed);
-            setSelectedItem(parsed[0] || null);
+            const cleaned = parsed.filter((item: any) => 
+              !item.id?.startsWith('dsd_') && 
+              !item.title?.toLowerCase().includes('simulação dsd') &&
+              !item.description?.toLowerCase().includes('planejamento digital do sorriso')
+            );
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem(storageKey, JSON.stringify(cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA));
+            }
+            const finalItems = cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA;
+            setItems(finalItems);
+            setSelectedItem(finalItems[0] || null);
             return;
           }
         }
@@ -281,6 +324,9 @@ export default function PatientMediaGallery({
     };
     const updated = [newItem, ...items];
     persistItems(updated);
+    if (activeTab !== 'all' && newCategory !== 'document' && activeTab !== newCategory) {
+      setActiveTab(newCategory);
+    }
     setSelectedItem(newItem);
     setNewTitle('');
     setNewUrl('');
@@ -435,13 +481,19 @@ export default function PatientMediaGallery({
     toast.success('Imagem anotada salva com sucesso na galeria!');
   };
 
-  const handleDeleteItem = (id: string) => {
-    if (window.confirm('Deseja realmente remover este exame da galeria do paciente?')) {
-      const next = items.filter(i => i.id !== id);
-      persistItems(next);
-      setSelectedItem(next[0] || null);
-      toast.success('Exame removido com sucesso.');
-    }
+  const handleDeleteItem = (item: MediaItem) => {
+    setItemToDelete(item);
+  };
+
+  const confirmDeleteItem = () => {
+    if (!itemToDelete) return;
+    const id = itemToDelete.id;
+    const next = items.filter(i => i.id !== id);
+    persistItems(next);
+    const filtered = next.filter(i => activeTab === 'all' || i.type === activeTab);
+    setSelectedItem(filtered[0] || null);
+    setItemToDelete(null);
+    toast.success('Exame removido com sucesso da galeria.');
   };
 
   return (
@@ -459,7 +511,7 @@ export default function PatientMediaGallery({
           <p className="text-xs text-slate-500">Suba arquivos do seu PC/celular, visualize radiografias e desenhe/marque sobre as imagens.</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           {!hideEmbeddedOdontogram && (
             <button
               type="button"
@@ -489,7 +541,7 @@ export default function PatientMediaGallery({
       {/* Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
         <button
-          onClick={() => setActiveTab('all')}
+          onClick={() => handleTabChange('all')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'all'
               ? 'bg-slate-800 text-white shadow-sm'
@@ -499,34 +551,34 @@ export default function PatientMediaGallery({
           Todos ({items.length})
         </button>
         <button
-          onClick={() => setActiveTab('tomography')}
+          onClick={() => handleTabChange('tomography')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'tomography'
               ? 'bg-sky-600 text-white shadow-sm'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Tomografias (TC)
+          Tomografias (TC) ({items.filter(i => i.type === 'tomography').length})
         </button>
         <button
-          onClick={() => setActiveTab('radiograph')}
+          onClick={() => handleTabChange('radiograph')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'radiograph'
               ? 'bg-indigo-600 text-white shadow-sm'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Radiografias / Raio-X
+          Radiografias / Raio-X ({items.filter(i => i.type === 'radiograph').length})
         </button>
         <button
-          onClick={() => setActiveTab('photo')}
+          onClick={() => handleTabChange('photo')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'photo'
               ? 'bg-slate-700 text-white shadow-sm'
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Fotos Extraorais / Corporais
+          Fotos Extraorais / Corporais ({items.filter(i => i.type === 'photo').length})
         </button>
       </div>
 
@@ -649,7 +701,7 @@ export default function PatientMediaGallery({
 
                 <button
                   type="button"
-                  onClick={() => handleDeleteItem(selectedItem.id)}
+                  onClick={() => handleDeleteItem(selectedItem)}
                   className="p-1.5 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white rounded-lg transition-colors cursor-pointer"
                   title="Excluir imagem"
                 >
@@ -667,27 +719,41 @@ export default function PatientMediaGallery({
                 <div
                   key={item.id}
                   onClick={() => setSelectedItem(item)}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center gap-3 ${
+                  className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 group relative ${
                     selectedItem.id === item.id
                       ? 'bg-blue-50/80 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
                       : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
                   }`}
                 >
-                  <div className="w-16 h-16 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
-                    <img 
-                      src={item.url} 
-                      alt={item.title} 
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-16 h-16 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
+                      <img 
+                        src={item.url} 
+                        alt={item.title} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-slate-800 line-clamp-1">{item.title}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{item.date}</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-200 text-slate-700">
+                        {item.type}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-slate-800 line-clamp-1">{item.title}</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{item.date}</p>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-200 text-slate-700">
-                      {item.type}
-                    </span>
-                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteItem(item);
+                    }}
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                    title="Excluir este exame"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               ))}
             </div>
@@ -1117,6 +1183,63 @@ export default function PatientMediaGallery({
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-slate-800 text-xs text-slate-300 flex items-center gap-2 shadow-2xl pointer-events-none">
               <UserCheck size={14} className="text-sky-400" />
               <span>Exame certificado e vinculado exclusivamente ao paciente <strong>{patientName}</strong></span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <SmileSimulationModal
+        isOpen={showSmileSimulation}
+        onClose={() => setShowSmileSimulation(false)}
+        patientName={patientName}
+      />
+
+      {/* Delete Confirmation Modal */}
+      {itemToDelete && (
+        <div 
+          id="delete-confirmation-modal"
+          className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-center space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+              <Trash2 size={28} />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Remover Exame da Galeria?</h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Você está prestes a excluir <strong className="text-slate-700 font-semibold">{itemToDelete.title}</strong> da pasta da paciente <strong className="text-slate-700 font-semibold">{patientName}</strong>.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3 text-left">
+              <img 
+                src={itemToDelete.url} 
+                alt={itemToDelete.title} 
+                className="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-slate-900 shrink-0" 
+                referrerPolicy="no-referrer"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-800 truncate">{itemToDelete.title}</p>
+                <p className="text-[10px] text-slate-500">{itemToDelete.date} • {itemToDelete.type.toUpperCase()}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteItem}
+                className="flex-1 py-2.5 px-4 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
+              >
+                Sim, Excluir Exame
+              </button>
             </div>
           </div>
         </div>
