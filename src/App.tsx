@@ -257,6 +257,9 @@ const formatIntegrativeLabel = (key: string) => {
 export default function App() {
   console.log("App: SPECIALTIES carregadas:", SPECIALTIES);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<'quick' | 'ambient'>('quick');
+  const [recordingDuration, setRecordingDuration] = useState<number>(0);
+  const [pendingDraft, setPendingDraft] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -1382,6 +1385,25 @@ export default function App() {
   const chunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
+  const isRecordingRef = useRef<boolean>(false);
+  const recordingDurationRef = useRef<number>(0);
+  const lastActivityTimeRef = useRef<number>(Date.now());
+  const recordingTimerRef = useRef<any>(null);
+  const accumulatedTranscriptRef = useRef<string>('');
+
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem('ambulatorio_draft_consultation');
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed && parsed.transcript && parsed.transcript.trim().length > 15) {
+          setPendingDraft(parsed);
+        }
+      }
+    } catch (e) {
+      console.warn("Draft restore error:", e);
+    }
+  }, []);
 
   useEffect(() => {
     fetchHistory();
@@ -1622,11 +1644,17 @@ export default function App() {
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, showHistory]);
 
-  const startRecording = async () => {
+  const startRecording = async (mode: 'quick' | 'ambient' = 'quick') => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("WEBVIEW_ERROR");
       }
+
+      setRecordingMode(mode);
+      setRecordingDuration(0);
+      recordingDurationRef.current = 0;
+      lastActivityTimeRef.current = Date.now();
+      accumulatedTranscriptRef.current = '';
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -1645,39 +1673,103 @@ export default function App() {
         await handleAudioProcess(audioBlob);
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(mode === 'ambient' ? 5000 : undefined);
       setIsRecording(true);
+      isRecordingRef.current = true;
       setError(null);
       setLiveTranscript('');
       transcriptRef.current = '';
 
-      // Tenta iniciar o Web Speech API para transcrição em tempo real (Mágica!)
+      // Configuração de Timer & Fail-safes (Keep-Alive, Limite Máximo e Auto-Stop por Silêncio)
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = setInterval(() => {
+        if (!isRecordingRef.current) {
+          clearInterval(recordingTimerRef.current);
+          return;
+        }
+
+        recordingDurationRef.current += 1;
+        setRecordingDuration(recordingDurationRef.current);
+
+        // Salva rascunho de segurança a cada 10 segundos localmente
+        if (recordingDurationRef.current % 10 === 0 && transcriptRef.current.trim().length > 10) {
+          try {
+            localStorage.setItem('ambulatorio_draft_consultation', JSON.stringify({
+              transcript: transcriptRef.current,
+              duration: recordingDurationRef.current,
+              date: new Date().toISOString(),
+              patientName: selectedPatient || currentRecord?.paciente_nome_completo || 'Paciente em Atendimento',
+              mode: examMode
+            }));
+          } catch (e) {
+            console.warn("Auto-draft save error:", e);
+          }
+        }
+
+        // Auto-stop de segurança 1: Limite máximo de consulta de 60 minutos (3600 segundos)
+        if (recordingDurationRef.current >= 3600) {
+          toast("⏱️ Limite máximo de consulta atingido (60 min). Finalizando e processando prontuário...");
+          stopRecording();
+        }
+
+        // Auto-stop de segurança 2: Detecção de sala vazia / silêncio prolongado (> 7 minutos sem novas palavras no modo ambiente)
+        if (mode === 'ambient' && Date.now() - lastActivityTimeRef.current > 7 * 60 * 1000 && transcriptRef.current.trim().length > 50) {
+          toast("🔇 Silêncio prolongado detectado. Finalizando consulta automaticamente...");
+          stopRecording();
+        }
+      }, 1000);
+
+      // Web Speech API com Reconexão Contínua (Keep-Alive)
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognition) {
         try {
-          // Garantir que não existam instâncias antigas rodando
           if ((window as any).currentRecognition) {
             try { (window as any).currentRecognition.stop(); } catch (e) {}
           }
-          const recognition = new SpeechRecognition();
-          (window as any).currentRecognition = recognition;
-          recognition.lang = 'pt-BR';
-          recognition.continuous = true;
-          recognition.interimResults = true;
           
-          recognition.onresult = (event: any) => {
-            let currentTranscript = '';
-            for (let i = 0; i < event.results.length; i++) {
-              currentTranscript += event.results[i][0].transcript;
-            }
-            setLiveTranscript(currentTranscript);
-            transcriptRef.current = currentTranscript;
+          const initRecognition = () => {
+            if (!isRecordingRef.current) return;
+            const recognition = new SpeechRecognition();
+            (window as any).currentRecognition = recognition;
+            recognition.lang = 'pt-BR';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            
+            recognition.onresult = (event: any) => {
+              lastActivityTimeRef.current = Date.now();
+              let sessionTranscript = '';
+              for (let i = 0; i < event.results.length; i++) {
+                sessionTranscript += event.results[i][0].transcript;
+              }
+              
+              const fullText = (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + sessionTranscript;
+              setLiveTranscript(fullText);
+              transcriptRef.current = fullText;
+            };
+            
+            recognition.onerror = (e: any) => {
+              console.log("Speech recognition error:", e);
+            };
+
+            recognition.onend = () => {
+              // Se ainda estiver gravando (especialmente no modo ambiente), reconecta imediatamente!
+              if (isRecordingRef.current) {
+                if (transcriptRef.current) {
+                  accumulatedTranscriptRef.current = transcriptRef.current;
+                }
+                setTimeout(() => {
+                  if (isRecordingRef.current) {
+                    try { initRecognition(); } catch (err) { console.log("Recognition restart err:", err); }
+                  }
+                }, 200);
+              }
+            };
+            
+            recognition.start();
+            recognitionRef.current = recognition;
           };
-          
-          recognition.onerror = (e: any) => console.log("Speech recognition error:", e);
-          
-          recognition.start();
-          recognitionRef.current = recognition;
+
+          initRecognition();
         } catch (e) {
           console.log("Speech recognition init failed", e);
         }
@@ -1685,6 +1777,9 @@ export default function App() {
 
     } catch (err: any) {
       console.error("Erro ao acessar microfone:", err);
+      setIsRecording(false);
+      isRecordingRef.current = false;
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
       const errorName = err.name || '';
       const errorMessage = err.message || '';
       
@@ -1714,8 +1809,15 @@ export default function App() {
   };
 
   const stopRecording = () => {
+    isRecordingRef.current = false;
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    } else {
       setIsRecording(false);
     }
     if (recognitionRef.current) {
@@ -1783,12 +1885,13 @@ export default function App() {
     }
   };
 
-  const handleAudioProcess = async (blob: Blob) => {
+  const handleAudioProcess = async (blobOrText?: Blob | string) => {
     setIsProcessing(true);
-    const toastId = toast.loading("🎙️ Processando áudio da consulta com IA...");
+    const toastId = toast.loading("🎙️ Processando conversa da consulta com IA...");
     try {
       let result;
-      const finalTranscript = transcriptRef.current.trim();
+      const isDirectText = typeof blobOrText === 'string';
+      const finalTranscript = isDirectText ? blobOrText.trim() : transcriptRef.current.trim();
       
       // Se a transcrição em tempo real funcionou bem (mais de 15 caracteres), usamos ela!
       // É muito mais rápido e barato processar texto do que áudio no Gemini.
@@ -1801,12 +1904,12 @@ export default function App() {
           selectedAppointmentReason,
           currentSpecialty?.promptContext
         );
-      } else {
+      } else if (blobOrText instanceof Blob) {
         // Fallback de segurança: se a transcrição falhou, processamos o áudio original
         console.log("Usando processamento de áudio (fallback de segurança)");
         const base64Data = await new Promise<string>((resolve) => {
           const reader = new FileReader();
-          reader.readAsDataURL(blob);
+          reader.readAsDataURL(blobOrText);
           reader.onloadend = () => {
             resolve((reader.result as string).split(',')[1]);
           };
@@ -1816,6 +1919,8 @@ export default function App() {
           data: base64Data,
           mimeType: 'audio/webm'
         }, examMode, selectedAppointmentReason, currentSpecialty?.promptContext);
+      } else {
+        throw new Error("Nenhum áudio ou texto de consulta detectado para processar.");
       }
       
       // Busca automática por histórico via CPF
@@ -2143,6 +2248,13 @@ export default function App() {
         } else if (newRecord.dados_especialidade) {
           setSpecialtyData(newRecord.dados_especialidade);
         }
+
+        // Limpa rascunho de emergência após processamento bem sucedido
+        try {
+          localStorage.removeItem('ambulatorio_draft_consultation');
+          setPendingDraft(null);
+        } catch (e) {}
+
         toast.success("✨ IA preencheu a ficha e prontuário com sucesso!", { id: toastId });
     } catch (err: any) {
       console.error("Erro no processamento clínico:", err);
@@ -2155,7 +2267,7 @@ export default function App() {
         toast.error("Limite de IA atingido temporariamente.", { id: toastId });
       } else {
         setError(`Erro ao processar áudio: ${msg || 'Verifique sua conexão e tente novamente.'}`);
-        toast.error("Erro ao processar áudio.", { id: toastId });
+        toast.error("Erro ao processar áudio. O rascunho da conversa está salvo com segurança.", { id: toastId });
       }
     } finally {
       setIsProcessing(false);
@@ -4360,6 +4472,18 @@ export default function App() {
                   examMode={examMode}
                   setExamMode={setExamMode}
                   isRecording={isRecording}
+                  recordingMode={recordingMode}
+                  setRecordingMode={setRecordingMode}
+                  recordingDuration={recordingDuration}
+                  pendingDraft={pendingDraft}
+                  onRestoreDraft={(draft) => handleAudioProcess(draft.transcript)}
+                  onDiscardDraft={() => {
+                    try {
+                      localStorage.removeItem('ambulatorio_draft_consultation');
+                      setPendingDraft(null);
+                      toast('Rascunho de consulta descartado.');
+                    } catch (e) {}
+                  }}
                   startRecording={startRecording}
                   stopRecording={stopRecording}
                   isProcessing={isProcessing}

@@ -100,7 +100,13 @@ interface PatientDossierViewProps {
   examMode: string;
   setExamMode: (mode: string) => void;
   isRecording: boolean;
-  startRecording: () => void;
+  recordingMode?: 'quick' | 'ambient';
+  setRecordingMode?: (mode: 'quick' | 'ambient') => void;
+  recordingDuration?: number;
+  pendingDraft?: any;
+  onRestoreDraft?: (draft: any) => void;
+  onDiscardDraft?: () => void;
+  startRecording: (mode?: 'quick' | 'ambient') => void;
   stopRecording: () => void;
   isProcessing: boolean;
   liveTranscript: string;
@@ -369,6 +375,12 @@ export default function PatientDossierView({
   examMode,
   setExamMode,
   isRecording,
+  recordingMode = 'quick',
+  setRecordingMode,
+  recordingDuration = 0,
+  pendingDraft,
+  onRestoreDraft,
+  onDiscardDraft,
   startRecording,
   stopRecording,
   isProcessing,
@@ -392,6 +404,14 @@ export default function PatientDossierView({
   const [activeTab, setActiveTab] = useState<
     'evolucao' | 'anamnese' | 'plano' | 'especialidade' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
   >('evolucao');
+
+  const [showAudioModeMenu, setShowAudioModeMenu] = useState(false);
+
+  const formatSeconds = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const [clinicalAlerts, setClinicalAlerts] = useState<string[]>(
     currentRecord?.alertas_copiloto || currentRecord?.alertas_clinicos || []
@@ -1313,28 +1333,112 @@ export default function PatientDossierView({
                     ))}
                   </div>
                 )}
+
+                {/* Banner de Recuperação de Rascunho de Emergência / Offline */}
+                {pendingDraft && (
+                  <div className="mt-3 w-full bg-amber-50 border border-amber-300 text-amber-900 px-3.5 py-2.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+                      <span>
+                        <strong>💾 Rascunho Salvo Localmente:</strong> {pendingDraft.patientName || 'Paciente'} ({pendingDraft.transcript?.length || 0} caracteres transcritos)
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onRestoreDraft && onRestoreDraft(pendingDraft)}
+                        disabled={isProcessing}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                      >
+                        {isProcessing ? 'Processando...' : '✨ Processar com IA'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDiscardDraft && onDiscardDraft()}
+                        className="px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-semibold transition-all"
+                      >
+                        Descartar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Clean Action Command Bar */}
-            {/* Clean Action Command Bar */}
             <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
-              {/* Primary IA Dictation */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (isRecording) stopRecording();
-                  else startRecording();
-                }}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 border ${
-                  isRecording 
-                    ? 'bg-red-600 hover:bg-red-700 text-white border-red-600 animate-pulse' 
-                    : 'bg-blue-50 hover:bg-blue-100 text-blue-950 border-blue-200/90'
-                }`}
-              >
-                <Mic size={16} className={isRecording ? "text-white animate-bounce" : "text-blue-600"} />
-                {isRecording ? 'Ouvindo...' : 'Atender IA'}
-              </button>
+              {/* Primary IA Dictation / Ambient Scribe */}
+              <div className="relative flex items-center">
+                {isRecording ? (
+                  <div className="flex items-center gap-2 bg-red-600 text-white px-3.5 py-2 rounded-xl border border-red-500 shadow-md animate-pulse">
+                    <div className="w-2 h-2 rounded-full bg-white animate-ping" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-red-100">
+                      {recordingMode === 'ambient' ? '🎙️ Escuta Ativa' : '⚡ Ditado'} • {formatSeconds(recordingDuration)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => stopRecording()}
+                      className="ml-1.5 px-2.5 py-1 bg-white text-red-700 hover:bg-red-50 rounded-lg text-xs font-extrabold transition-all shadow-xs cursor-pointer active:scale-95"
+                      title="Finalizar gravação e processar prontuário com IA"
+                    >
+                      Finalizar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="inline-flex rounded-xl shadow-xs border border-blue-200/90 bg-blue-50/90 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => startRecording(recordingMode)}
+                      disabled={isProcessing}
+                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-950 hover:bg-blue-100/80 rounded-l-lg transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      <Mic size={15} className="text-blue-600" />
+                      <span>{recordingMode === 'ambient' ? '🎙️ Escuta Ativa' : '⚡ Atender IA'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAudioModeMenu(!showAudioModeMenu)}
+                      className="px-2 py-2 text-blue-700 hover:bg-blue-100/80 rounded-r-lg border-l border-blue-200 transition-all"
+                      title="Alternar modo de gravação"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+
+                    {showAudioModeMenu && (
+                      <div className="absolute top-full left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-1.5 space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (setRecordingMode) setRecordingMode('quick');
+                            setShowAudioModeMenu(false);
+                            startRecording('quick');
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs flex flex-col gap-0.5 transition-all ${
+                            recordingMode === 'quick' ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200' : 'hover:bg-slate-50 text-slate-700 font-medium'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 font-bold">⚡ Ditado Rápido (1 a 3 min)</span>
+                          <span className="text-[10px] text-slate-500 font-normal">Grave um resumo direto com achados e conduta.</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (setRecordingMode) setRecordingMode('ambient');
+                            setShowAudioModeMenu(false);
+                            startRecording('ambient');
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs flex flex-col gap-0.5 transition-all ${
+                            recordingMode === 'ambient' ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200' : 'hover:bg-slate-50 text-slate-700 font-medium'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 font-bold">🎙️ Escuta Ambiental (30 a 40 min)</span>
+                          <span className="text-[10px] text-slate-500 font-normal">Deixe gravando na mesa durante a consulta.</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Primary Save Evolution */}
               <button

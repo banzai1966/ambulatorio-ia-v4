@@ -144,6 +144,10 @@ export async function processClinicalInput(
            * 'suplemento_vit_d3_k2': true/false, 'suplemento_vit_c': true/false, 'suplemento_zinco_mg': true/false, 'suplemento_arnica_homeo': true/false, 'suplemento_coenzima_q10': true/false.
            * 'observacoes_odonto_biologica': texto do plano.
            * 'odontograma': { "teeth": { [numDente]: { "id": number, "status": "amalgam"|"zirconia_implant"|"titanium_implant"|"endodontic"|"cavitation_nico"|"missing"|"caries"|"ceramic_crown"|"healthy", "notes": string, "biologicalPlan": string, "neuralTherapy": boolean } } }.
+       5. ESCUTA AMBIENTAL & DIARIZAÇÃO (AMBIENT SCRIBE DE CONSULTA LIVRE):
+          - Se a entrada for um diálogo natural de consulta médica/odontológica:
+            a) Descarte bate-papo informal (trânsito, clima, amenidades).
+            b) Diarize e separe queixas do paciente (para queixa principal/anamnese) das constatações clínicas, exames e condutas do Dr. Carlos ou Dra. Lucy (para exame físico, odontograma FDI, reflexos, suplementos e prescrição).
        
       MODELO JSON OBRIGATÓRIO DE RETORNO:
       {

@@ -763,7 +763,11 @@ app.post("/api/process-clinical", async (req, res) => {
              Exemplo: Dentes 16 e 46 amálgama -> { "16": { "id": 16, "status": "amalgam", "notes": "Amálgama oclusal - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" }, "46": { "id": 46, "status": "amalgam", "notes": "Amálgama extenso - Troca segura SMART", "biologicalPlan": "Protocolo SMART IAOMT" } }.
              Dente 36 ausente / implante zircônia -> { "36": { "id": 36, "status": "zirconia_implant", "notes": "Implante cerâmico Zircônia", "biologicalPlan": "Implante Cerâmico Metal-Free + PRF" } }.
              Dente 38 siso extraído / foco NICO -> { "38": { "id": 38, "status": "cavitation_nico", "notes": "Cavitação NICO / FDOK", "biologicalPlan": "Curetagem + Ozonioterapia + Terapia Neural", "neuralTherapy": true } }.
-      7. CORREÇÃO DE TRANSCRIÇÃO:
+      7. ESCUTA AMBIENTAL & DIARIZAÇÃO DE CONSULTAS (AMBIENT SCRIBE):
+         - Se a entrada contiver um diálogo natural de consulta médica/odontológica:
+           a) Descarte conversas informais (trânsito, clima, piadas, amenidades).
+           b) Diarize e separe queixas do paciente (para anamnese/queixa principal) dos achados clínicos, dentes, reflexos, suplementos e prescrições decididos pelo profissional.
+      8. CORREÇÃO DE TRANSCRIÇÃO:
          - Gere todos os textos em português médico impecável, formal e gramaticalmente perfeito.
 
       Extraia em formato JSON com a seguinte estrutura:
