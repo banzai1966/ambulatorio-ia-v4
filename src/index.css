@@ -86,4 +86,19 @@
   @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
 }
 
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Esconder elementos de navegação geral ao imprimir */
+  header, nav, aside:not(.printable-content) {
+    display: none !important;
+  }
+}
+
+
 

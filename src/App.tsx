@@ -68,6 +68,7 @@ import ClinicSettings from './components/ClinicSettings';
 import UserProfileModal from './components/UserProfileModal';
 import IntegrativeChecklistForm from './components/IntegrativeChecklistForm';
 import FinancialModule from './components/FinancialModule';
+import CrmKanbanModule from './components/CrmKanbanModule';
 import IntegrativeBodyMap from './components/IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './components/IntegrativeEvolution';
 import SpecialtyFields from './components/SpecialtyFields';
@@ -362,6 +363,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showManageTeam, setShowManageTeam] = useState(savedActiveTab === 'equipe');
   const [showFinancial, setShowFinancial] = useState(savedActiveTab === 'financeiro');
+  const [showCrm, setShowCrm] = useState(savedActiveTab === 'crm');
   const [showDashboard, setShowDashboard] = useState(!savedActiveTab || savedActiveTab === 'dashboard');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -417,7 +419,7 @@ export default function App() {
     }
   };
 
-  const navigateToTab = (tab: 'dashboard' | 'atendimento' | 'agenda' | 'mensagens' | 'historico' | 'financeiro' | 'equipe') => {
+  const navigateToTab = (tab: 'dashboard' | 'atendimento' | 'agenda' | 'mensagens' | 'historico' | 'financeiro' | 'crm' | 'equipe') => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('ambulatorio_active_tab', tab);
     }
@@ -426,6 +428,7 @@ export default function App() {
     setShowMessageHistory(tab === 'mensagens');
     setShowHistory(tab === 'historico');
     setShowFinancial(tab === 'financeiro');
+    setShowCrm(tab === 'crm');
     setShowManageTeam(tab === 'equipe');
     if (tab !== 'atendimento') {
       setSelectedPatient(null);
@@ -3457,6 +3460,26 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => navigateToTab('crm')}
+              title={isSidebarCollapsed ? "CRM & Funil de Pacientes" : undefined}
+              className={cn(
+                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
+                showCrm 
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+              )}
+            >
+              <TrendingUp size={17} className={showCrm ? "text-white" : "text-slate-500"} />
+              {!isSidebarCollapsed && (
+                <div className="flex items-center justify-between w-full">
+                  <span>CRM & Funil</span>
+                  <span className="px-1.5 py-0.2 text-[9px] font-black bg-indigo-100 text-indigo-700 rounded-md">PRO</span>
+                </div>
+              )}
+            </button>
+
+            <button
               onClick={() => navigateToTab('mensagens')}
               title={isSidebarCollapsed ? "Mensagens & WhatsApp" : undefined}
               className={cn(
@@ -3880,6 +3903,32 @@ export default function App() {
               >
                 <FinancialModule currentUser={user} />
               </motion.div>
+            ) : showCrm ? (
+              <motion.div
+                key="crm"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <CrmKanbanModule 
+                  currentUser={user} 
+                  onOpenAgendaWithPatient={(name, phone) => {
+                    setPrefillPatient({ name, phone: phone || '' });
+                    navigateToTab('agenda');
+                  }}
+                  onStartConsultation={(name, phone) => {
+                    setCurrentRecord({
+                      paciente_nome_completo: name,
+                      paciente_telefone: phone || '',
+                      especialidade: resolveDoctorKey(user) === 'dra_lucy' ? 'Odontologia Biológica' : 'Neurologia',
+                      paciente_status: 'Estável',
+                      resumo_formatado: '',
+                      sugestao_conduta: ''
+                    });
+                    navigateToTab('atendimento');
+                  }}
+                />
+              </motion.div>
             ) : showDashboard ? (
               <motion.div
                 key="dashboard"
@@ -3901,6 +3950,7 @@ export default function App() {
                   onOpenAgenda={() => navigateToTab('agenda')}
                   onOpenMessages={() => navigateToTab('mensagens')}
                   onOpenHistory={() => navigateToTab('historico')}
+                  onOpenCrm={() => navigateToTab('crm')}
                 />
               </motion.div>
             ) : showAgenda ? (

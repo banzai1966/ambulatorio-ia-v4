@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import toast from 'react-hot-toast';
 import { 
   X, 
   Stethoscope, 
@@ -30,9 +31,15 @@ import {
   DollarSign,
   Users,
   UserCheck,
-  MessageSquare
+  MessageSquare,
+  Printer,
+  Camera,
+  Radio,
+  Waves,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { generateManualClinicoPDF } from '../lib/manualPdfGenerator';
 
 interface ManualClinicoModalProps {
   isOpen: boolean;
@@ -43,6 +50,7 @@ interface ManualClinicoModalProps {
 export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = 'dr_carlos' }: ManualClinicoModalProps) {
   const [selectedManual, setSelectedManual] = useState<'dr_carlos' | 'dra_lucy'>(defaultProfile);
   const isLucy = selectedManual === 'dra_lucy';
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   const [activeSection, setActiveSection] = useState<string>(
     defaultProfile === 'dra_lucy' ? 'lucy_visao_geral' : 'carlos_visao_geral'
@@ -59,6 +67,29 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
   const handleSwitchManual = (profile: 'dr_carlos' | 'dra_lucy') => {
     setSelectedManual(profile);
     setActiveSection(profile === 'dra_lucy' ? 'lucy_visao_geral' : 'carlos_visao_geral');
+  };
+
+  const handleExportPDF = () => {
+    setIsExportingPDF(true);
+    const toastId = toast.loading('Gerando PDF oficial do Manual Clínico completo...', { id: 'manual-pdf-gen' });
+    
+    // Pequeno timeout para permitir que a UI atualize e o toast renderize
+    setTimeout(() => {
+      try {
+        generateManualClinicoPDF(selectedManual);
+        toast.success(
+          isLucy 
+            ? 'Manual da Dra. Lucy Morata baixado em PDF com sucesso!' 
+            : 'Manual do Dr. Carlos Morato baixado em PDF com sucesso!',
+          { id: 'manual-pdf-gen' }
+        );
+      } catch (error: any) {
+        console.error('Erro ao gerar PDF do manual:', error);
+        toast.error('Erro ao gerar PDF: ' + (error?.message || 'Tente novamente.'), { id: 'manual-pdf-gen' });
+      } finally {
+        setIsExportingPDF(false);
+      }
+    }, 150);
   };
 
   return (
@@ -83,13 +114,30 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                 ? "bg-gradient-to-r from-teal-950 via-slate-900 to-emerald-950 border-emerald-900/60" 
                 : "bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 border-blue-900/60"
             )}>
-              <button
-                onClick={onClose}
-                className="absolute top-5 right-5 p-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full transition-all cursor-pointer z-10"
-                title="Fechar Manual"
-              >
-                <X size={20} />
-              </button>
+              <div className="absolute top-5 right-5 flex items-center gap-2 z-10">
+                <button
+                  onClick={handleExportPDF}
+                  disabled={isExportingPDF}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500/80 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-emerald-400/40 shadow-sm disabled:opacity-50"
+                  title="Baixar Manual Clínico Completo em PDF"
+                >
+                  {isExportingPDF ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Download size={15} />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isExportingPDF ? 'Gerando PDF...' : 'Baixar PDF Oficial'}
+                  </span>
+                </button>
+                <button
+                  onClick={onClose}
+                  className="p-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full transition-all cursor-pointer"
+                  title="Fechar Manual"
+                >
+                  <X size={20} />
+                </button>
+              </div>
 
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pr-12">
                 <div className="flex items-center gap-3.5">
@@ -252,7 +300,23 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Calendar size={15} className="text-blue-600 shrink-0" />
-                        7. Agenda, Fila & WhatsApp
+                        7. Agenda, Pré-Anamnese & WhatsApp
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('carlos_escuta_ambiental')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'carlos_escuta_ambiental'
+                          ? "bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Radio size={15} className="text-purple-600 shrink-0" />
+                        8. Escuta Ambiental (30-40 min)
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -369,7 +433,39 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Calendar size={15} className="text-emerald-600 shrink-0" />
-                        7. Agenda, Fila & Recibos
+                        7. Agenda, Pré-Anamnese & WhatsApp
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('lucy_dsd_tomografia')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'lucy_dsd_tomografia'
+                          ? "bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Camera size={15} className="text-indigo-600 shrink-0" />
+                        8. DSD, Sorriso 3D & Tomografia CBCT
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('lucy_escuta_ambiental')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'lucy_escuta_ambiental'
+                          ? "bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Radio size={15} className="text-teal-600 shrink-0" />
+                        9. Escuta Ambiental Odonto (30-40 min)
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -673,39 +769,98 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                           <Calendar size={24} />
                         </div>
                         <div>
-                          <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Rotina de Atendimento & Agenda</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">7. Agenda do Dr. Carlos, Fila de Espera & WhatsApp</h3>
-                          <p className="text-xs text-slate-500">Como funciona o fluxo do agendamento à consulta e contato com o paciente.</p>
+                          <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Recepção Inteligente & Automação Completa</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">7. Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp</h3>
+                          <p className="text-xs text-slate-500">Agendamento de consultas com disparo automático de pré-anamnese no WhatsApp, triagem e controle de faltas.</p>
                         </div>
                       </div>
 
                       <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
                         <div className="grid sm:grid-cols-2 gap-3.5">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
-                              <Calendar size={15} className="text-blue-600" /> Grade de Horários & Consultório
+                          <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-1.5">
+                            <strong className="text-blue-950 font-bold text-xs flex items-center gap-1.5">
+                              <MessageSquare size={15} className="text-blue-600" /> Disparo Automático de Pré-Anamnese no WhatsApp
                             </strong>
-                            <p className="text-xs text-slate-600">
-                              Na aba <strong>"Agenda Médica"</strong>, o Dr. Carlos pode visualizar seus pacientes do dia, horários confirmados, encaixes e tempo médio de cada consulta neurológica.
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Assim que a recepção ou o médico agenda o paciente, o sistema dispara no WhatsApp um link interativo. O paciente responde queixa principal, sintomas, histórico médico e medicações direto no celular antes da consulta.
                             </p>
                           </div>
 
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
-                              <Activity size={15} className="text-emerald-600" /> Fila de Espera & Chamada
+                          <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5">
+                            <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                              <Check size={15} className="text-emerald-600" /> Carga Automática no Prontuário (Ganha 20 min)
                             </strong>
-                            <p className="text-xs text-slate-600">
-                              Ao chegar na clínica, a recepção coloca o paciente na fila como <em>"Aguardando Médico"</em>. Quando o Dr. Carlos abre o prontuário no consultório, o status muda automaticamente para <em>"Em Atendimento"</em>.
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Quando o Dr. Carlos abre o prontuário no consultório, todos os dados respondidos pelo paciente no WhatsApp já aparecem preenchidos e organizados, liberando o médico para focar no exame neurológico e integrativo.
                             </p>
                           </div>
                         </div>
 
-                        <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200/80 space-y-2">
-                          <strong className="text-blue-950 font-bold text-xs flex items-center gap-1.5">
-                            <MessageSquare size={16} className="text-blue-600" /> Disparo de WhatsApp & Pré-Anamnese
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Calendar size={15} className="text-indigo-600" /> Grade Dinâmica & Confirmação de Presença
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Lembretes automáticos com orientações para o paciente trazer exames de imagem anteriores (RMN/TC), exames de sangue e receitas em uso, com botão de confirmação ativa que reduz drasticamente faltas (*no-show*).
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Activity size={15} className="text-rose-600" /> Fila de Espera & Status em Tempo Real
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Ao chegar na clínica, o paciente entra no status <em>"Aguardando Médico"</em>. Ao iniciar a consulta, muda para <em>"Em Atendimento"</em> e ao finalizar gera o envio da receita em PDF com 1 clique no WhatsApp.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedManual === 'dr_carlos' && activeSection === 'carlos_escuta_ambiental' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-purple-100 text-purple-700 rounded-2xl">
+                          <Radio size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">Inteligência Artificial de Escuta Contínua</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">8. Escuta Ambiental de Longa Duração (30 a 40 Minutos)</h3>
+                          <p className="text-xs text-slate-500">Tecnologia exclusiva de escuta passiva, diarização clínica e filtragem acústica profunda.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-1.5">
+                            <strong className="text-purple-950 font-bold text-xs flex items-center gap-1.5">
+                              <Waves size={15} className="text-purple-600" /> Captação de Longo Alcance & Filtro Acústico
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              O microfone do notebook ou tablet fica ligado durante toda a sessão (30 a 40 minutos). O sistema ativa cancelamento de eco, ganho automático e supressão de ruídos de ar-condicionado e tráfego.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-1.5">
+                            <strong className="text-blue-950 font-bold text-xs flex items-center gap-1.5">
+                              <Brain size={15} className="text-blue-600" /> Filtragem Semântica & Descarte de Ruído
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              A IA descarta automaticamente barulhos de teclado, folhas de papel e conversas sociais da chegada (*"como estava o trânsito?"*), focando exclusivamente nos termos neurológicos e integrativos.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                          <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                            <Sparkles size={16} className="text-emerald-600" /> Preenchimento Clínico Multidimensional em 1 Clique
                           </strong>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            O sistema pode enviar lembretes automáticos com as instruções prévias da consulta (trazer exames de imagem anteriores, ressonâncias e lista de medicações em uso). Ao terminar a consulta, o receituário em PDF pode ser enviado com 1 clique.
+                            Ao finalizar a consulta e clicar em <strong>"Parar Gravação"</strong>, a IA não cria apenas um texto: ela <strong>marca o Boneco de Wexler</strong> (reflexos 0 a 4+), <strong>pinta os Dermátomos C2-S5</strong>, preenche o <strong>Checklist Integrativo</strong>, gera o <strong>S.O.A.P.</strong> estruturado e já elabora a <strong>Prescrição Médica</strong> pronta para assinatura.
                           </p>
                         </div>
                       </div>
@@ -1038,39 +1193,146 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                           <Calendar size={24} />
                         </div>
                         <div>
-                          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Rotina do Consultório Odontológico</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">7. Agenda da Dra. Lucy, Fila Cirúrgica & Recibos</h3>
-                          <p className="text-xs text-slate-500">Como funciona o fluxo do agendamento, atendimento cirúrgico e emissão de orçamentos.</p>
+                          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Recepção Inteligente & Automação Odontológica</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">7. Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp</h3>
+                          <p className="text-xs text-slate-500">Agendamento de cirurgias e avaliações com disparo imediato da pré-anamnese biológica no WhatsApp.</p>
                         </div>
                       </div>
 
                       <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
                         <div className="grid sm:grid-cols-2 gap-3.5">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
-                              <Calendar size={15} className="text-emerald-600" /> Grade de Horários & Cirurgias
+                          <div className="p-4 bg-teal-50/70 rounded-2xl border border-teal-200 space-y-1.5">
+                            <strong className="text-teal-950 font-bold text-xs flex items-center gap-1.5">
+                              <MessageSquare size={15} className="text-teal-600" /> Disparo da Pré-Anamnese Biológica no WhatsApp
                             </strong>
-                            <p className="text-xs text-slate-600">
-                              Na aba <strong>"Agenda Médica"</strong>, a Dra. Lucy pode filtrar exclusivamente seus pacientes odontológicos, diferenciando avaliações iniciais, cirurgias de implante de zircônia e sessões de ozonioterapia.
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Ao agendar a consulta cirúrgica ou avaliação, o WhatsApp envia automaticamente um link para o paciente preencher no celular seu histórico de restaurações de amálgama, implantes prévios, alergias e queixas sistêmicas.
                             </p>
                           </div>
 
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
-                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
-                              <Sparkles size={15} className="text-blue-600" /> Fila em Tempo Real
+                          <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5">
+                            <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                              <Check size={15} className="text-emerald-600" /> Carga Direta no Prontuário da Dra. Lucy
                             </strong>
-                            <p className="text-xs text-slate-600">
-                              Quando o paciente chega ao consultório e é marcado na recepção, a Dra. Lucy vê o alerta na tela. Ao iniciar o procedimento, o prontuário sincroniza em tempo real.
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Quando a Dra. Lucy abre o prontuário no consultório, todo o histórico biológico já está pré-carregado, economizando 15 a 20 minutos de digitação e permitindo foco total no Odontograma 3D e exame intraoral.
                             </p>
                           </div>
                         </div>
 
-                        <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 space-y-2">
-                          <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
-                            <FileText size={16} className="text-emerald-600" /> Orçamentos, Orientações Pós-Op & WhatsApp
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <Calendar size={15} className="text-emerald-600" /> Bloqueio de Blocos Cirúrgicos & Confirmação
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Grade inteligente para diferenciar consultas breves de blocos cirúrgicos longos (SMART, Zircônia e PRF de 2 a 3h), com confirmação ativa no WhatsApp que minimiza faltas (*no-show*).
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <FileText size={15} className="text-blue-600" /> Orçamentos, Pós-Operatório & Recibos
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Geração imediata do plano de tratamento com valores discriminados, orientações pré e pós-operatórias ilustradas e envio de recibos com 1 clique diretamente para o WhatsApp do paciente.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedManual === 'dra_lucy' && activeSection === 'lucy_dsd_tomografia' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
+                          <Camera size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider">Estética Biológica & Diagnóstico por Imagem</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">8. Simulador de Sorriso Digital (DSD) & Tomografia CBCT</h3>
+                          <p className="text-xs text-slate-500">Tecnologia visual integrada que outros softwares cobram à parte em módulos caros e isolados.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200 space-y-1.5">
+                            <strong className="text-indigo-950 font-bold text-xs flex items-center gap-1.5">
+                              <Smile size={15} className="text-indigo-600" /> Simulador de Sorriso Digital (DSD / Smile Design)
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Permite carregar a foto do rosto/sorriso do paciente, calibrar proporções de largura/altura dos dentes anteriores (linha média, zênite gengival, proporção áurea) e simular facetas de porcelana e coroas cerâmicas antes de iniciar o desgaste ou cirurgia.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-purple-50/70 rounded-2xl border border-purple-200 space-y-1.5">
+                            <strong className="text-purple-950 font-bold text-xs flex items-center gap-1.5">
+                              <ImageIcon size={15} className="text-purple-600" /> Tomografia Cone Beam (CBCT) & Panorâmica
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Área dedicada para anexar e visualizar cortes tomográficos de cavitações ósseas NICO/FDOK, medição de tábua óssea para implantes de zircônia, proximidade do canal mandibular e laudo radiológico integrado ao prontuário.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                          <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                            <Sparkles size={16} className="text-emerald-600" /> Diferencial Competitivo Único
                           </strong>
                           <p className="text-xs text-slate-600 leading-relaxed">
-                            Após o planejamento do odontograma (ex: remoção de amálgama ou implante cerâmico), o sistema gera o plano de tratamento detalhado com valores e orientações pré/pós-operatórias, que podem ser enviados diretamente para o WhatsApp do paciente.
+                            Enquanto softwares tradicionais exigem a contratação de 3 a 4 plataformas separadas (um odontograma simples, um software caro de DSD, um visualizador DICOM e uma prescrição comum), o <strong>Ambulatório IA</strong> une tudo em uma única tela fluida e intuitiva para a <strong>Dra. Lucy Morata</strong>.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedManual === 'dra_lucy' && activeSection === 'lucy_escuta_ambiental' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-teal-100 text-teal-700 rounded-2xl">
+                          <Radio size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-teal-700 tracking-wider">Inteligência Artificial de Escuta Contínua Odontológica</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">9. Escuta Ambiental Odontológica (30 a 40 Minutos)</h3>
+                          <p className="text-xs text-slate-500">Captação contínua da consulta odontológica, descarte de ruídos de instrumentos e preenchimento direto no Odontograma 3D.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-teal-50/70 rounded-2xl border border-teal-200 space-y-1.5">
+                            <strong className="text-teal-950 font-bold text-xs flex items-center gap-1.5">
+                              <Waves size={15} className="text-teal-600" /> Escuta da Avaliação Clínica & Conversa
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              A Dra. Lucy pode deixar o microfone ligado durante toda a primeira consulta ou exame inicial. O sistema isola a voz da dentista e do paciente, mantendo a sensibilidade mesmo a 2 metros de distância da mesa.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5">
+                            <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                              <Smile size={15} className="text-emerald-600" /> Mapeamento Automático do Odontograma (FDI)
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Ao ditar ou conversar: <em>"No 36 temos amálgama com indicação de SMART, no 11 planejaremos implante de zircônia e no 48 há cavitação NICO visível em tomografia"</em>, a IA marca automaticamente os elementos 36, 11 e 48 com as cores e protocolos correspondentes.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                          <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                            <ShieldCheck size={16} className="text-amber-600" /> Montagem Automática do Plano Biológico & Prescrição
+                          </strong>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            A IA sintetiza o histórico da queixa principal, vincula os dentes aos seus meridianos e órgãos correspondentes, ativa as orientações do Protocolo SMART (IAOMT) e já prepara a receita de suporte cirúrgico (Vitamina D3/K2, Vitamina C e Zinco) para exportação em PDF e envio no WhatsApp.
                           </p>
                         </div>
                       </div>
@@ -1087,12 +1349,26 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Manuais Clínicos sincronizados • Ambulatório IA v4.6</span>
               </div>
-              <button
-                onClick={onClose}
-                className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
-              >
-                Fechar Manual
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportPDF}
+                  disabled={isExportingPDF}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isExportingPDF ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Download size={15} />
+                  )}
+                  <span>{isExportingPDF ? 'Gerando PDF...' : 'Baixar PDF Oficial'}</span>
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  Fechar Manual
+                </button>
+              </div>
             </div>
           </motion.div>
         </motion.div>

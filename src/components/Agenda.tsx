@@ -902,6 +902,48 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           status: 'Agendado'
         } as any);
       }
+
+      // Sincroniza imediatamente no CRM Kanban
+      if (typeof window !== 'undefined') {
+        try {
+          const savedCrm = localStorage.getItem('ambulatorio_crm_cards_v1');
+          const currentCards = savedCrm ? JSON.parse(savedCrm) : [];
+          const cleanPhone = (newAppointment.paciente_telefone || '').replace(/\D/g, '');
+          const cleanName = (newAppointment.paciente_nome || '').toLowerCase().trim();
+          
+          const alreadyExists = currentCards.some((c: any) => 
+            (c.paciente_nome && c.paciente_nome.toLowerCase().trim() === cleanName) ||
+            (cleanPhone && c.paciente_telefone && c.paciente_telefone.replace(/\D/g, '') === cleanPhone)
+          );
+
+          if (!alreadyExists) {
+            const isLucy = (selectedSpecialtyObj?.nome || '').toLowerCase().includes('odonto') || (selectedDoctor?.full_name || '').toLowerCase().includes('lucy');
+            const isCarlos = (selectedSpecialtyObj?.nome || '').toLowerCase().includes('neuro') || (selectedDoctor?.full_name || '').toLowerCase().includes('carlos');
+
+            const newCrmCard = {
+              id: `crm_ag_${Date.now()}`,
+              paciente_nome: newAppointment.paciente_nome,
+              paciente_telefone: newAppointment.paciente_telefone || '',
+              paciente_cpf: newAppointment.paciente_cpf || '',
+              stage: 'avaliacao_agendada',
+              doctorKey: isLucy ? 'dra_lucy' : (isCarlos ? 'dr_carlos' : 'geral'),
+              procedimento_interesse: newAppointment.motivo || 'Consulta / Procedimento Agendado',
+              valor_estimado: newAppointment.valor_consulta ? Number(newAppointment.valor_consulta) : 0,
+              status_anamnese: 'preenchida',
+              tags: ['Criado na Agenda', newAppointment.convenio || 'Particular'],
+              notas: `Agendado para ${date ? date.split('-').reverse().join('/') : ''} às ${formattedTime ? formattedTime.slice(0, 5) : ''}. Profissional: ${selectedDoctor?.full_name || 'Médico'}.`,
+              origem: 'whatsapp',
+              data_contato: new Date().toISOString()
+            };
+
+            const updatedCards = [newCrmCard, ...currentCards];
+            localStorage.setItem('ambulatorio_crm_cards_v1', JSON.stringify(updatedCards));
+            window.dispatchEvent(new CustomEvent('crm_cards_updated'));
+          }
+        } catch (e) {
+          console.warn("Erro ao sincronizar agendamento no CRM:", e);
+        }
+      }
       
       setNewAppointment({ 
         paciente_nome: '', 

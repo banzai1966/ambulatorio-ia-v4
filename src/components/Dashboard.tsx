@@ -32,9 +32,10 @@ interface DashboardProps {
   onOpenAgenda: () => void;
   onOpenMessages: () => void;
   onOpenHistory: () => void;
+  onOpenCrm?: () => void;
 }
 
-export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMessages, onOpenHistory }: DashboardProps) {
+export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMessages, onOpenHistory, onOpenCrm }: DashboardProps) {
   const [stats, setStats] = useState({
     newPatientsToday: 0,
     confirmedAppointments: 0,
@@ -442,7 +443,7 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
       </div>
 
       {/* Atalhos Rápidos com Cantos Arredondados & Cores Suaves */}
-      <div className="grid sm:grid-cols-3 gap-4 sm:gap-5">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         <QuickActionCard 
           title="WhatsApp & Mensagens" 
           description="Acompanhe confirmações automáticas e conversas" 
@@ -457,6 +458,15 @@ export default function Dashboard({ onStartConsultation, onOpenAgenda, onOpenMes
           iconBg="bg-emerald-50"
           onClick={onOpenAgenda}
         />
+        {onOpenCrm && (
+          <QuickActionCard 
+            title="CRM & Funil de Pacientes" 
+            description="Leads, pré-anamneses e orçamentos em negociação" 
+            icon={<TrendingUp size={20} className="text-purple-600" />} 
+            iconBg="bg-purple-50"
+            onClick={onOpenCrm}
+          />
+        )}
         <QuickActionCard 
           title="Histórico de Prontuários" 
           description="Consulte relatórios, evoluções SOAP e prescrições" 
