@@ -314,7 +314,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
           const evoUrl = clinicConfig.evolution_url || "https://api.makprojetosmake.com.br";
           const instance = clinicConfig.evolution_instance || "ambulatorio";
-          const apiKey = clinicConfig.evolution_apikey || "E6247913DB92-48B4-8B54-5C7449EA639B";
+          const apiKey = clinicConfig.evolution_apikey || "BFA493146682-4CA6-B8CB-40E2D785AA23";
 
           await axios.post(`${evoUrl}/message/sendText/${instance}`, {
             number: cleanPhone,
@@ -416,7 +416,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       try {
         const evoUrl = clinicConfig.evolution_url || "https://api.makprojetosmake.com.br";
         const instance = clinicConfig.evolution_instance || "ambulatorio";
-        const apiKey = clinicConfig.evolution_apikey || "E6247913DB92-48B4-8B54-5C7449EA639B";
+        const apiKey = clinicConfig.evolution_apikey || "BFA493146682-4CA6-B8CB-40E2D785AA23";
 
         await axios.post(`${evoUrl}/message/sendText/${instance}`, {
           number: cleanPhone,

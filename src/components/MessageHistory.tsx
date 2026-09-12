@@ -403,23 +403,45 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const handleReply = async (phone: string) => {
     if (isSendingMessage || (!replyText.trim() && !pendingMedia)) return;
     
+    const sentMsgText = replyText.trim();
+    const sentMedia = pendingMedia;
+
     setIsSendingMessage(true);
     try {
+      // Adiciona otimisticamente na lista de mensagens
+      const tempId = `temp_${Date.now()}`;
+      setMessages(prev => [
+        ...prev,
+        {
+          id: tempId,
+          telefone_cliente: phone,
+          mensagem: sentMsgText || (sentMedia?.type === 'image' ? '[Imagem]' : '[Documento]'),
+          direcao: 'enviada',
+          created_at: new Date().toISOString(),
+          lida: true,
+          midia_url: sentMedia ? sentMedia.base64 : undefined,
+          tipo: sentMedia ? 'media' : 'text',
+          tipo_midia: sentMedia?.type
+        }
+      ]);
+
       await sendWhatsAppMessage(
         phone, 
-        replyText, 
-        pendingMedia?.base64, 
-        pendingMedia?.type, 
-        pendingMedia?.name
+        sentMsgText, 
+        sentMedia?.base64, 
+        sentMedia?.type, 
+        sentMedia?.name
       );
       
       setReplyText('');
       setPendingMedia(null);
       toast.success("Mensagem enviada com sucesso!");
+      setTimeout(() => fetchMessages(), 800);
     } catch (err: any) {
       console.error("Erro ao enviar mensagem:", err);
       const errorMessage = err.response?.data?.error || err.message || "Erro desconhecido";
       toast.error(`Erro ao enviar mensagem: ${errorMessage}`);
+      fetchMessages();
     } finally {
       setIsSendingMessage(false);
     }

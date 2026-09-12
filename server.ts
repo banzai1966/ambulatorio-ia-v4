@@ -45,17 +45,75 @@ const OLD_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogI
 // Configuração Evolution API (Dinâmica com fallback para variáveis de ambiente)
 let EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || "https://api.makprojetosmake.com.br").replace(/\/$/, "");
 let EVOLUTION_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || "ambulatorio";
-let EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || 
+const EVOLUTION_GLOBAL_KEY = (process.env.EVOLUTION_GLOBAL_KEY || "b2efa885a71ee2edf72b597df1a0ce9").trim();
+let EVOLUTION_API_KEY = (process.env.EVOLUTION_API_KEY || 
                           process.env.WHATSAPP_API_KEY || 
                           process.env.EVOLUTION_API_K || 
-                          "E6247913DB92-48B4-8B54-5C7449EA639B";
+                          "BFA493146682-4CA6-B8CB-40E2D785AA23").trim();
+
+const KNOWN_INSTANCE_TOKENS: Record<string, string> = {
+  ambulatorio: "BFA493146682-4CA6-B8CB-40E2D785AA23",
+  luci: "BFA493146682-4CA6-B8CB-40E2D785AA23",
+  drcarlos: "BFA493146682-4CA6-B8CB-40E2D785AA23"
+};
 
 // Helper para obter configuração dinâmica da requisição ou fallback
 function getEvolutionConfig(req?: express.Request) {
   const url = (req?.body?.evolution_url || req?.query?.evolution_url || (req?.headers['x-evolution-url'] as string) || EVOLUTION_API_URL).replace(/\/$/, "");
   const instance = (req?.body?.evolution_instance || req?.query?.evolution_instance || (req?.headers['x-evolution-instance'] as string) || EVOLUTION_INSTANCE_NAME).trim();
-  const apikey = (req?.body?.evolution_apikey || req?.query?.evolution_apikey || (req?.headers['x-evolution-apikey'] as string) || EVOLUTION_API_KEY).trim();
+  let apikey = (req?.body?.evolution_apikey || req?.query?.evolution_apikey || (req?.headers['x-evolution-apikey'] as string) || "").trim();
+  
+  if (!apikey || apikey === "E6247913DB92-48B4-8B54-5C7449EA639B") {
+    apikey = KNOWN_INSTANCE_TOKENS[instance] || EVOLUTION_API_KEY || EVOLUTION_GLOBAL_KEY;
+  }
   return { url, instance, apikey };
+}
+
+// Helper universal que tenta a requisição na Evolution e, caso receba 401, tenta a outra chave (global ou token da instância)
+async function requestEvolutionWithFallback(method: 'get' | 'post' | 'put' | 'delete', endpointUrl: string, data?: any, initialKey?: string) {
+  const keysToTry = [
+    initialKey,
+    "BFA493146682-4CA6-B8CB-40E2D785AA23",
+    EVOLUTION_GLOBAL_KEY,
+    EVOLUTION_API_KEY
+  ].filter(Boolean) as string[];
+
+  const uniqueKeys = Array.from(new Set(keysToTry));
+  let lastError: any = null;
+
+  for (const key of uniqueKeys) {
+    try {
+      const config: any = { headers: { 'apikey': key }, timeout: 8000 };
+      if (method === 'get') {
+        return await axios.get(endpointUrl, config);
+      } else if (method === 'post') {
+        return await axios.post(endpointUrl, data || {}, config);
+      } else if (method === 'put') {
+        return await axios.put(endpointUrl, data || {}, config);
+      } else if (method === 'delete') {
+        return await axios.delete(endpointUrl, config);
+      }
+    } catch (err: any) {
+      lastError = err;
+      if (err.response?.status === 401) {
+        continue; // Tenta próxima chave
+      }
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
+// Helper universal para extrair QR code de múltiplos formatos da Evolution API v1 / v2
+function extractQrFromEvolutionData(data: any): string | null {
+  if (!data) return null;
+  if (typeof data === 'string' && data.startsWith('data:image')) return data;
+  if (data.base64 && typeof data.base64 === 'string') return data.base64;
+  if (data.qrcode?.base64 && typeof data.qrcode.base64 === 'string') return data.qrcode.base64;
+  if (data.qrcode && typeof data.qrcode === 'string' && data.qrcode.startsWith('data:image')) return data.qrcode;
+  if (data.code && typeof data.code === 'string' && data.code.startsWith('data:image')) return data.code;
+  if (data.instance?.qrcode?.base64) return data.instance.qrcode.base64;
+  return null;
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -119,8 +177,9 @@ const getGeminiKey = () => {
 
 async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig: any) {
   const modelsToTry = [
-    "gemini-2.5-flash",
+    "gemini-3.6-flash",
     "gemini-3.7-flash",
+    "gemini-2.5-flash",
     "gemini-flash-latest"
   ];
   
@@ -1208,18 +1267,76 @@ app.get("/api/keep-alive", async (req, res) => {
   }
 });
 
-// Rota de saúde para o sistema
+// Helper para URL do webhook do n8n (suporta modo de teste ou produção)
+let N8N_IS_TEST_MODE = true;
+
+const getN8nWebhookUrl = () => {
+  if (process.env.N8N_WEBHOOK_URL) return process.env.N8N_WEBHOOK_URL;
+  return N8N_IS_TEST_MODE
+    ? "https://n8n.makprojetosmake.com.br/webhook-test/16464b5a-567f-44d8-b17a-2f4e48184278"
+    : "https://n8n.makprojetosmake.com.br/webhook/16464b5a-567f-44d8-b17a-2f4e48184278";
+};
+
+// --- ROTA DE SAÚDE PARA O SISTEMA ---
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "ok", 
     time: new Date().toISOString(),
     realtime: "active",
-    webhookUrl: process.env.N8N_WEBHOOK_URL || "Using internal endpoint",
+    n8nTestMode: N8N_IS_TEST_MODE,
+    webhookUrl: getN8nWebhookUrl(),
     instance: "ambulatorio",
     processedEvolutionIds: Array.from(processedEvolutionIds).slice(-10),
     processedDatabaseIds: Array.from(processedDatabaseIds).slice(-10),
     lastProcessedMessages: Array.from(lastProcessedMessages.entries()).slice(-5)
   });
+});
+
+// Alternar modo de webhook do n8n (teste vs produção) e reconfigurar a Evolution
+app.post("/api/n8n/set-mode", async (req, res) => {
+  try {
+    const { mode } = req.body; // 'test' ou 'production'
+    N8N_IS_TEST_MODE = mode !== 'production';
+    await updateEvolutionWebhook();
+    res.json({ 
+      success: true, 
+      mode: N8N_IS_TEST_MODE ? 'test' : 'production', 
+      webhookUrl: getN8nWebhookUrl() 
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Disparar evento de teste direto para o n8n
+app.post("/api/n8n/trigger-test", async (req, res) => {
+  try {
+    const targetUrl = req.body.url || getN8nWebhookUrl();
+    const payload = req.body.payload || {
+      event: "MESSAGES_UPSERT",
+      instance: "ambulatorio",
+      data: {
+        key: {
+          remoteJid: "5511999999999@s.whatsapp.net",
+          fromMe: false,
+          id: "TEST_" + Date.now()
+        },
+        pushName: "Marco Duarte (Teste)",
+        message: {
+          conversation: "1"
+        },
+        messageType: "conversation",
+        messageTimestamp: Math.floor(Date.now() / 1000)
+      }
+    };
+    
+    console.log(`[n8n] Enviando disparo de teste para: ${targetUrl}`);
+    const n8nResp = await axios.post(targetUrl, payload, { timeout: 10000 });
+    res.json({ success: true, url: targetUrl, status: n8nResp.status, data: n8nResp.data });
+  } catch (err: any) {
+    console.error(`[n8n] Erro no disparo de teste:`, err.message);
+    res.status(500).json({ error: err.message, response: err.response?.data });
+  }
 });
 
 // --- ROTA DE BUSCA DE CEP (ViaCEP) ---
@@ -1403,10 +1520,7 @@ app.post("/api/whatsapp/process-survey-response", async (req, res) => {
 app.get("/api/whatsapp/status", async (req, res) => {
   try {
     const { url, instance, apikey } = getEvolutionConfig(req);
-    const response = await axios.get(`${url}/instance/connectionState/${instance}`, {
-      headers: { 'apikey': apikey },
-      timeout: 5000
-    });
+    const response = await requestEvolutionWithFallback('get', `${url}/instance/connectionState/${instance}`, undefined, apikey);
     const instanceData = response.data?.instance || response.data || {};
     const state = instanceData.state || 'close';
     const connected = state === 'open';
@@ -1428,24 +1542,9 @@ app.post("/api/whatsapp/connect", async (req, res) => {
     const { url, instance, apikey } = getEvolutionConfig(req);
     console.log(`[WHATSAPP] Conectando instância "${instance}" em ${url}...`);
 
-    // Helper para extrair QR code de múltiplos formatos da Evolution API v1 / v2
-    const extractQr = (data: any): string | null => {
-      if (!data) return null;
-      if (typeof data === 'string' && data.startsWith('data:image')) return data;
-      if (data.base64 && typeof data.base64 === 'string') return data.base64;
-      if (data.qrcode?.base64 && typeof data.qrcode.base64 === 'string') return data.qrcode.base64;
-      if (data.qrcode && typeof data.qrcode === 'string' && data.qrcode.startsWith('data:image')) return data.qrcode;
-      if (data.code && typeof data.code === 'string' && data.code.startsWith('data:image')) return data.code;
-      if (data.instance?.qrcode?.base64) return data.instance.qrcode.base64;
-      return null;
-    };
-
     // 1. Verifica se já está conectado ('open')
     try {
-      const stateRes = await axios.get(`${url}/instance/connectionState/${instance}`, {
-        headers: { 'apikey': apikey },
-        timeout: 5000
-      });
+      const stateRes = await requestEvolutionWithFallback('get', `${url}/instance/connectionState/${instance}`, undefined, apikey);
       const st = stateRes.data?.instance?.state || stateRes.data?.state;
       if (st === 'open') {
         return res.json({
@@ -1464,11 +1563,8 @@ app.post("/api/whatsapp/connect", async (req, res) => {
 
     // 2. Tenta obter o QR code via GET /instance/connect/:instance
     try {
-      const resp = await axios.get(`${url}/instance/connect/${instance}`, {
-        headers: { 'apikey': apikey },
-        timeout: 8000
-      });
-      qrCode = extractQr(resp.data);
+      const resp = await requestEvolutionWithFallback('get', `${url}/instance/connect/${instance}`, undefined, apikey);
+      qrCode = extractQrFromEvolutionData(resp.data);
       pairingCode = resp.data?.pairingCode || resp.data?.qrcode?.pairingCode || null;
     } catch (e1: any) {
       console.log(`[WHATSAPP] GET /instance/connect falhou (${e1.message}), tentando POST...`);
@@ -1477,11 +1573,8 @@ app.post("/api/whatsapp/connect", async (req, res) => {
     // 3. Tenta via POST /instance/connect/:instance
     if (!qrCode) {
       try {
-        const resp = await axios.post(`${url}/instance/connect/${instance}`, {}, {
-          headers: { 'apikey': apikey },
-          timeout: 8000
-        });
-        qrCode = extractQr(resp.data);
+        const resp = await requestEvolutionWithFallback('post', `${url}/instance/connect/${instance}`, {}, apikey);
+        qrCode = extractQrFromEvolutionData(resp.data);
         pairingCode = resp.data?.pairingCode || resp.data?.qrcode?.pairingCode || null;
       } catch (e2: any) {
         console.log(`[WHATSAPP] POST /instance/connect falhou (${e2.message})`);
@@ -1492,31 +1585,39 @@ app.post("/api/whatsapp/connect", async (req, res) => {
     if (!qrCode) {
       try {
         console.log(`[WHATSAPP] Tentando criar instância "${instance}" na Evolution API...`);
-        const createResp = await axios.post(`${url}/instance/create`, {
+        const createResp = await requestEvolutionWithFallback('post', `${url}/instance/create`, {
           instanceName: instance,
           token: apikey,
           qrcode: true,
           integration: "WHATSAPP-BAILEYS"
-        }, {
-          headers: { 'apikey': apikey },
-          timeout: 10000
-        });
+        }, apikey);
 
-        qrCode = extractQr(createResp.data);
+        qrCode = extractQrFromEvolutionData(createResp.data);
         pairingCode = createResp.data?.pairingCode || createResp.data?.qrcode?.pairingCode || null;
       } catch (createErr: any) {
         const errMsg = createErr.response?.data?.response?.message || createErr.response?.data?.message || createErr.message;
         console.warn(`[WHATSAPP] Resposta na criação de instância:`, errMsg);
-        
-        // Se a instância já existe ou a chave não bate, repassa mensagem explicativa
-        if (createErr.response?.status === 401) {
-          return res.status(401).json({
-            success: false,
-            error: `API Key não autorizada para a instância "${instance}". Verifique se a chave corresponde a esta instância no Evolution Manager.`
-          });
-        }
       }
     }
+
+    // 5. Configurar automaticamente o webhook para o n8n na nova VPS
+    try {
+      const n8nUrl = getN8nWebhookUrl();
+      await requestEvolutionWithFallback('post', `${url}/webhook/set/${instance}`, {
+        webhook: {
+          enabled: true,
+          url: n8nUrl,
+          byEvents: false,
+          base64: false,
+          events: [
+            "MESSAGES_UPSERT",
+            "MESSAGES_UPDATE",
+            "SEND_MESSAGE",
+            "CONNECTION_UPDATE"
+          ]
+        }
+      }, apikey);
+    } catch (_) {}
 
     if (qrCode) {
       return res.json({
@@ -1542,6 +1643,44 @@ app.post("/api/whatsapp/connect", async (req, res) => {
   }
 });
 
+app.post("/api/whatsapp/force-reset", async (req, res) => {
+  try {
+    const { url, instance, apikey } = getEvolutionConfig(req);
+    console.log(`[WHATSAPP] Forçando reset e nova conexão para "${instance}" em ${url}...`);
+
+    try {
+      await requestEvolutionWithFallback('delete', `${url}/instance/logout/${instance}`, undefined, apikey);
+    } catch (_) {}
+
+    try {
+      await requestEvolutionWithFallback('delete', `${url}/instance/delete/${instance}`, undefined, apikey);
+    } catch (_) {}
+
+    await new Promise(r => setTimeout(r, 1200));
+
+    try {
+      const createResp = await requestEvolutionWithFallback('post', `${url}/instance/create`, {
+        instanceName: instance,
+        token: apikey,
+        qrcode: true,
+        integration: "WHATSAPP-BAILEYS"
+      }, apikey);
+      const qr = extractQrFromEvolutionData(createResp.data);
+      if (qr) {
+        return res.json({ success: true, qrcode: qr, instance });
+      }
+    } catch (e: any) {
+      console.warn("[WHATSAPP] Erro ao recriar instância:", e.message);
+    }
+
+    const connectResp = await requestEvolutionWithFallback('get', `${url}/instance/connect/${instance}`, undefined, apikey);
+    const qr = extractQrFromEvolutionData(connectResp.data);
+    return res.json({ success: true, qrcode: qr || null, instance });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/whatsapp/logout", async (req, res) => {
   try {
     const { url, instance, apikey } = getEvolutionConfig(req);
@@ -1552,10 +1691,7 @@ app.post("/api/whatsapp/logout", async (req, res) => {
 
     // 1. Tenta DELETE /instance/logout/:instance (Evolution API v1/v2 padrão)
     try {
-      const response = await axios.delete(`${url}/instance/logout/${instance}`, {
-        headers: { 'apikey': apikey },
-        timeout: 8000
-      });
+      const response = await requestEvolutionWithFallback('delete', `${url}/instance/logout/${instance}`, undefined, apikey);
       logoutData = response.data;
       logoutSuccess = true;
     } catch (e: any) {
@@ -1565,10 +1701,7 @@ app.post("/api/whatsapp/logout", async (req, res) => {
     // 2. Se falhou, tenta POST /instance/logout/:instance
     if (!logoutSuccess) {
       try {
-        const response = await axios.post(`${url}/instance/logout/${instance}`, {}, {
-          headers: { 'apikey': apikey },
-          timeout: 8000
-        });
+        const response = await requestEvolutionWithFallback('post', `${url}/instance/logout/${instance}`, {}, apikey);
         logoutData = response.data;
         logoutSuccess = true;
       } catch (e: any) {
@@ -1578,16 +1711,10 @@ app.post("/api/whatsapp/logout", async (req, res) => {
 
     // 3. Tenta reiniciar a instância para garantir limpeza de sockets
     try {
-      await axios.put(`${url}/instance/restart/${instance}`, {}, {
-        headers: { 'apikey': apikey },
-        timeout: 5000
-      });
+      await requestEvolutionWithFallback('put', `${url}/instance/restart/${instance}`, {}, apikey);
     } catch (_) {
       try {
-        await axios.post(`${url}/instance/restart/${instance}`, {}, {
-          headers: { 'apikey': apikey },
-          timeout: 5000
-        });
+        await requestEvolutionWithFallback('post', `${url}/instance/restart/${instance}`, {}, apikey);
       } catch (_) {}
     }
 
@@ -1598,7 +1725,6 @@ app.post("/api/whatsapp/logout", async (req, res) => {
     });
   } catch (err: any) {
     console.error("[WHATSAPP] Erro geral ao desconectar:", err.message);
-    // Mesmo em caso de erro, permitir que a interface desmarque o estado conectado
     return res.json({ 
       success: true, 
       message: "Comando de desconexão enviado.",
@@ -2059,7 +2185,7 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
     }
 
     // 3. Notificar o n8n sobre a conclusão do formulário de anamnese
-    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL || "https://n8n.makprojetosmake.com.br/webhook-test/16464b5a-567f-44d8-b17a-2f4e48184278";
+    const n8nWebhookUrl = getN8nWebhookUrl();
     if (n8nWebhookUrl) {
       axios.post(n8nWebhookUrl, {
         event: "anamnese.submitted",
@@ -2414,19 +2540,19 @@ async function updateEvolutionWebhook() {
   try {
     addLog(`🔄 Tentando atualizar webhook da Evolution...`);
     
-    // Usa a URL do webhook do n8n configurada no .env ou a URL de teste informada pelo usuário
-    const webhookUrl = process.env.N8N_WEBHOOK_URL || "https://n8n.makprojetosmake.com.br/webhook-test/16464b5a-567f-44d8-b17a-2f4e48184278";
-    addLog(`🌐 Reconfigurando webhook para n8n: ${webhookUrl}`);
+    // Usa a URL do webhook do n8n configurada no .env ou a URL correspondente ao modo atual (test ou prod)
+    const webhookUrl = getN8nWebhookUrl();
+    addLog(`🌐 Reconfigurando webhook para n8n (${N8N_IS_TEST_MODE ? 'MODO TESTE' : 'PRODUÇÃO'}): ${webhookUrl}`);
     
     addLog(`📍 URL Alvo: ${webhookUrl}`);
     addLog(`🔑 Usando API Key: ${EVOLUTION_API_KEY.substring(0, 5)}...`);
     
-    const response = await axios.post(`${EVOLUTION_API_URL}/webhook/set/${EVOLUTION_INSTANCE_NAME}`, {
+    const response = await requestEvolutionWithFallback('post', `${EVOLUTION_API_URL}/webhook/set/${EVOLUTION_INSTANCE_NAME}`, {
       webhook: {
         url: webhookUrl,
         enabled: true,
-        webhook_by_events: true, // Alterado para true para forçar a configuração por evento
-        webhook_base64: true,
+        webhook_by_events: false,
+        webhook_base64: false,
         events: [
           "MESSAGES_UPSERT",
           "MESSAGES_UPDATE",
@@ -2435,9 +2561,7 @@ async function updateEvolutionWebhook() {
           "CONNECTION_UPDATE"
         ]
       }
-    }, { 
-      headers: { 'apikey': EVOLUTION_API_KEY } 
-    });
+    }, EVOLUTION_API_KEY);
     
     addLog(`✅ Webhook configurado! Resposta: ${JSON.stringify(response.data)}`);
   } catch (err: any) {
@@ -2747,10 +2871,7 @@ app.post("/api/send-message", async (req, res) => {
       payload.linkPreview = true;
     }
 
-    // 1. Inserção imediata no banco removida para evitar duplicidade.
-    // Como o n8n (webhook) já está salvando as mensagens enviadas (fromMe=true) no banco,
-    // se salvarmos aqui também, a mensagem aparecerá duplicada na tela.
-    /*
+    // Salva a mensagem enviada no Supabase para aparecer no chat imediatamente
     const insertData = {
       telefone_cliente: cleanPhone,
       mensagem: message || (mediaType === 'audio' ? '[Áudio]' : (mediaType === 'image' ? '[Imagem]' : '')),
@@ -2762,16 +2883,13 @@ app.post("/api/send-message", async (req, res) => {
       midia_url: media ? (media.startsWith('http') ? media : `data:${mediaType === 'audio' ? 'audio/ogg' : 'image/jpeg'};base64,${cleanMedia}`) : null
     };
     tryInsertMessage(insertData).catch(e => addLog(`⚠️ Erro silencioso no banco: ${e.message}`));
-    */
 
     addLog(`🚀 Chamando Evolution: ${endpoint} para ${cleanPhone}`);
 
     const { url, instance, apikey } = getEvolutionConfig(req);
 
     try {
-      const evoResponse = await axios.post(`${url}/message/${endpoint}/${instance}`, payload, { 
-        headers: { 'apikey': apikey } 
-      });
+      const evoResponse = await requestEvolutionWithFallback('post', `${url}/message/${endpoint}/${instance}`, payload, apikey);
 
       addLog(`✅ Evolution respondeu: ${JSON.stringify(evoResponse.data)}`);
 
