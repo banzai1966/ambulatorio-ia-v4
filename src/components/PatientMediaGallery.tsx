@@ -47,7 +47,7 @@ const DEFAULT_SAMPLE_MEDIA: MediaItem[] = [
     id: 'tc_cbct_1',
     title: 'Tomografia Computadorizada Cone Beam (CBCT) - Maxilofacial',
     type: 'tomography',
-    url: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&q=80&w=1200',
+    url: '/sample_cbct_scan.jpg',
     date: '04/08/2026',
     description: 'Documentação Tomográfica CBCT - Cortes Maxilares, Cavitações Ósseas NICO e Seios Maxilares'
   },
@@ -55,7 +55,7 @@ const DEFAULT_SAMPLE_MEDIA: MediaItem[] = [
     id: 'rx_panoramica_1',
     title: 'Radiografia Panorâmica Digital & Periapical',
     type: 'radiograph',
-    url: 'https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?auto=format&fit=crop&q=80&w=1200',
+    url: '/sample_panoramic_rx.jpg',
     date: '16/06/2026',
     description: 'Radiografia Panorâmica Digital - Avaliação de estruturas dentais, condutos e crista óssea'
   },
@@ -137,12 +137,22 @@ export default function PatientMediaGallery({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            // Remove registros indevidos de simulação DSD salvos na galeria radiológica
-            const cleaned = parsed.filter((item: any) => 
-              !item.id?.startsWith('dsd_') && 
-              !item.title?.toLowerCase().includes('simulação dsd') &&
-              !item.description?.toLowerCase().includes('planejamento digital do sorriso')
-            );
+            // Remove registros indevidos de simulação DSD e atualiza URLs antigas de amostra para os exames locais
+            const cleaned = parsed
+              .filter((item: any) => 
+                !item.id?.startsWith('dsd_') && 
+                !item.title?.toLowerCase().includes('simulação dsd') &&
+                !item.description?.toLowerCase().includes('planejamento digital do sorriso')
+              )
+              .map((item: any) => {
+                if (item.url && item.url.includes('516549655169-df83a0774514')) {
+                  return { ...item, url: '/sample_cbct_scan.jpg' };
+                }
+                if (item.url && item.url.includes('588776814546-1ffcf47267a5')) {
+                  return { ...item, url: '/sample_panoramic_rx.jpg' };
+                }
+                return item;
+              });
             if (cleaned.length > 0) {
               return cleaned;
             }
@@ -233,14 +243,22 @@ export default function PatientMediaGallery({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const cleaned = parsed.filter((item: any) => 
-              !item.id?.startsWith('dsd_') && 
-              !item.title?.toLowerCase().includes('simulação dsd') &&
-              !item.description?.toLowerCase().includes('planejamento digital do sorriso')
-            );
-            if (cleaned.length !== parsed.length) {
-              localStorage.setItem(storageKey, JSON.stringify(cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA));
-            }
+            const cleaned = parsed
+              .filter((item: any) => 
+                !item.id?.startsWith('dsd_') && 
+                !item.title?.toLowerCase().includes('simulação dsd') &&
+                !item.description?.toLowerCase().includes('planejamento digital do sorriso')
+              )
+              .map((item: any) => {
+                if (item.url && item.url.includes('516549655169-df83a0774514')) {
+                  return { ...item, url: '/sample_cbct_scan.jpg' };
+                }
+                if (item.url && item.url.includes('588776814546-1ffcf47267a5')) {
+                  return { ...item, url: '/sample_panoramic_rx.jpg' };
+                }
+                return item;
+              });
+            localStorage.setItem(storageKey, JSON.stringify(cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA));
             const finalItems = cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA;
             setItems(finalItems);
             setSelectedItem(finalItems[0] || null);
