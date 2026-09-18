@@ -209,9 +209,12 @@ export default function Dental3DViewer({
     };
 
     const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      camera.position.z += e.deltaY * 0.12;
-      camera.position.z = Math.max(80, Math.min(380, camera.position.z));
+      // Se pressionar Ctrl ou Meta, faz o zoom 3D. Caso contrário, permite a rolagem natural da página.
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        camera.position.z += e.deltaY * 0.12;
+        camera.position.z = Math.max(80, Math.min(380, camera.position.z));
+      }
     };
 
     const onClick = (e: MouseEvent) => {
@@ -864,10 +867,12 @@ export default function Dental3DViewer({
         )}
 
         {/* Guia de Navegação Interativa no Canto Inferior Direito */}
-        <div className="absolute bottom-4 right-4 hidden sm:flex items-center gap-2 bg-slate-900/70 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-800/80 text-[11px] text-slate-400">
+        <div className="absolute bottom-4 right-4 hidden sm:flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-800/80 text-[11px] text-slate-300 shadow-md">
           <span>🖱️ Arraste para girar</span>
           <span>&bull;</span>
-          <span>📜 Roda do mouse para zoom</span>
+          <span>📜 Rolar a página livremente</span>
+          <span>&bull;</span>
+          <span>🔍 <kbd className="px-1 py-0.5 bg-slate-800 text-sky-400 font-mono text-[9px] rounded border border-slate-700">Ctrl</kbd> + Scroll ou Botões Zoom</span>
           <span>&bull;</span>
           <span>🎯 Clique no dente</span>
         </div>

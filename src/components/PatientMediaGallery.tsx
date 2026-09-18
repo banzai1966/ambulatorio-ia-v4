@@ -27,7 +27,10 @@ import {
   Eye,
   Layers,
   Activity,
-  Box
+  Box,
+  ChevronLeft,
+  ChevronRight,
+  ArrowDown
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
@@ -638,216 +641,368 @@ export default function PatientMediaGallery({
 
       {/* Main Dual Area: Enlarged Viewer & Thumbnails Strip */}
       {selectedItem ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Large Image Display */}
-          <div className="lg:col-span-2 bg-slate-950 rounded-2xl p-4 flex flex-col justify-between min-h-[440px] relative group overflow-hidden border border-slate-800">
-            <div className="flex items-center justify-between text-white text-xs z-10 bg-slate-900/80 backdrop-blur-md p-3 rounded-xl border border-white/10 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <ImageIcon size={16} className="text-sky-400" />
-                <span className="font-bold truncate max-w-[200px] sm:max-w-[280px]">{selectedItem.title}</span>
-              </div>
+        (() => {
+          const currentFilteredIndex = filteredItems.findIndex(i => i.id === selectedItem.id);
+          const hasPrevItem = currentFilteredIndex > 0;
+          const hasNextItem = currentFilteredIndex >= 0 && currentFilteredIndex < filteredItems.length - 1;
 
-              {/* Zoom & Scale Controls for Main Viewer */}
-              <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-700/80">
-                <button
-                  type="button"
-                  onClick={() => setViewerZoom(z => Math.max(0.5, z - 0.25))}
-                  className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                  title="Reduzir Zoom (-25%)"
-                >
-                  <ZoomOut size={14} />
-                </button>
-                <span className="px-1 text-[11px] font-bold text-sky-400 min-w-[38px] text-center">
-                  {Math.round(viewerZoom * 100)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setViewerZoom(z => Math.min(3.0, z + 0.25))}
-                  className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
-                  title="Aumentar Zoom (+25%)"
-                >
-                  <ZoomIn size={14} />
-                </button>
-                {viewerZoom !== 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setViewerZoom(1)}
-                    className="p-1 hover:bg-slate-800 rounded text-amber-400 hover:text-amber-300 cursor-pointer"
-                    title="Restaurar Zoom Original (100%)"
-                  >
-                    <RotateCcw size={12} />
-                  </button>
-                )}
-              </div>
+          const handlePrevItem = () => {
+            if (hasPrevItem) {
+              setSelectedItem(filteredItems[currentFilteredIndex - 1]);
+            }
+          };
 
-              <span className="text-slate-400 text-[11px]">{selectedItem.date}</span>
-            </div>
+          const handleNextItem = () => {
+            if (hasNextItem) {
+              setSelectedItem(filteredItems[currentFilteredIndex + 1]);
+            }
+          };
 
-            <div className="my-auto py-4 flex items-center justify-center overflow-auto relative max-h-[420px] custom-scrollbar-emerald">
-              {show3DViewerMode ? (
-                <div className="w-full h-full min-h-[380px] animate-in fade-in zoom-in-95 duration-200">
-                  <Dental3DViewer
-                    odontogramData={localOdontogram}
-                    onScanAiRequest={() => setShowCbctScannerModal(true)}
-                  />
-                </div>
-              ) : (
-                <div 
-                  style={{ 
-                    transform: `scale(${viewerZoom})`, 
-                    transformOrigin: 'center center',
-                    transition: 'transform 0.2s ease-out' 
-                  }}
-                  className="inline-block transition-transform"
-                >
-                  <img 
-                    src={selectedItem.url} 
-                    alt={selectedItem.title} 
-                    className="max-h-[380px] w-auto object-contain rounded-lg shadow-2xl block"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="text-white text-xs z-10 bg-slate-900/90 backdrop-blur-md p-3 rounded-xl border border-white/10 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-slate-300 italic text-[11px] truncate max-w-[280px]">{selectedItem.description}</p>
-              
-              <div className="flex items-center gap-2">
-                {/* 3D Interativo Voxel Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShow3DViewerMode(!show3DViewerMode)}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
-                    show3DViewerMode
-                      ? 'bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-600 text-white shadow-sky-600/30 ring-2 ring-sky-400/40'
-                      : 'bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700'
-                  }`}
-                  title="Alternar para o Visualizador 3D Interativo Voxel da Arcada e Transparência Óssea"
-                >
-                  <Box size={14} className={show3DViewerMode ? "text-amber-300 animate-bounce" : "text-sky-400"} />
-                  <span>{show3DViewerMode ? 'Ver Foto 2D' : '🧊 Visão 3D Voxel'}</span>
-                </button>
-
-                {/* AI CBCT Tomography / X-Ray Scanner Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowCbctScannerModal(true)}
-                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95 animate-pulse"
-                  title="Escanear e Laudar Tomografia/Raio-X com Inteligência Artificial Biológica"
-                >
-                  <Sparkles size={14} className="text-amber-300" />
-                  <span>Scanner IA (Laudo CBCT)</span>
-                </button>
-
-                {/* Fullscreen Lightbox Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFullScreenZoom(1);
-                    setFullScreenRotation(0);
-                    setFullScreenInvert(false);
-                    setShowFullScreenModal(true);
-                  }}
-                  className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
-                  title="Abrir em Tela Cheia no Monitor com contraste e rotação para diagnóstico"
-                >
-                  <Eye size={14} />
-                  Tela Cheia (Monitor)
-                </button>
-
-                {/* Annotate / Riscar Button */}
-                <button
-                  type="button"
-                  onClick={() => { setAnnotateZoom(1); setShowAnnotateModal(true); }}
-                  className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-slate-700/20 cursor-pointer border border-slate-600"
-                  title="Abrir estúdio para riscar, desenhar e fazer marcações nesta imagem"
-                >
-                  <Pencil size={14} />
-                  Riscar / Anotar
-                </button>
-
-                {/* Download High Res Button */}
-                <button
-                  type="button"
-                  onClick={() => downloadHighResImage(selectedItem.url, selectedItem.title)}
-                  className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-slate-700/20 cursor-pointer border border-slate-600"
-                  title="Baixar imagem original em alta resolução (preserva qualidade)"
-                >
-                  <Download size={14} />
-                  Baixar HD
-                </button>
-
-                <a 
-                  href={selectedItem.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors cursor-pointer"
-                  title="Abrir em tamanho real em nova aba"
-                >
-                  <Maximize2 size={14} />
-                </a>
-
-                <button
-                  type="button"
-                  onClick={() => handleDeleteItem(selectedItem)}
-                  className="p-1.5 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white rounded-lg transition-colors cursor-pointer"
-                  title="Excluir imagem"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Thumbnail List */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Documentos na Pasta</h3>
-            <div className="space-y-2 max-h-[440px] overflow-y-auto pr-1 custom-scrollbar-blue">
-              {filteredItems.map(item => (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedItem(item)}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 group relative ${
-                    selectedItem.id === item.id
-                      ? 'bg-blue-50/80 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
-                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-16 h-16 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
-                      <img 
-                        src={item.url} 
-                        alt={item.title} 
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-slate-800 line-clamp-1">{item.title}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{item.date}</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-200 text-slate-700">
-                        {item.type}
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main Large Image Display */}
+              <div className="lg:col-span-2 bg-slate-950 rounded-2xl p-4 flex flex-col justify-between min-h-[460px] relative group overflow-hidden border border-slate-800 shadow-xl">
+                <div className="flex items-center justify-between text-white text-xs z-10 bg-slate-900/80 backdrop-blur-md p-3 rounded-xl border border-white/10 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon size={16} className="text-sky-400 shrink-0" />
+                    <span className="font-bold truncate max-w-[180px] sm:max-w-[260px]">{selectedItem.title}</span>
+                    {filteredItems.length > 1 && currentFilteredIndex >= 0 && (
+                      <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700">
+                        {currentFilteredIndex + 1} de {filteredItems.length}
                       </span>
+                    )}
+                  </div>
+
+                  {/* Top Bar Quick Controls: Prev/Next Image Navigation & Zoom */}
+                  <div className="flex items-center gap-2">
+                    {filteredItems.length > 1 && (
+                      <div className="flex items-center gap-1 bg-slate-950/80 p-0.5 rounded-lg border border-slate-700/80">
+                        <button
+                          type="button"
+                          onClick={handlePrevItem}
+                          disabled={!hasPrevItem}
+                          className={`p-1 rounded cursor-pointer transition-colors ${
+                            hasPrevItem ? 'text-white hover:bg-slate-800' : 'text-slate-600 cursor-not-allowed'
+                          }`}
+                          title="Exame anterior (←)"
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleNextItem}
+                          disabled={!hasNextItem}
+                          className={`p-1 rounded cursor-pointer transition-colors ${
+                            hasNextItem ? 'text-white hover:bg-slate-800' : 'text-slate-600 cursor-not-allowed'
+                          }`}
+                          title="Próximo exame (→)"
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Zoom & Scale Controls for Main Viewer */}
+                    <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-lg border border-slate-700/80">
+                      <button
+                        type="button"
+                        onClick={() => setViewerZoom(z => Math.max(0.5, z - 0.25))}
+                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        title="Reduzir Zoom (-25%)"
+                      >
+                        <ZoomOut size={14} />
+                      </button>
+                      <span className="px-1 text-[11px] font-bold text-sky-400 min-w-[38px] text-center">
+                        {Math.round(viewerZoom * 100)}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setViewerZoom(z => Math.min(3.0, z + 0.25))}
+                        className="p-1 hover:bg-slate-800 rounded text-slate-300 hover:text-white cursor-pointer"
+                        title="Aumentar Zoom (+25%)"
+                      >
+                        <ZoomIn size={14} />
+                      </button>
+                      {viewerZoom !== 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setViewerZoom(1)}
+                          className="p-1 hover:bg-slate-800 rounded text-amber-400 hover:text-amber-300 cursor-pointer"
+                          title="Restaurar Zoom Original (100%)"
+                        >
+                          <RotateCcw size={12} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteItem(item);
-                    }}
-                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
-                    title="Excluir este exame"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <span className="text-slate-400 text-[11px]">{selectedItem.date}</span>
                 </div>
-              ))}
+
+                <div className="my-auto py-4 flex items-center justify-center overflow-auto relative max-h-[420px] custom-scrollbar-emerald">
+                  {/* Navegação por Setas Flutuantes Sobre a Imagem */}
+                  {!show3DViewerMode && filteredItems.length > 1 && (
+                    <>
+                      {hasPrevItem && (
+                        <button
+                          type="button"
+                          onClick={handlePrevItem}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 z-20 p-2.5 rounded-full bg-slate-900/80 hover:bg-sky-600 text-white backdrop-blur-md border border-white/20 shadow-xl transition-all cursor-pointer hover:scale-110 active:scale-95 group/btn"
+                          title="Ver exame anterior"
+                        >
+                          <ChevronLeft size={20} className="group-hover/btn:-translate-x-0.5 transition-transform" />
+                        </button>
+                      )}
+                      {hasNextItem && (
+                        <button
+                          type="button"
+                          onClick={handleNextItem}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 z-20 p-2.5 rounded-full bg-slate-900/80 hover:bg-sky-600 text-white backdrop-blur-md border border-white/20 shadow-xl transition-all cursor-pointer hover:scale-110 active:scale-95 group/btn"
+                          title="Ver próximo exame"
+                        >
+                          <ChevronRight size={20} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {show3DViewerMode ? (
+                    <div className="w-full h-full min-h-[380px] animate-in fade-in zoom-in-95 duration-200">
+                      <Dental3DViewer
+                        odontogramData={localOdontogram}
+                        onScanAiRequest={() => setShowCbctScannerModal(true)}
+                      />
+                    </div>
+                  ) : (
+                    <div 
+                      style={{ 
+                        transform: `scale(${viewerZoom})`, 
+                        transformOrigin: 'center center',
+                        transition: 'transform 0.2s ease-out' 
+                      }}
+                      className="inline-block transition-transform"
+                    >
+                      <img 
+                        src={selectedItem.url} 
+                        alt={selectedItem.title} 
+                        className="max-h-[380px] w-auto object-contain rounded-lg shadow-2xl block"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-white text-xs z-10 bg-slate-900/90 backdrop-blur-md p-3 rounded-xl border border-white/10 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-slate-300 italic text-[11px] truncate max-w-[240px] sm:max-w-[280px]">{selectedItem.description}</p>
+                  
+                  <div className="flex items-center flex-wrap gap-2">
+                    {/* 3D Interativo Voxel Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setShow3DViewerMode(!show3DViewerMode)}
+                      className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
+                        show3DViewerMode
+                          ? 'bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-600 text-white shadow-sky-600/30 ring-2 ring-sky-400/40'
+                          : 'bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700'
+                      }`}
+                      title="Alternar para o Visualizador 3D Interativo Voxel da Arcada e Transparência Óssea"
+                    >
+                      <Box size={14} className={show3DViewerMode ? "text-amber-300 animate-bounce" : "text-sky-400"} />
+                      <span>{show3DViewerMode ? 'Ver Foto 2D' : '🧊 Visão 3D Voxel'}</span>
+                    </button>
+
+                    {/* AI CBCT Tomography / X-Ray Scanner Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowCbctScannerModal(true)}
+                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95 animate-pulse"
+                      title="Escanear e Laudar Tomografia/Raio-X com Inteligência Artificial Biológica"
+                    >
+                      <Sparkles size={14} className="text-amber-300" />
+                      <span>Scanner IA (Laudo CBCT)</span>
+                    </button>
+
+                    {/* Fullscreen Lightbox Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFullScreenZoom(1);
+                        setFullScreenRotation(0);
+                        setFullScreenInvert(false);
+                        setShowFullScreenModal(true);
+                      }}
+                      className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-blue-600/20 cursor-pointer"
+                      title="Abrir em Tela Cheia no Monitor com contraste e rotação para diagnóstico"
+                    >
+                      <Eye size={14} />
+                      Tela Cheia (Monitor)
+                    </button>
+
+                    {/* Annotate / Riscar Button */}
+                    <button
+                      type="button"
+                      onClick={() => { setAnnotateZoom(1); setShowAnnotateModal(true); }}
+                      className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-slate-700/20 cursor-pointer border border-slate-600"
+                      title="Abrir estúdio para riscar, desenhar e fazer marcações nesta imagem"
+                    >
+                      <Pencil size={14} />
+                      Riscar / Anotar
+                    </button>
+
+                    {/* Download High Res Button (Destaque em Esmeralda/Azul com Ícone Claro) */}
+                    <button
+                      type="button"
+                      onClick={() => downloadHighResImage(selectedItem.url, selectedItem.title)}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer border border-emerald-500 hover:scale-105 active:scale-95"
+                      title="Baixar imagem original em alta resolução (preserva qualidade para envio ou laudo externo)"
+                    >
+                      <Download size={14} className="text-emerald-100" />
+                      <span>Baixar Imagem HD</span>
+                    </button>
+
+                    <a 
+                      href={selectedItem.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors cursor-pointer"
+                      title="Abrir em tamanho real em nova aba"
+                    >
+                      <Maximize2 size={14} />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteItem(selectedItem)}
+                      className="p-1.5 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white rounded-lg transition-colors cursor-pointer"
+                      title="Excluir imagem"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Thumbnail List With Scroll and Arrow Controls */}
+              <div className="space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                      <FolderOpen size={14} className="text-blue-500" />
+                      Documentos na Pasta ({filteredItems.length})
+                    </h3>
+                    {filteredItems.length > 3 && (
+                      <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
+                        <ArrowDown size={11} className="text-slate-400 animate-bounce" />
+                        Role para ver mais
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar-blue mt-2">
+                    {filteredItems.map((item, idx) => (
+                      <div
+                        key={item.id}
+                        onClick={() => setSelectedItem(item)}
+                        className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 group relative ${
+                          selectedItem.id === item.id
+                            ? 'bg-blue-50/90 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-16 h-16 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center relative">
+                            <img 
+                              src={item.url} 
+                              alt={item.title} 
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                            <span className="absolute top-1 left-1 bg-black/70 backdrop-blur-sm text-white text-[9px] font-mono font-bold px-1 rounded">
+                              #{idx + 1}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{item.title}</p>
+                            <p className="text-[10px] text-slate-500 mt-0.5">{item.date}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-200 text-slate-700">
+                                {item.type}
+                              </span>
+                              {selectedItem.id === item.id && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white">
+                                  Visualizando
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-1">
+                          {/* Quick Download Button directly on thumbnail */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadHighResImage(item.url, item.title);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                            title="Baixar este exame em HD"
+                          >
+                            <Download size={14} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteItem(item);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                            title="Excluir este exame"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer Fast Controls: Previous / Next Navigation */}
+                {filteredItems.length > 1 && (
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePrevItem}
+                      disabled={!hasPrevItem}
+                      className={`flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                        hasPrevItem 
+                          ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300 shadow-sm cursor-pointer' 
+                          : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      <ChevronLeft size={14} />
+                      <span>Anterior</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextItem}
+                      disabled={!hasNextItem}
+                      className={`flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                        hasNextItem 
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm cursor-pointer' 
+                          : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      <span>Próximo</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })()
       ) : (
         <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
           <FolderOpen size={40} className="mx-auto text-slate-300 mb-2" />
