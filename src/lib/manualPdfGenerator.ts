@@ -224,12 +224,12 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
     },
     {
       number: '9',
-      title: 'Simulador de Sorriso Digital (DSD) & Visualizador de Tomografia CBCT',
-      category: 'Estética Biológica & Diagnóstico por Imagem',
-      summary: 'Tecnologia visual integrada que outros softwares cobram em módulos caros e isolados, reunida em uma única tela fluida.',
+      title: 'Simulador de Sorriso Digital (DSD) & Galeria Radiológica Integrada',
+      category: 'Estética Biológica & Planejamento Facial',
+      summary: 'Tecnologia visual integrada para calibração estética, proporção áurea dental e banco de imagens radiológicas e fotográficas.',
       highlights: [
         { title: 'Simulador de Sorriso DSD Interativo', desc: 'Carregamento de foto do paciente, calibrador de linha média, zênite gengival e simulação de facetas cerâmicas antes do preparo.' },
-        { title: 'Visualizador de Tomografia Cone Beam (CBCT)', desc: 'Galeria para anexar cortes tomográficos de NICO, implantes e panorâmicas, vinculando o laudo direto ao dente correspondente.' }
+        { title: 'Galeria Radiológica & Panorâmica', desc: 'Armazenamento de exames e laudos vinculados diretamente à ficha do paciente sem necessidade de softwares externos.' }
       ],
       details: [
         'Enquanto clínicas convencionais precisam de 3 a 4 softwares diferentes (DSD, DICOM, prontuário e receituário), o Ambulatório IA unifica toda a jornada estética e cirúrgica.'
@@ -237,6 +237,20 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
     },
     {
       number: '10',
+      title: 'Scanner Tomográfico IA (CBCT), Precisão Diagnóstica & Galvanismo por Voz',
+      category: 'Visão Computacional & Bioeletricidade Oral',
+      summary: 'Leitura multimodal com Gemini 2.5 Flash Vision, taxas reais de acerto, limites científicos do 100% e aferição hands-free de microvoltagem oral.',
+      highlights: [
+        { title: 'Scanner Laser Multimodal (CBCT/Panorâmica)', desc: 'Identifica amálgamas, implantes e rarefações trabeculares NICO/FDOK com animação laser e correlação bioenergética de Voll.' },
+        { title: 'Taxas Reais de Precisão da IA', desc: 'Metais e amálgamas (~90-95%), endodontias (~85-90%), edentulismo (~95%) e cavitações NICO (~70-80%). Nenhuma IA atinge 100% devido a artefatos de beam hardening e variações anatômicas; a validação final é 100% soberana da Dra. Lucy.' },
+        { title: 'Galvanismo Oral & Microvoltímetro Hands-Free', desc: 'Aferição de sobrecarga bioelétrica em mV com voltímetro de contato. A Dra. Lucy dita com luvas estéreis (ex: "Dente 16 com 250 mV") e a IA preenche o odontograma 3D sem quebrar a assepsia cirúrgica.' }
+      ],
+      details: [
+        'A visão computacional atua como copiloto de visão aumentada, e o preenchimento de galvanismo por voz garante biossegurança estrita e zero tempo de digitação.'
+      ]
+    },
+    {
+      number: '11',
       title: 'Inteligência Artificial & Escuta Ambiental Odontológica (30 a 40 Minutos)',
       category: 'Inteligência Artificial & Produtividade',
       summary: 'Captação contínua da consulta odontológica sem interrupções, descartando ruídos mecânicos e preenchendo o prontuário em tempo real.',

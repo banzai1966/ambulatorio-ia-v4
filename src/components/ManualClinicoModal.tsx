@@ -36,7 +36,10 @@ import {
   Camera,
   Radio,
   Waves,
-  Loader2
+  Loader2,
+  Cpu,
+  Gauge,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { generateManualClinicoPDF } from '../lib/manualPdfGenerator';
@@ -449,7 +452,23 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Camera size={15} className="text-indigo-600 shrink-0" />
-                        8. DSD, Sorriso 3D & Tomografia CBCT
+                        8. DSD, Sorriso 3D & Galeria CBCT
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('lucy_cbct_scanner_galvanismo')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'lucy_cbct_scanner_galvanismo'
+                          ? "bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Cpu size={15} className="text-emerald-600 shrink-0" />
+                        9. Scanner IA (CBCT) & Galvanismo por Voz
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -465,7 +484,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Radio size={15} className="text-teal-600 shrink-0" />
-                        9. Escuta Ambiental Odonto (30-40 min)
+                        10. Escuta Ambiental Odonto (30-40 min)
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -1292,6 +1311,170 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                   </div>
                 )}
 
+                {selectedManual === 'dra_lucy' && activeSection === 'lucy_cbct_scanner_galvanismo' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+                      
+                      {/* Cabeçalho do Capítulo */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl">
+                          <Cpu size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Visão Computacional Multimodal & Bioeletricidade Oral</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">9. Scanner Tomográfico IA (CBCT), Precisão Diagnóstica & Galvanismo por Voz</h3>
+                          <p className="text-xs text-slate-500">Leitura multimodal por IA, limites reais da visão computacional, mitos do 100% e protocolo hands-free de microvoltagem oral.</p>
+                        </div>
+                      </div>
+
+                      {/* Bloco 1: Como Funciona o Scanner Laser */}
+                      <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-2xl border border-slate-800 space-y-3 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <strong className="text-emerald-400 font-bold text-sm flex items-center gap-2">
+                            <Sparkles size={16} /> Scanner Tomográfico Cone Beam por IA Multimodal
+                          </strong>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+                            Gemini 2.5 Flash Vision
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          O módulo permite que a <strong>Dra. Lucy</strong> abra qualquer corte tomográfico CBCT ou ortopantomografia digital da paciente e dispare a varredura inteligente com animação laser. A IA examina a imagem pixel a pixel, reconhecendo materiais radiopacos de alta densidade (amálgamas e metais), linhas radiculares obturadas (endodontias) e rarefações ósseas trabeculares radiolúcidas compatíveis com <strong>cavitações NICO/FDOK</strong>.
+                        </p>
+                        <div className="grid sm:grid-cols-3 gap-2.5 pt-1 text-xs">
+                          <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80">
+                            <span className="text-emerald-400 font-bold block mb-1">1. Reconhecimento FDI</span>
+                            <span className="text-slate-300 text-[11px]">Identifica elementos dentários específicos (ex: 16, 38, 46).</span>
+                          </div>
+                          <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80">
+                            <span className="text-teal-400 font-bold block mb-1">2. Cruzamento Voll</span>
+                            <span className="text-slate-300 text-[11px]">Mapeia órgãos e meridianos bioenergéticos sobrecarregados.</span>
+                          </div>
+                          <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80">
+                            <span className="text-amber-400 font-bold block mb-1">3. Carga no Odontograma</span>
+                            <span className="text-slate-300 text-[11px]">Transfere os achados com 1 clique para o odontograma 3D.</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Bloco 2: Tabela de Taxas Reais de Precisão */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Gauge size={18} className="text-emerald-600" />
+                          <h4 className="text-sm font-extrabold text-slate-900">Taxas Reais de Precisão da IA em Exames Radiológicos</h4>
+                        </div>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          A visão computacional médica atual apresenta índices de acerto variáveis de acordo com o contraste radiográfico e a densidade física do tecido:
+                        </p>
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                              <tr>
+                                <th className="p-3">Estrutura Radiológica</th>
+                                <th className="p-3 text-center">Taxa de Acerto</th>
+                                <th className="p-3">Comportamento Óptico & Clínico</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 text-slate-600">
+                              <tr className="hover:bg-slate-50/70">
+                                <td className="p-3 font-bold text-slate-900">Metais, Amálgamas e Implantes</td>
+                                <td className="p-3 text-center font-extrabold text-emerald-600 bg-emerald-50/50">~90% a 95%</td>
+                                <td className="p-3 text-[11px]">Altíssimo contraste radiopaco (branco puro óptico que absorve o feixe de raios-X).</td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/70">
+                                <td className="p-3 font-bold text-slate-900">Tratamentos de Canal (Endodontia)</td>
+                                <td className="p-3 text-center font-extrabold text-teal-600 bg-teal-50/50">~85% a 90%</td>
+                                <td className="p-3 text-[11px]">Linha nítida do material obturador radiopaco preenchendo o canal radicular.</td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/70">
+                                <td className="p-3 font-bold text-slate-900">Dentes Ausentes / Edentulismo</td>
+                                <td className="p-3 text-center font-extrabold text-blue-600 bg-blue-50/50">~95%</td>
+                                <td className="p-3 text-[11px]">Reconhecimento anatômico evidente de espaço edêntulo na crista alveolar.</td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/70">
+                                <td className="p-3 font-bold text-slate-900">Cavitações Ósseas NICO / FDOK</td>
+                                <td className="p-3 text-center font-extrabold text-amber-600 bg-amber-50/50">~70% a 80%</td>
+                                <td className="p-3 text-[11px]">Rarefações trabeculares radiolúcidas; em imagens 2D há sobreposição óssea que exige cortes finos de CBCT ou CaviTAU.</td>
+                              </tr>
+                              <tr className="hover:bg-slate-50/70">
+                                <td className="p-3 font-bold text-slate-900">Estimativa de Galvanismo (mV)</td>
+                                <td className="p-3 text-center font-extrabold text-purple-600 bg-purple-50/50">Predição Teórica</td>
+                                <td className="p-3 text-[11px]">Cálculo probabilístico por área de liga metálica; a aferição real definitiva requer voltímetro oral na boca.</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Bloco 3: O Mito dos 100% de Acerto (Ciência & Medicina) */}
+                      <div className="p-4 sm:p-5 bg-amber-50/80 rounded-2xl border border-amber-200 space-y-2">
+                        <strong className="text-amber-950 font-bold text-xs sm:text-sm flex items-center gap-2">
+                          <AlertTriangle size={18} className="text-amber-600 shrink-0" />
+                          Por que Nenhuma IA no Mundo Atinge 100% de Acerto?
+                        </strong>
+                        <p className="text-xs text-amber-900 leading-relaxed">
+                          Nem os modelos de inteligência artificial de <strong>Elon Musk (xAI/Grok)</strong>, nem do <strong>Google Health</strong>, nem de centros como Harvard atingem 100% de precisão em diagnóstico por imagem médica. Existem limitadores físicos e biológicos inescapáveis:
+                        </p>
+                        <ul className="text-xs text-amber-900/90 space-y-1.5 list-disc pl-4 pt-1">
+                          <li><strong>Artefatos de Refração Metálica (Beam Hardening):**</strong> Restaurações metálicas dispersam os raios-X, gerando halos e faixas brancas/negras que podem mascarar cáries ou simular lesões ósseas inexistentes.</li>
+                          <li><strong>Variação Anatômica Humana:**</strong> A posição do forame mentoniano, do canal mandibular e septos no seio maxilar varia entre indivíduos e pode mimetizar patologias.</li>
+                          <li><strong>O Papel da IA como Copiloto de Visão Aumentada:**</strong> A IA nunca substitui a dentista; ela serve como uma segunda opinião incansável que economiza 20 minutos de digitação e tria detalhes ocultos. <strong>A validação e decisão clínica final são 100% soberanas da Dra. Lucy Morata.</strong></li>
+                        </ul>
+                      </div>
+
+                      {/* Bloco 4: Galvanismo Oral e Preenchimento por Voz Hands-Free */}
+                      <div className="p-5 bg-teal-50/70 rounded-2xl border border-teal-200 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Zap size={18} className="text-teal-600" />
+                          <h4 className="text-sm font-extrabold text-teal-950">Aferição Física de Galvanismo Oral & Preenchimento por Voz (Hands-Free)</h4>
+                        </div>
+                        <p className="text-xs text-slate-700 leading-relaxed">
+                          O <strong>galvanismo oral</strong> ocorre quando restaurações de amálgama (mercúrio, prata, estanho), coroas com metal ou pinos interagem com a saliva eletrolítica, funcionando como uma pilha química na boca do paciente e disparando microcorrentes contínuas (+50 mV a mais de +300 mV). Essas correntes podem despolarizar o sistema nervoso autônomo, causar cefaleias, gosto metálico e dores cervicais.
+                        </p>
+                        
+                        <div className="p-4 bg-white rounded-xl border border-teal-200 space-y-2">
+                          <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                            <Mic size={15} className="text-teal-600" /> Como a Dra. Lucy usa o microvoltímetro sem contaminar as mãos:
+                          </strong>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            Durante o exame clínico, a <strong>Dra. Lucy</strong> segura a ponta de prova esterilizada do voltímetro oral com as luvas cirúrgicas. Como não pode tocar no teclado ou mouse para não quebrar a assepsia, ela simplesmente fala em voz alta:
+                          </p>
+                          <div className="p-3 bg-slate-900 text-emerald-300 rounded-xl font-mono text-xs border border-slate-800">
+                            &quot;Dente 16 com amálgama oclusal, medindo duzentos e cinquenta milivolts, indicando sobrecarga bioelétrica no meridiano do estômago.&quot;
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            O microfone com IA do <strong>Ambulatório IA</strong> escuta a frase, reconhece o elemento <strong>FDI 16</strong>, atribui a condição de <strong>Amálgama</strong>, preenche a voltagem de <strong>+250 mV</strong>, aplica a cor no Odontograma 3D e já inclui a remoção segura no <strong>Protocolo SMART (IAOMT)</strong> instantaneamente!
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Bloco 5: Correlação de Meridianos e Órgãos (Dr. Voll) */}
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                        <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                          <Layers size={16} className="text-indigo-600" /> Correlação Dente-Órgão-Meridiano (Eletroacupuntura de Voll)
+                        </strong>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Ao identificar ou ditar um dente com sobrecarga galvânica ou foco NICO, o sistema correlaciona imediatamente com a Medicina Tradicional Chinesa:
+                        </p>
+                        <div className="grid sm:grid-cols-3 gap-2.5 text-xs text-slate-700 pt-1">
+                          <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                            <span className="font-bold text-indigo-700 block">Dentes 16 / 26 / 36 / 46:</span>
+                            Meridiano do Estômago, Baço-Pâncreas, Tireoide e vértebras T11-T12.
+                          </div>
+                          <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                            <span className="font-bold text-rose-700 block">Dentes 18 / 28 / 38 / 48 (Sisos):</span>
+                            Meridiano do Coração, Intestino Delgado e Sistema Nervoso Autônomo.
+                          </div>
+                          <div className="p-2.5 bg-white rounded-xl border border-slate-200">
+                            <span className="font-bold text-emerald-700 block">Dentes 11 / 21 / 31 / 41:</span>
+                            Meridiano dos Rins, Bexiga, Sistema Urogenital e vértebras L2-L3.
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
                 {selectedManual === 'dra_lucy' && activeSection === 'lucy_escuta_ambiental' && (
                   <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
@@ -1301,7 +1484,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-teal-700 tracking-wider">Inteligência Artificial de Escuta Contínua Odontológica</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">9. Escuta Ambiental Odontológica (30 a 40 Minutos)</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">10. Escuta Ambiental Odontológica (30 a 40 Minutos)</h3>
                           <p className="text-xs text-slate-500">Captação contínua da consulta odontológica, descarte de ruídos de instrumentos e preenchimento direto no Odontograma 3D.</p>
                         </div>
                       </div>

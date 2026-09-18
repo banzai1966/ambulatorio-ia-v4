@@ -292,7 +292,8 @@ function isProtectedClinicalEmail(emailOrId?: string): boolean {
   const norm = String(emailOrId).toLowerCase().trim();
   return norm === 'marco.agduarte22@gmail.com' || norm.includes('marco.agduarte22@gmail.com') ||
          norm === 'carvalhomorato@gmail.com' || norm.includes('carvalhomorato@gmail.com') ||
-         norm.includes('carlos') || norm.includes('morato');
+         norm.includes('carlos') || norm.includes('morato') ||
+         norm === 'lucimurata@gmail.com' || norm.includes('lucimurata') || norm.includes('lucy') || norm.includes('murata');
 }
 
 const CORE_CLINIC_USERS = [
@@ -311,6 +312,14 @@ const CORE_CLINIC_USERS = [
     role: 'admin',
     especialidade: 'Neurologia & Medicina Integrativa',
     crm_cro: 'CRM/SP 145.892'
+  },
+  {
+    email: 'lucimurata@gmail.com',
+    password: 'Murata123@',
+    full_name: 'Dra. Lucy Morata',
+    role: 'admin',
+    especialidade: 'Odontologia Biológica & Saúde Integrativa',
+    crm_cro: 'CRO/SP 98.412'
   }
 ];
 
@@ -581,12 +590,16 @@ app.post("/api/auth/ensure-user", async (req, res) => {
       return res.status(400).json({ error: "E-mail é obrigatório" });
     }
 
-    const normEmail = email.toLowerCase().trim();
-    const userPassword = password || "Duarte2026!";
-    const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : 'Médico');
-    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com') ? 'admin' : (role || 'doctor');
-    const userSpec = especialidade || 'Nenhuma';
-    const userCrm = (crm_cro || '').trim();
+    let normEmail = email.toLowerCase().trim();
+    if (normEmail.endsWith('@gmail.com.br')) {
+      normEmail = normEmail.replace('@gmail.com.br', '@gmail.com');
+    }
+    const isLucy = normEmail === 'lucimurata@gmail.com' || normEmail.includes('lucimurata') || normEmail.includes('lucy') || normEmail.includes('murata');
+    const userPassword = password || (isLucy ? 'Murata123@' : 'Duarte2026!');
+    const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : (normEmail === 'carvalhomorato@gmail.com' ? 'Dr. Carlos Morato' : (isLucy ? 'Dra. Lucy Morata' : 'Médico')));
+    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com' || isLucy) ? 'admin' : (role || 'doctor');
+    const userSpec = especialidade || (isLucy ? 'Odontologia Biológica & Saúde Integrativa' : (normEmail === 'carvalhomorato@gmail.com' ? 'Neurologia & Medicina Integrativa' : 'Clínica Geral & Gestão'));
+    const userCrm = (crm_cro || (isLucy ? 'CRO/SP 98.412' : '')).trim();
 
     unmarkDeletedMember(normEmail);
     if (userCrm) {

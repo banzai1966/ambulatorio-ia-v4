@@ -26,10 +26,12 @@ import {
   UserCheck,
   Eye,
   Layers,
-  Activity
+  Activity,
+  Box
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
+import Dental3DViewer from './Dental3DViewer';
 import SmileSimulationModal from './SmileSimulationModal';
 import CbctAiScannerModal, { CbctDetectedTooth } from './CbctAiScannerModal';
 
@@ -196,6 +198,7 @@ export default function PatientMediaGallery({
   const [showSmileSimulation, setShowSmileSimulation] = useState(false);
   const [showCbctScannerModal, setShowCbctScannerModal] = useState(false);
   const [showOdontogram, setShowOdontogram] = useState<boolean>(false);
+  const [show3DViewerMode, setShow3DViewerMode] = useState<boolean>(false);
   const [localOdontogram, setLocalOdontogram] = useState<OdontogramData>(initialOdontogram || {
     teeth: {
       16: { id: 16, status: 'amalgam', cbctFindings: 'Amálgama com microinfiltração visível na TC', biologicalPlan: 'Troca Segura SMART (IAOMT)' },
@@ -681,27 +684,51 @@ export default function PatientMediaGallery({
             </div>
 
             <div className="my-auto py-4 flex items-center justify-center overflow-auto relative max-h-[420px] custom-scrollbar-emerald">
-              <div 
-                style={{ 
-                  transform: `scale(${viewerZoom})`, 
-                  transformOrigin: 'center center',
-                  transition: 'transform 0.2s ease-out' 
-                }}
-                className="inline-block transition-transform"
-              >
-                <img 
-                  src={selectedItem.url} 
-                  alt={selectedItem.title} 
-                  className="max-h-[380px] w-auto object-contain rounded-lg shadow-2xl block"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
+              {show3DViewerMode ? (
+                <div className="w-full h-full min-h-[380px] animate-in fade-in zoom-in-95 duration-200">
+                  <Dental3DViewer
+                    odontogramData={localOdontogram}
+                    onScanAiRequest={() => setShowCbctScannerModal(true)}
+                  />
+                </div>
+              ) : (
+                <div 
+                  style={{ 
+                    transform: `scale(${viewerZoom})`, 
+                    transformOrigin: 'center center',
+                    transition: 'transform 0.2s ease-out' 
+                  }}
+                  className="inline-block transition-transform"
+                >
+                  <img 
+                    src={selectedItem.url} 
+                    alt={selectedItem.title} 
+                    className="max-h-[380px] w-auto object-contain rounded-lg shadow-2xl block"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="text-white text-xs z-10 bg-slate-900/90 backdrop-blur-md p-3 rounded-xl border border-white/10 flex flex-wrap items-center justify-between gap-2">
               <p className="text-slate-300 italic text-[11px] truncate max-w-[280px]">{selectedItem.description}</p>
               
               <div className="flex items-center gap-2">
+                {/* 3D Interativo Voxel Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShow3DViewerMode(!show3DViewerMode)}
+                  className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
+                    show3DViewerMode
+                      ? 'bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-600 text-white shadow-sky-600/30 ring-2 ring-sky-400/40'
+                      : 'bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700'
+                  }`}
+                  title="Alternar para o Visualizador 3D Interativo Voxel da Arcada e Transparência Óssea"
+                >
+                  <Box size={14} className={show3DViewerMode ? "text-amber-300 animate-bounce" : "text-sky-400"} />
+                  <span>{show3DViewerMode ? 'Ver Foto 2D' : '🧊 Visão 3D Voxel'}</span>
+                </button>
+
                 {/* AI CBCT Tomography / X-Ray Scanner Button */}
                 <button
                   type="button"

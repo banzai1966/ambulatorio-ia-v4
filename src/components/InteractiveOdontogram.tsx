@@ -20,9 +20,11 @@ import {
   Trash2,
   Scan,
   Grid,
-  Zap
+  Zap,
+  Box
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import Dental3DViewer from './Dental3DViewer';
 
 export type ToothStatus = 
   | 'healthy' 
@@ -613,6 +615,7 @@ export default function InteractiveOdontogram({
   const [selectedToothNum, setSelectedToothNum] = useState<number | null>(16);
   const [filterStatus, setFilterStatus] = useState<ToothStatus | 'all'>('all');
   const [showPanoramicBanner, setShowPanoramicBanner] = useState<boolean>(true);
+  const [show3DViewer, setShow3DViewer] = useState<boolean>(false);
 
   const teethRecords = data.teeth || {};
 
@@ -755,6 +758,22 @@ export default function InteractiveOdontogram({
 
         {/* Action badges / summary */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* 3D Interativo Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShow3DViewer(!show3DViewer)}
+            className={cn(
+              "px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer shadow-xs",
+              show3DViewer 
+                ? "bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-600 text-white border-sky-500 ring-2 ring-sky-400/40" 
+                : "bg-slate-900 hover:bg-slate-850 text-sky-300 border-slate-700 hover:text-white"
+            )}
+            title="Alternar entre o Odontograma 2D Anatômico e o Visualizador 3D Interativo Voxel (Three.js)"
+          >
+            <Box size={14} className={show3DViewer ? "text-amber-300 animate-bounce" : "text-sky-400"} />
+            <span>{show3DViewer ? 'Voltar para Odontograma 2D' : '🧊 Visualizador 3D Interativo'}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setShowPanoramicBanner(!showPanoramicBanner)}
@@ -789,6 +808,18 @@ export default function InteractiveOdontogram({
           )}
         </div>
       </div>
+
+      {/* PAINEL 3D INTERATIVO (QUANDO ATIVADO) */}
+      {show3DViewer && (
+        <div className="animate-in fade-in zoom-in-95 duration-200">
+          <Dental3DViewer
+            odontogramData={data}
+            selectedToothNumber={selectedToothNum}
+            onSelectTooth={(num) => handleSelectTooth(num)}
+            onScanAiRequest={() => setShowPanoramicBanner(true)}
+          />
+        </div>
+      )}
 
       {/* Optional Panoramic / CBCT Banner View (Simulando Laudo Tomográfico Superior) */}
       {showPanoramicBanner && (
