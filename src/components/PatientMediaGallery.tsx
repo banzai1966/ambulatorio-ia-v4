@@ -31,6 +31,7 @@ import {
 import { toast } from 'react-hot-toast';
 import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
 import SmileSimulationModal from './SmileSimulationModal';
+import CbctAiScannerModal, { CbctDetectedTooth } from './CbctAiScannerModal';
 
 interface MediaItem {
   id: string;
@@ -183,6 +184,7 @@ export default function PatientMediaGallery({
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAnnotateModal, setShowAnnotateModal] = useState(false);
   const [showSmileSimulation, setShowSmileSimulation] = useState(false);
+  const [showCbctScannerModal, setShowCbctScannerModal] = useState(false);
   const [showOdontogram, setShowOdontogram] = useState<boolean>(false);
   const [localOdontogram, setLocalOdontogram] = useState<OdontogramData>(initialOdontogram || {
     teeth: {
@@ -191,6 +193,37 @@ export default function PatientMediaGallery({
       38: { id: 38, status: 'cavitation_nico', cbctFindings: 'Área hipodensa NICO em leito de siso extraído', biologicalPlan: 'Curetagem + Ozônio + Terapia Neural', neuralTherapy: true }
     }
   });
+
+  // Aplicação dos achados do Scanner Tomográfico com IA diretamente no Odontograma 3D
+  const handleApplyCbctFindings = (detectedTeeth: CbctDetectedTooth[], generalFindings: string) => {
+    const currentTeeth = { ...(localOdontogram.teeth || {}) };
+
+    detectedTeeth.forEach((t) => {
+      const existing = currentTeeth[t.toothNumber] || { id: t.toothNumber, status: t.status };
+      currentTeeth[t.toothNumber] = {
+        ...existing,
+        id: t.toothNumber,
+        status: t.status,
+        cbctFindings: t.finding,
+        biologicalPlan: t.recommendation,
+        galvanismo_mv: t.estimatedGalvanismMv !== undefined ? t.estimatedGalvanismMv : existing.galvanismo_mv,
+        neuralTherapy: t.neuralTherapySuggested ?? (existing.neuralTherapy || t.status === 'cavitation_nico' || t.status === 'endodontic')
+      };
+    });
+
+    const updatedOdontogram: OdontogramData = {
+      ...localOdontogram,
+      teeth: currentTeeth,
+      cbctTomographyCorrelation: generalFindings || localOdontogram.cbctTomographyCorrelation
+    };
+
+    setLocalOdontogram(updatedOdontogram);
+    if (onOdontogramChange) {
+      onOdontogramChange(updatedOdontogram);
+    }
+    // Abre automaticamente a visualização do odontograma para a Dra. Lucy
+    setShowOdontogram(true);
+  };
 
   // Recarrega galeria quando o paciente selecionado mudar e purga duplicatas de simulação DSD
   useEffect(() => {
@@ -651,6 +684,17 @@ export default function PatientMediaGallery({
               <p className="text-slate-300 italic text-[11px] truncate max-w-[280px]">{selectedItem.description}</p>
               
               <div className="flex items-center gap-2">
+                {/* AI CBCT Tomography / X-Ray Scanner Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowCbctScannerModal(true)}
+                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95 animate-pulse"
+                  title="Escanear e Laudar Tomografia/Raio-X com Inteligência Artificial Biológica"
+                >
+                  <Sparkles size={14} className="text-amber-300" />
+                  <span>Scanner IA (Laudo CBCT)</span>
+                </button>
+
                 {/* Fullscreen Lightbox Button */}
                 <button
                   type="button"
@@ -1192,6 +1236,15 @@ export default function PatientMediaGallery({
         isOpen={showSmileSimulation}
         onClose={() => setShowSmileSimulation(false)}
         patientName={patientName}
+      />
+
+      {/* Modal de Scanner Tomográfico com IA Biológica */}
+      <CbctAiScannerModal
+        isOpen={showCbctScannerModal}
+        onClose={() => setShowCbctScannerModal(false)}
+        mediaItem={selectedItem}
+        patientName={patientName}
+        onApplyFindings={handleApplyCbctFindings}
       />
 
       {/* Delete Confirmation Modal */}

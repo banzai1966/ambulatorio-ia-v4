@@ -42,6 +42,8 @@ export interface ToothRecord {
   cbctFindings?: string;
   biologicalPlan?: string;
   neuralTherapy?: boolean;
+  galvanismo_mv?: number; // Microvoltagem galvânica em mV (ex: +250, -110)
+  galvanismo_polaridade?: '+' | '-';
   faces?: {
     mesial?: boolean;
     distal?: boolean;
@@ -681,10 +683,28 @@ export default function InteractiveOdontogram({
       >
         {/* Tooth number badge */}
         <div className={cn(
-          "w-full text-center py-0.5 rounded-t-xl text-[11px] font-black leading-tight transition-colors",
+          "w-full text-center py-0.5 rounded-t-xl text-[11px] font-black leading-tight transition-colors relative",
           isSelected ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-800 group-hover:bg-emerald-100 group-hover:text-emerald-950"
         )}>
           {num}
+
+          {/* Galvanism microvoltage badge */}
+          {rec.galvanismo_mv !== undefined && rec.galvanismo_mv !== null && (
+            <span 
+              title={`Galvanismo: ${rec.galvanismo_mv > 0 ? `+${rec.galvanismo_mv}` : rec.galvanismo_mv} mV`}
+              className={cn(
+                "absolute -top-2 -right-1 px-1 py-0.2 rounded-md text-[7.5px] font-black font-mono shadow-xs border flex items-center gap-0.5 z-30",
+                Math.abs(rec.galvanismo_mv) > 100 
+                  ? "bg-rose-600 text-white border-rose-700 animate-pulse" 
+                  : Math.abs(rec.galvanismo_mv) >= 40 
+                    ? "bg-amber-500 text-white border-amber-600" 
+                    : "bg-emerald-600 text-white border-emerald-700"
+              )}
+            >
+              <Zap size={7} />
+              {rec.galvanismo_mv > 0 ? `+${rec.galvanismo_mv}` : rec.galvanismo_mv}
+            </span>
+          )}
         </div>
 
         {/* Realistic Anatomical Tooth Graphic */}
@@ -1011,6 +1031,122 @@ export default function InteractiveOdontogram({
                 </div>
               </div>
 
+              {/* MEDIÇÃO DE GALVANISMO BUCAL (MICROVOLTAGEM EM mV) */}
+              {!readOnly && (
+                <div className="p-3.5 bg-gradient-to-br from-amber-50/70 via-slate-50 to-orange-50/50 rounded-2xl border border-amber-200/80 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                      <Zap size={13} className="text-amber-600" />
+                      <span>Galvanismo Bucal / Microvoltagem (mV)</span>
+                    </label>
+                    {currentToothRecord.galvanismo_mv !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => updateToothRecord(currentToothMeta.number, { galvanismo_mv: undefined })}
+                        className="text-[9px] text-rose-600 hover:text-rose-700 font-bold hover:underline"
+                        title="Limpar medição de voltagem"
+                      >
+                        Zerar mV
+                      </button>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    Medição da carga eletromagnética do elemento (Oral Potential Meter / Milivoltímetro). Valores &gt; ±100 mV indicam correntes galvânicas ativas e prioridade de remoção SMART.
+                  </p>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        step="1"
+                        value={currentToothRecord.galvanismo_mv !== undefined ? currentToothRecord.galvanismo_mv : ''}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : parseInt(e.target.value, 10);
+                          updateToothRecord(currentToothMeta.number, { galvanismo_mv: isNaN(val as any) ? undefined : val });
+                        }}
+                        placeholder="Ex: +250 ou -120"
+                        className={cn(
+                          "w-full py-2 px-3 rounded-xl border text-xs font-mono font-bold transition-all",
+                          currentToothRecord.galvanismo_mv !== undefined
+                            ? Math.abs(currentToothRecord.galvanismo_mv) > 100
+                              ? "bg-rose-50 border-rose-300 text-rose-900 focus:ring-2 focus:ring-rose-500"
+                              : Math.abs(currentToothRecord.galvanismo_mv) >= 40
+                                ? "bg-amber-50 border-amber-300 text-amber-900 focus:ring-2 focus:ring-amber-500"
+                                : "bg-emerald-50 border-emerald-300 text-emerald-900 focus:ring-2 focus:ring-emerald-500"
+                            : "bg-white border-slate-200 text-slate-800 focus:ring-2 focus:ring-amber-500"
+                        )}
+                      />
+                      <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400">mV</span>
+                    </div>
+
+                    {/* Botões de polaridade rápida */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = currentToothRecord.galvanismo_mv || 0;
+                        updateToothRecord(currentToothMeta.number, { galvanismo_mv: cur === 0 ? 100 : -cur });
+                      }}
+                      className="px-2.5 py-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-[11px] font-bold text-slate-700 shadow-2xs transition-all"
+                      title="Inverter polaridade (+ / -)"
+                    >
+                      +/-
+                    </button>
+                  </div>
+
+                  {/* Botões de pré-seleção rápida */}
+                  <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                    <span className="text-[9px] font-bold text-slate-400 mr-1">Rápido:</span>
+                    {[+280, +150, +70, -110, 0].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => updateToothRecord(currentToothMeta.number, { galvanismo_mv: preset })}
+                        className={cn(
+                          "px-1.5 py-0.5 rounded-lg text-[9px] font-mono font-bold transition-all border",
+                          currentToothRecord.galvanismo_mv === preset
+                            ? "bg-amber-600 text-white border-amber-700"
+                            : "bg-white hover:bg-slate-100 text-slate-600 border-slate-200"
+                        )}
+                      >
+                        {preset > 0 ? `+${preset}` : preset} mV
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Diagnóstico em tempo real de Galvanismo */}
+                  {currentToothRecord.galvanismo_mv !== undefined && (
+                    <div className={cn(
+                      "p-2 rounded-xl border text-[10px] space-y-0.5",
+                      Math.abs(currentToothRecord.galvanismo_mv) > 100
+                        ? "bg-rose-100/80 border-rose-300 text-rose-950 font-medium"
+                        : Math.abs(currentToothRecord.galvanismo_mv) >= 40
+                          ? "bg-amber-100/80 border-amber-300 text-amber-950 font-medium"
+                          : "bg-emerald-100/80 border-emerald-300 text-emerald-950 font-medium"
+                    )}>
+                      <div className="flex items-center justify-between font-bold">
+                        <span className="flex items-center gap-1">
+                          <Zap size={11} className={Math.abs(currentToothRecord.galvanismo_mv) > 100 ? "text-rose-600 animate-bounce" : "text-amber-600"} />
+                          {Math.abs(currentToothRecord.galvanismo_mv) > 100 
+                            ? "⚠️ Alto Potencial Galvânico (Bateria Bucal)" 
+                            : Math.abs(currentToothRecord.galvanismo_mv) >= 40 
+                              ? "⚡ Carga Galvânica Moderada" 
+                              : "✅ Carga Basal / Fisiológica"}
+                        </span>
+                        <span className="font-mono">{currentToothRecord.galvanismo_mv > 0 ? `+${currentToothRecord.galvanismo_mv}` : currentToothRecord.galvanismo_mv} mV</span>
+                      </div>
+                      <p className="text-[9.5px] opacity-90">
+                        {Math.abs(currentToothRecord.galvanismo_mv) > 100
+                          ? "Prioridade Alta para remoção com protocolo SMART da IAOMT. Gera correntes elétricas na saliva sobrecarregando o sistema nervoso e meridianos."
+                          : Math.abs(currentToothRecord.galvanismo_mv) >= 40
+                            ? "Microvoltagem ativa. Recomenda-se acompanhamento e troca programada por material cerâmico metal-free."
+                            : "Potencial eletromagnético aceitável e de baixa interferência biológica."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Tomography CBCT / Notes Field for this specific tooth */}
               {!readOnly && (
                 <div className="space-y-3">
@@ -1151,12 +1287,127 @@ export default function InteractiveOdontogram({
                         <strong>TC:</strong> {t.cbctFindings}
                       </div>
                     )}
+
+                    {t.galvanismo_mv !== undefined && (
+                      <div className={cn(
+                        "text-[10px] px-2 py-0.5 rounded-lg font-mono font-bold flex items-center justify-between border",
+                        Math.abs(t.galvanismo_mv) > 100 
+                          ? "bg-rose-50 text-rose-800 border-rose-200" 
+                          : Math.abs(t.galvanismo_mv) >= 40 
+                            ? "bg-amber-50 text-amber-800 border-amber-200" 
+                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      )}>
+                        <span className="flex items-center gap-1">
+                          <Zap size={10} className={Math.abs(t.galvanismo_mv) > 100 ? "text-rose-600" : "text-amber-600"} />
+                          Galvanismo:
+                        </span>
+                        <span>{t.galvanismo_mv > 0 ? `+${t.galvanismo_mv}` : t.galvanismo_mv} mV</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
           </div>
         </div>
       )}
+
+      {/* PAINEL DE GALVANISMO BUCAL E ORDEM DE REMOÇÃO CIRÚRGICA SMART (IAOMT) */}
+      {(() => {
+        const galvanismTeeth = Object.values(teethRecords)
+          .filter(t => t?.galvanismo_mv !== undefined && t?.galvanismo_mv !== null)
+          .sort((a, b) => Math.abs(b.galvanismo_mv || 0) - Math.abs(a.galvanismo_mv || 0));
+
+        if (galvanismTeeth.length === 0) return null;
+
+        return (
+          <div className="pt-4 border-t border-amber-100 space-y-3 p-4 bg-gradient-to-br from-amber-50/80 via-slate-50 to-orange-50/60 rounded-3xl border border-amber-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                  <Zap size={16} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                    Galvanismo Bucal & Sequência de Remoção SMART ({galvanismTeeth.length} elementos medidos)
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Na Odontologia Biológica, restaurações com maior microvoltagem (baterias orais) devem ser priorizadas para cessar a dispersão eletromagnética.
+                  </p>
+                </div>
+              </div>
+              <span className="self-start sm:self-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-200/80 text-amber-900 border border-amber-300">
+                Protocolo IAOMT & Voll
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+              {galvanismTeeth.map((t, idx) => {
+                const meta = TOOTH_METADATA[t.id];
+                const mv = t.galvanismo_mv || 0;
+                const absMv = Math.abs(mv);
+                const isHigh = absMv > 100;
+                const isMed = absMv >= 40 && !isHigh;
+
+                return (
+                  <div 
+                    key={t.id}
+                    onClick={() => handleSelectTooth(t.id)}
+                    className={cn(
+                      "p-3 rounded-2xl border transition-all cursor-pointer space-y-1.5 shadow-2xs hover:scale-[1.01]",
+                      isHigh 
+                        ? "bg-rose-50/90 border-rose-300 hover:border-rose-400" 
+                        : isMed 
+                          ? "bg-amber-50/90 border-amber-300 hover:border-amber-400" 
+                          : "bg-white border-slate-200 hover:border-emerald-300"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                        <span className={cn(
+                          "w-5 h-5 rounded-lg text-white font-mono text-[10px] font-black flex items-center justify-center",
+                          isHigh ? "bg-rose-600" : isMed ? "bg-amber-600" : "bg-emerald-600"
+                        )}>
+                          #{idx + 1}
+                        </span>
+                        Dente {t.id} - {meta?.name?.split('(')[0]}
+                      </span>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-lg text-[10px] font-mono font-black border",
+                        isHigh ? "bg-rose-600 text-white border-rose-700 animate-pulse" : isMed ? "bg-amber-500 text-white border-amber-600" : "bg-emerald-600 text-white border-emerald-700"
+                      )}>
+                        {mv > 0 ? `+${mv}` : mv} mV
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] text-slate-600">
+                      <strong>Meridiano / Órgão:</strong> {meta?.organ} ({meta?.meridian})
+                    </div>
+
+                    <div className="text-[10px] font-semibold flex items-center gap-1">
+                      {isHigh ? (
+                        <span className="text-rose-700 font-bold flex items-center gap-1">
+                          <AlertCircle size={11} className="shrink-0" />
+                          1ª Prioridade: Remoção Segura SMART Imediata
+                        </span>
+                      ) : isMed ? (
+                        <span className="text-amber-700 font-bold flex items-center gap-1">
+                          <Activity size={11} className="shrink-0" />
+                          2ª Prioridade: Carga moderada / Programar troca
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={11} className="shrink-0" />
+                          Carga Basal / Sem efeito bateria imediato
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

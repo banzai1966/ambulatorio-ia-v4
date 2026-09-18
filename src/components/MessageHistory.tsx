@@ -35,7 +35,7 @@ import { sendWhatsAppMessage } from '../services/whatsappService';
 import WhatsAppQRModal from './WhatsAppQRModal';
 
 interface Message {
-  id: number;
+  id: number | string;
   created_at: string;
   telefone_cliente: string;
   mensagem: string;
@@ -43,6 +43,7 @@ interface Message {
   midia_url?: string;
   tipo?: string;
   tipo_midia?: string;
+  lida?: boolean;
 }
 
 export default function MessageHistory({ onSchedule, initialPhone }: { onSchedule: (name: string, phone: string) => void, initialPhone?: string | null }) {
@@ -65,7 +66,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const [pendingMedia, setPendingMedia] = useState<{ base64: string, type: string, name: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'message' | 'conversation';
-    id?: number;
+    id?: number | string;
     phone?: string;
     name?: string;
   } | null>(null);
@@ -546,7 +547,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     }
   };
 
-  const handleDeleteMessage = (msgId: number) => {
+  const handleDeleteMessage = (msgId: number | string) => {
     setDeleteTarget({
       type: 'message',
       id: msgId
