@@ -15,11 +15,11 @@ dotenv.config();
 // Ignora erros de certificado self-signed globalmente no backend
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filenameSafe = typeof import.meta !== 'undefined' && import.meta.url ? fileURLToPath(import.meta.url) : (typeof __filename !== 'undefined' ? __filename : path.resolve(process.cwd(), 'server.ts'));
+const __dirnameSafe = typeof __dirname !== 'undefined' ? __dirname : path.dirname(__filenameSafe);
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
