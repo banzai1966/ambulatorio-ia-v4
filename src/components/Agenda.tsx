@@ -37,6 +37,7 @@ import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getAvailableSlots, getDoctorsBySpecialty } from '../services/schedulingService';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
 import { calculateAge, formatDateMask } from '../lib/utils';
+import { getActiveClinicConfig } from '../constants/clinicProfiles';
 
 interface Appointment {
   id: string;
@@ -306,14 +307,13 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         const receiptMsg = `🧾 *COMPROVANTE DE PAGAMENTO - AMBULATÓRIO IA*\n\nOlá *${payingAppointment.paciente_nome}*,\nConfirmamos o recebimento da sua consulta!\n\n📋 *Detalhes do Recibo:*\n👨‍⚕️ *Profissional:* ${payingAppointment.medico_nome || 'Dr(a). da Clínica'}\n💵 *Valor Pago:* ${formattedMoney}\n💳 *Forma:* ${labelMethod}\n📅 *Data:* ${todayStr}\n\n✅ *Status:* Pagamento Confirmado & Check-in Liberado!\n\nObrigado pela preferência e tenha uma excelente consulta! 🏥`;
 
         try {
-          let clinicConfig: any = {};
-          try {
-            const saved = localStorage.getItem('clinic_info');
-            if (saved) clinicConfig = JSON.parse(saved);
-          } catch (e) {}
+          const docKey = (payingAppointment.medico_nome || '').toLowerCase().includes('lucy') || (payingAppointment.medico_nome || '').toLowerCase().includes('luci')
+            ? 'dra_lucy'
+            : ((payingAppointment.medico_nome || '').toLowerCase().includes('carlos') ? 'dr_carlos' : undefined);
+          const clinicConfig = getActiveClinicConfig(undefined, docKey);
 
           const evoUrl = clinicConfig.evolution_url || "https://api.makprojetosmake.com.br";
-          const instance = clinicConfig.evolution_instance || "ambulatorio";
+          const instance = clinicConfig.evolution_instance || (docKey === 'dr_carlos' ? "drcarlos" : "ambulatorio");
           const apiKey = clinicConfig.evolution_apikey || "BFA493146682-4CA6-B8CB-40E2D785AA23";
 
           await axios.post(`${evoUrl}/message/sendText/${instance}`, {
@@ -377,12 +377,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
     let sent = false;
 
-    // 1. Tenta envio através do servidor backend com as credenciais salvas no localStorage
-    let clinicConfig: any = {};
-    try {
-      const saved = localStorage.getItem('clinic_info');
-      if (saved) clinicConfig = JSON.parse(saved);
-    } catch (e) {}
+    // 1. Tenta envio através do servidor backend com as credenciais salvas
+    const docKey = docName.toLowerCase().includes('lucy') || docName.toLowerCase().includes('luci')
+      ? 'dra_lucy'
+      : (docName.toLowerCase().includes('carlos') ? 'dr_carlos' : undefined);
+    const clinicConfig = getActiveClinicConfig(undefined, docKey);
 
     try {
       const res = await fetch('/api/whatsapp/send-confirmation', {
@@ -415,7 +414,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     if (!sent) {
       try {
         const evoUrl = clinicConfig.evolution_url || "https://api.makprojetosmake.com.br";
-        const instance = clinicConfig.evolution_instance || "ambulatorio";
+        const instance = clinicConfig.evolution_instance || (docKey === 'dr_carlos' ? "drcarlos" : "ambulatorio");
         const apiKey = clinicConfig.evolution_apikey || "BFA493146682-4CA6-B8CB-40E2D785AA23";
 
         await axios.post(`${evoUrl}/message/sendText/${instance}`, {

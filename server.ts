@@ -2780,7 +2780,7 @@ const mockSlots: Record<string, string[]> = {
   "3": ["10:30", "13:00", "16:00"]
 };
 
-async function processAndReply(phone: string, message: string) {
+async function processAndReply(phone: string, message: string, targetInstance?: string) {
   const cleanPhone = phone.split('@')[0];
   console.log(`[IA] 🚀 Processando mensagem de ${cleanPhone}: "${message.substring(0, 50)}..."`);
   
@@ -2895,13 +2895,15 @@ async function processAndReply(phone: string, message: string) {
       
       // Enviar via Evolution
       try {
-        const evoResponse = await axios.post(`${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}`, {
+        const incomingInstance = (targetInstance || EVOLUTION_INSTANCE_NAME).trim();
+        const incomingApiKey = KNOWN_INSTANCE_TOKENS[incomingInstance] || EVOLUTION_API_KEY || EVOLUTION_GLOBAL_KEY;
+        const evoResponse = await axios.post(`${EVOLUTION_API_URL}/message/sendText/${incomingInstance}`, {
           number: cleanPhone,
           text: finalResp,
           linkPreview: true
-        }, { headers: { 'apikey': EVOLUTION_API_KEY } });
+        }, { headers: { 'apikey': incomingApiKey } });
         
-        console.log(`[EVOLUTION] ✅ Enviado para WhatsApp:`, evoResponse.data);
+        console.log(`[EVOLUTION] ✅ Enviado para WhatsApp (${incomingInstance}):`, evoResponse.data);
       } catch (evoErr: any) {
         console.error(`[EVOLUTION] ❌ Erro no WhatsApp:`, evoErr.response?.data || evoErr.message);
       }
