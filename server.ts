@@ -54,7 +54,7 @@ let EVOLUTION_API_KEY = (process.env.EVOLUTION_API_KEY ||
 const KNOWN_INSTANCE_TOKENS: Record<string, string> = {
   ambulatorio: "BFA493146682-4CA6-B8CB-40E2D785AA23",
   luci: "BFA493146682-4CA6-B8CB-40E2D785AA23",
-  drcarlos: "BFA493146682-4CA6-B8CB-40E2D785AA23"
+  drcarlos: "E54C7FA2A036-4959-A843-5C258EA783BA"
 };
 
 // Helper para obter configuração dinâmica da requisição ou fallback
@@ -63,7 +63,7 @@ function getEvolutionConfig(req?: express.Request) {
   const instance = (req?.body?.evolution_instance || req?.query?.evolution_instance || (req?.headers['x-evolution-instance'] as string) || EVOLUTION_INSTANCE_NAME).trim();
   let apikey = (req?.body?.evolution_apikey || req?.query?.evolution_apikey || (req?.headers['x-evolution-apikey'] as string) || "").trim();
   
-  if (!apikey || apikey === "E6247913DB92-48B4-8B54-5C7449EA639B") {
+  if (!apikey || apikey === "E6247913DB92-48B4-8B54-5C7449EA639B" || apikey.includes("0452D343F39E") || apikey.length < 20) {
     apikey = KNOWN_INSTANCE_TOKENS[instance] || EVOLUTION_API_KEY || EVOLUTION_GLOBAL_KEY;
   }
   return { url, instance, apikey };
@@ -73,6 +73,7 @@ function getEvolutionConfig(req?: express.Request) {
 async function requestEvolutionWithFallback(method: 'get' | 'post' | 'put' | 'delete', endpointUrl: string, data?: any, initialKey?: string) {
   const keysToTry = [
     initialKey,
+    "E54C7FA2A036-4959-A843-5C258EA783BA",
     "BFA493146682-4CA6-B8CB-40E2D785AA23",
     EVOLUTION_GLOBAL_KEY,
     EVOLUTION_API_KEY
