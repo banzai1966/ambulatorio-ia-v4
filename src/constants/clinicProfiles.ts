@@ -290,16 +290,25 @@ export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): C
       const parsed = JSON.parse(savedSpecific);
       let apikey = (parsed.evolution_apikey || baseDefault.evolution_apikey || '').trim();
       
-      // Se a chave no cache local for antiga, depreciada ou truncada, migra automaticamente para o padrão novo
+      // Se a chave no cache local for antiga ou diferente da chave mestra da Evolution
       const isOutdatedOrTruncated = 
-        apikey === "BFA493146682-4CA6-B8CB-40E2D785AA23" && key === 'dr_carlos' ||
-        apikey === "E6247913DB92-48B4-8B54-5C7449EA639B" ||
+        apikey.includes("40E2D785AA23") ||
+        apikey.includes("4CA6-B8CB") ||
+        apikey.includes("BFA493146682") ||
+        apikey.includes("E6247913DB92") ||
         apikey.includes("0452D343F39E") ||
         apikey.includes("4CA4-915D") ||
-        apikey.length < 20;
+        apikey.length < 20 ||
+        apikey !== "b2efa885a71ee2edf72b597df1a0ce9";
 
       if (isOutdatedOrTruncated) {
-        apikey = baseDefault.evolution_apikey;
+        apikey = "b2efa885a71ee2edf72b597df1a0ce9";
+        try {
+          localStorage.setItem(`clinic_info_${key}`, JSON.stringify({
+            ...parsed,
+            evolution_apikey: apikey
+          }));
+        } catch (_) {}
       }
 
       return {

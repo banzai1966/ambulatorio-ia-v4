@@ -51,8 +51,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Apenas métodos GET
-  if (event.request.method !== 'GET') return;
+  // Apenas métodos GET e esquemas http/https
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
 
   event.respondWith(
     fetch(event.request)

@@ -8,7 +8,7 @@ services:
       - Banzainet
     environment:
       - PORT=3000
-      - NODE_ENV=development
+      - NODE_ENV=production
       
       # 🧠 Inteligência Artificial (Gemini)
       - GEMINI_API_KEY=AQ.Ab8RN6JM0UB5KrGFRIwmMgzgX6gjEPjmeQLCM5Y9Qdt89Haa4A
@@ -27,7 +27,7 @@ services:
       - EVOLUTION_GLOBAL_KEY=b2efa885a71ee2edf72b597df1a0ce9
       - EVOLUTION_API_KEY=b2efa885a71ee2edf72b597df1a0ce9
 
-    command: sh -c "apk add --no-cache git && rm -rf /app_ambulatorio && git clone --depth 1 https://github.com/banzai1966/ambulatorio-ia-v4.git /app_ambulatorio && cd /app_ambulatorio && npm install --legacy-peer-deps && npm run dev"
+    command: sh -c "apk add --no-cache git && rm -rf /app_ambulatorio && git clone --depth 1 https://github.com/banzai1966/ambulatorio-ia-v4.git /app_ambulatorio && cd /app_ambulatorio && npm install --legacy-peer-deps && npm run build && npm start"
     
     deploy:
       replicas: 1
