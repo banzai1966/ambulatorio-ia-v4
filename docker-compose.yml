@@ -1,32 +1,52 @@
 version: '3.8'
 
 services:
-  ambulatorio-ia:
-    container_name: ambulatorio-ia
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ambulatorio-ia:latest
+  ambulatorio:
+    image: node:20-alpine
     restart: always
-    ports:
-      - "${HOST_PORT:-3030}:3000"
+    networks:
+      - Banzainet
     environment:
-      - NODE_ENV=production
       - PORT=3000
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - VITE_GEMINI_API_KEY=${VITE_GEMINI_API_KEY:-}
-      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-https://api.makprojetosmake.com.br}
-      - EVOLUTION_INSTANCE_NAME=${EVOLUTION_INSTANCE_NAME:-ambulatorio}
-      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY:-E54C7FA2A036-4959-A843-5C258EA783BA}
-      - EVOLUTION_GLOBAL_KEY=${EVOLUTION_GLOBAL_KEY:-b2efa885a71ee2edf72b597df1a0ce9}
-      - VITE_SUPABASE_URL=${VITE_SUPABASE_URL:-https://qmnbbpoubacuctlokmgq.supabase.co}
-      - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmJicG91YmFjdWN0bG9rbWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODgyOTQsImV4cCI6MjA5MDY2NDI5NH0.a0c7wB3KLQKHkGZccxNihpoKcgG9hpd-Ct9fluiKIJI}
-      - SUPABASE_URL=${SUPABASE_URL:-https://qmnbbpoubacuctlokmgq.supabase.co}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmJicG91YmFjdWN0bG9rbWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODgyOTQsImV4cCI6MjA5MDY2NDI5NH0.a0c7wB3KLQKHkGZccxNihpoKcgG9hpd-Ct9fluiKIJI}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmJicG91YmFjdWN0bG9rbWdxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA4ODI5NCwiZXhwIjoyMDkwNjY0Mjk0fQ.8qyH3jhL31LwFQsygLjx1iN6Q-dqaE2OtuCyOx6K1zY}
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
+      - NODE_ENV=development
+      
+      # 🧠 Inteligência Artificial (Gemini)
+      - GEMINI_API_KEY=AQ.Ab8RN6JM0UB5KrGFRIwmMgzgX6gjEPjmeQLCM5Y9Qdt89Haa4A
+      - VITE_GEMINI_API_KEY=AQ.Ab8RN6JM0UB5KrGFRIwmMgzgX6gjEPjmeQLCM5Y9Qdt89Haa4A
+      
+      # 🗄️ Banco de Dados (Supabase Ambulatório)
+      - SUPABASE_URL=https://qmnbbpoubacuctlokmgq.supabase.co
+      - VITE_SUPABASE_URL=https://qmnbbpoubacuctlokmgq.supabase.co
+      - SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmJicG91YmFjdWN0bG9rbWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODgyOTQsImV4cCI6MjA5MDY2NDI5NH0.a0c7wB3KLQKHkGZccxNihpoKcgG9hpd-Ct9fluiKIJI
+      - VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmJicG91YmFjdWN0bG9rbWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODgyOTQsImV4cCI6MjA5MDY2NDI5NH0.a0c7wB3KLQKHkGZccxNihpoKcgG9hpd-Ct9fluiKIJI
+      - SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtbmJicG91YmFjdWN0bG9rbWdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwODgyOTQsImV4cCI6MjA5MDY2NDI5NH0.8qyH3jhL31LwFQsygLjx1iN6Q-dqaE2OtuCyOx6K1zY
+      
+      # 💬 WhatsApp (Evolution API com Chave Mestra)
+      - EVOLUTION_API_URL=https://api.makprojetosmake.com.br
+      - EVOLUTION_INSTANCE_NAME=ambulatorio
+      - EVOLUTION_GLOBAL_KEY=b2efa885a71ee2edf72b597df1a0ce9
+      - EVOLUTION_API_KEY=b2efa885a71ee2edf72b597df1a0ce9
+
+    command: sh -c "apk add --no-cache git && rm -rf /app_ambulatorio && git clone --depth 1 https://github.com/banzai1966/ambulatorio-ia-v4.git /app_ambulatorio && cd /app_ambulatorio && npm install --legacy-peer-deps && npm run dev"
+    
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=Banzainet"
+        - "traefik.http.routers.ambulatorio.rule=Host(`ambulatorio.makprojetosmake.com.br`)"
+        - "traefik.http.routers.ambulatorio.priority=10"
+        - "traefik.http.routers.ambulatorio.entrypoints=websecure"
+        - "traefik.http.routers.ambulatorio.tls.certresolver=letsencryptresolver"
+        - "traefik.http.routers.ambulatorio.service=ambulatorio"
+        - "traefik.http.services.ambulatorio.loadbalancer.server.port=3000"
+        - "traefik.http.services.ambulatorio.loadbalancer.passHostHeader=1"
+
+networks:
+  Banzainet:
+    external: true
