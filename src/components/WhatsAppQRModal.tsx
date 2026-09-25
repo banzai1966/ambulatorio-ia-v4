@@ -72,7 +72,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
   // Verificar status inicial ao abrir
   useEffect(() => {
     if (isOpen) {
-      checkConnectionStatus();
+      checkConnectionStatus(false, true);
     } else {
       stopPolling();
     }
@@ -93,7 +93,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
     }, 3000);
   };
 
-  const checkConnectionStatus = async (isSilent = false) => {
+  const checkConnectionStatus = async (isSilent = false, autoGenerateIfDisconnected = false) => {
     if (!isSilent) setIsLoadingQr(true);
     try {
       const res = await fetch(`/api/whatsapp/status${getQueryParams()}`);
@@ -106,10 +106,9 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
         stopPolling();
         if (!isSilent) toast.success(`WhatsApp (${data.instance || evolutionConfig?.instance || 'instância'}) conectado e ativo!`);
       } else {
-        if (status === 'connected') {
-          setStatus('disconnected');
-        } else if (status !== 'connecting') {
-          setStatus('disconnected');
+        setStatus('disconnected');
+        if (autoGenerateIfDisconnected) {
+          generateQrCode();
         }
       }
     } catch (err) {
@@ -274,7 +273,7 @@ export default function WhatsAppQRModal({ isOpen, onClose, evolutionConfig }: Wh
                   }`}>
                     {status === 'connected' && '🟢 Conectado & Operacional'}
                     {status === 'connecting' && '🟡 Aguardando Leitura do QR Code...'}
-                    {status === 'disconnected' && '🔴 Desconectado'}
+                    {status === 'disconnected' && '🟡 Desconectado (Pronto para Pareamento)'}
                     {status === 'checking' && 'Verificando conexão...'}
                   </span>
                 </div>

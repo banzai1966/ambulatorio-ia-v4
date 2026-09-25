@@ -53,7 +53,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     whatsapp_message_template: 'Olá {paciente}, segue o seu receituário médico / pedido emitido pelo Dr. Carlos Morato em sua consulta.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'drcarlos',
-    evolution_apikey: 'b2efa885a71ee2edf72b597df1a0ce9'
+    evolution_apikey: 'E54C7FA2A036-4959-A843-5C258EA783BA'
   },
   marco_admin: {
     id: 'marco_admin',
@@ -70,7 +70,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     whatsapp_message_template: 'Olá {paciente}, segue seu documento clínico emitido pelo Ambulatório IA.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'ambulatorio',
-    evolution_apikey: 'b2efa885a71ee2edf72b597df1a0ce9'
+    evolution_apikey: 'BFA493146682-4CA6-B8CB-40E2D785AA23'
   }
 };
 

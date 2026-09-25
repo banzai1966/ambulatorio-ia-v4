@@ -52,9 +52,9 @@ let EVOLUTION_API_KEY = (process.env.EVOLUTION_API_KEY ||
                           "BFA493146682-4CA6-B8CB-40E2D785AA23").trim();
 
 const KNOWN_INSTANCE_TOKENS: Record<string, string> = {
-  ambulatorio: "b2efa885a71ee2edf72b597df1a0ce9",
+  ambulatorio: "BFA493146682-4CA6-B8CB-40E2D785AA23",
   luci: "b2efa885a71ee2edf72b597df1a0ce9",
-  drcarlos: "b2efa885a71ee2edf72b597df1a0ce9"
+  drcarlos: "E54C7FA2A036-4959-A843-5C258EA783BA"
 };
 
 // Helper para obter configuração dinâmica da requisição ou fallback
@@ -63,8 +63,8 @@ function getEvolutionConfig(req?: express.Request) {
   const instance = (req?.body?.evolution_instance || req?.query?.evolution_instance || (req?.headers['x-evolution-instance'] as string) || EVOLUTION_INSTANCE_NAME).trim();
   let apikey = (req?.body?.evolution_apikey || req?.query?.evolution_apikey || (req?.headers['x-evolution-apikey'] as string) || "").trim();
   
-  if (!apikey || apikey.includes("40E2D785AA23") || apikey.includes("4CA6-B8CB") || apikey.includes("BFA493146682") || apikey === "E6247913DB92-48B4-8B54-5C7449EA639B" || apikey.includes("0452D343F39E") || apikey.length < 20) {
-    apikey = EVOLUTION_GLOBAL_KEY || EVOLUTION_API_KEY || "b2efa885a71ee2edf72b597df1a0ce9";
+  if (!apikey || apikey.length < 15) {
+    apikey = KNOWN_INSTANCE_TOKENS[instance] || EVOLUTION_GLOBAL_KEY || EVOLUTION_API_KEY || "b2efa885a71ee2edf72b597df1a0ce9";
   }
   return { url, instance, apikey };
 }
@@ -72,8 +72,10 @@ function getEvolutionConfig(req?: express.Request) {
 // Helper universal que tenta a requisição na Evolution e, caso receba 401, tenta a outra chave (global ou token da instância)
 async function requestEvolutionWithFallback(method: 'get' | 'post' | 'put' | 'delete', endpointUrl: string, data?: any, initialKey?: string) {
   const keysToTry = [
-    "b2efa885a71ee2edf72b597df1a0ce9",
     initialKey,
+    "E54C7FA2A036-4959-A843-5C258EA783BA",
+    "BFA493146682-4CA6-B8CB-40E2D785AA23",
+    "b2efa885a71ee2edf72b597df1a0ce9",
     EVOLUTION_GLOBAL_KEY,
     EVOLUTION_API_KEY
   ].filter(Boolean) as string[];
