@@ -90,11 +90,13 @@ export default function PreConsultationAnamneseModal({
   const [qtdAmalgamas, setQtdAmalgamas] = useState('1 a 2 dentes');
   const [desejaSmart, setDesejaSmart] = useState(true);
   const [temTratamentoCanal, setTemTratamentoCanal] = useState(false);
+  const [qtdCanais, setQtdCanais] = useState('1');
   const [dorIncomodoCanal, setDorIncomodoCanal] = useState(false);
   const [extraiuSisos, setExtraiuSisos] = useState(false);
   const [dorNevralgiaFace, setDorNevralgiaFace] = useState(false);
   const [temBruxismoApertamento, setTemBruxismoApertamento] = useState(false);
   const [dorAtmMatinal, setDorAtmMatinal] = useState(false);
+  const [temDorMandibulaCabeca, setTemDorMandibulaCabeca] = useState(false);
   const [temImplanteTitanio, setTemImplanteTitanio] = useState(false);
   const [interesseZirconia, setInteresseZirconia] = useState(false);
   const [alergiaMetaisBijuterias, setAlergiaMetaisBijuterias] = useState(false);

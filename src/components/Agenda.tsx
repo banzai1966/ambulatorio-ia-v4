@@ -36,7 +36,7 @@ import { supabase } from '../lib/supabase';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getAvailableSlots, getDoctorsBySpecialty } from '../services/schedulingService';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
-import { calculateAge, formatDateMask } from '../lib/utils';
+import { cn, calculateAge, formatDateMask } from '../lib/utils';
 import { getActiveClinicConfig, resolveDoctorKey } from '../constants/clinicProfiles';
 
 interface Appointment {
