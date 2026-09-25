@@ -3112,13 +3112,24 @@ app.post("/api/send-message", async (req, res) => {
 });
 
 const setupFrontend = async () => {
-  const isProd = fs.existsSync(path.join(process.cwd(), 'dist'));
+  const isProd = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'));
   if (isProd) {
     app.use(express.static(path.join(process.cwd(), 'dist')));
     app.get('*', (req, res) => res.sendFile(path.join(process.cwd(), 'dist', 'index.html')));
   } else {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
     app.use(vite.middlewares);
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   }
   
   // 1. LIGAR O SERVIDOR NO FINAL
