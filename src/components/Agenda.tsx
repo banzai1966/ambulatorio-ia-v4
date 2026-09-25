@@ -36,7 +36,7 @@ import { supabase } from '../lib/supabase';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getAvailableSlots, getDoctorsBySpecialty } from '../services/schedulingService';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
-import { cn, calculateAge, formatDateMask } from '../lib/utils';
+import { cn, calculateAge, formatDateMask, isValidUUID } from '../lib/utils';
 import { getActiveClinicConfig, resolveDoctorKey } from '../constants/clinicProfiles';
 
 interface Appointment {
@@ -69,6 +69,9 @@ interface Doctor {
   id: string;
   email?: string;
   full_name?: string;
+  role?: string;
+  especialidade?: string;
+  crm_cro?: string;
 }
 
 export default function Agenda({ onStartConsultation, onOpenChat, user, prefillPatient }: { 
@@ -392,8 +395,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     const digitsPhone = (app.paciente_telefone || '').replace(/\D/g, '');
     const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
     let baseUrl = window.location.origin;
-    if (baseUrl.includes('localhost') || baseUrl.includes('aistudio.google.com')) {
-      baseUrl = 'https://ais-dev-rb5uztjihjvkduwo7bhuyk-51327969358.us-east1.run.app';
+    if (baseUrl.includes('localhost') || baseUrl.includes('aistudio.google.com') || baseUrl.includes('googleusercontent.com')) {
+      baseUrl = 'https://ambulatorio.makprojetosmake.com.br';
     }
     const docName = app.medico_nome || 'Dr(a). da Clínica';
     
@@ -866,11 +869,22 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               patient_phone: data.paciente_telefone,
               appointment_date: data.data_consulta,
               appointment_time: data.hora_consulta,
-              doctor_id: data.medico_id,
+              doctor_id: isValidUUID(data.medico_id) ? data.medico_id : null,
               reason: data.motivo,
-              user_id: data.user_id
+              user_id: isValidUUID(data.user_id) ? data.user_id : null
             };
             return tryInsert(legacyData, 'appointments');
+          }
+
+          // Tratamento para coluna com tipo UUID incompatível
+          if (error.message.includes('invalid input syntax for type uuid') || error.message.includes('uuid')) {
+            console.log("Agenda: Ajustando campos UUID incompatíveis para null e tentando novamente...");
+            const sanitized = { ...data };
+            if (sanitized.medico_id && !isValidUUID(sanitized.medico_id)) sanitized.medico_id = null;
+            if (sanitized.doctor_id && !isValidUUID(sanitized.doctor_id)) sanitized.doctor_id = null;
+            if (sanitized.especialidade_id && !isValidUUID(sanitized.especialidade_id)) sanitized.especialidade_id = null;
+            if (sanitized.user_id && !isValidUUID(sanitized.user_id)) sanitized.user_id = null;
+            return tryInsert(sanitized, table);
           }
 
           const isMissingColumn = error.message.includes('column') || error.message.includes('coluna') || error.message.includes('Could not find');
@@ -889,10 +903,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       };
 
       const isDental = isDentalClinic;
-      const targetDoctorId = isDental ? 'dra_lucy' : 'dr_carlos';
-      const targetDoctorName = isDental ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato';
-      const targetSpecialtyName = isDental ? 'Odontologia Biológica & Implantes Zircônia' : 'Neurologia & Medicina Integrativa';
+      const matchedDoctor = branchDoctors.find(d => d.id === newAppointment.medico_id || d.full_name === newAppointment.medico_id);
+      const targetDoctorId = matchedDoctor?.id || newAppointment.medico_id || (isDental ? 'dra_lucy' : 'dr_carlos');
+      const targetDoctorName = matchedDoctor?.full_name || (isDental ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato');
+      const targetSpecialtyName = matchedDoctor?.especialidade || (isDental ? 'Odontologia Biológica & Implantes Zircônia' : 'Neurologia & Medicina Integrativa');
       
+      // Valida se o targetDoctorId é um UUID válido para o banco
+      const safeDoctorUuid = isValidUUID(targetDoctorId) 
+        ? targetDoctorId 
+        : (isValidUUID(user?.id) ? user.id : null);
+
       // Formata telefone para incluir 55 se omitido
       let formattedPhone = (newAppointment.paciente_telefone || '').replace(/\D/g, '');
       if ((formattedPhone.length === 10 || formattedPhone.length === 11) && !formattedPhone.startsWith('55')) {
@@ -900,7 +920,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       }
 
       const initialData = {
-        user_id: user?.id,
+        user_id: isValidUUID(user?.id) ? user?.id : null,
         paciente_nome: newAppointment.paciente_nome,
         paciente_telefone: formattedPhone || newAppointment.paciente_telefone,
         paciente_cpf: newAppointment.paciente_cpf,
@@ -917,7 +937,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         hora_consulta: formattedTime,
         data_hora: isoDateTime, 
         data_hora_inicio: isoDateTime,
-        medico_id: targetDoctorId,
+        medico_id: safeDoctorUuid,
         medico_nome: targetDoctorName,
         especialidade_id: null,
         especialidade_nome: targetSpecialtyName,
@@ -1068,6 +1088,32 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     });
     setShowModal(true);
   };
+
+  const branchDoctors = useMemo(() => {
+    if (isDentalClinic) {
+      const list = doctors.filter(d => {
+        const name = (d.full_name || '').toLowerCase();
+        const spec = (d.especialidade || '').toLowerCase();
+        return spec.includes('odonto') || name.includes('lucy') || name.includes('murata');
+      });
+      const hasLucy = list.some(d => (d.full_name || '').toLowerCase().includes('lucy') || d.id === 'dra_lucy');
+      if (!hasLucy) {
+        return [{ id: 'dra_lucy', full_name: 'Dra. Lucy Murata', crm_cro: 'CRO-SP 69246', especialidade: 'Odontologia Biológica' }, ...list];
+      }
+      return list;
+    } else {
+      const list = doctors.filter(d => {
+        const name = (d.full_name || '').toLowerCase();
+        const spec = (d.especialidade || '').toLowerCase();
+        return !spec.includes('odonto') && !name.includes('lucy') && !name.includes('murata') && (d.role === 'doctor' || d.role === 'admin');
+      });
+      const hasCarlos = list.some(d => (d.full_name || '').toLowerCase().includes('carlos') || d.id === 'dr_carlos');
+      if (!hasCarlos) {
+        return [{ id: 'dr_carlos', full_name: 'Dr. Carlos Morato', crm_cro: 'CRM/SP 145.892', especialidade: 'Neurologia & Medicina Integrativa' }, ...list];
+      }
+      return list;
+    }
+  }, [doctors, isDentalClinic]);
 
   const displayedAppointments = useMemo(() => {
     return appointments.filter(app => {
@@ -1632,7 +1678,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
               </div>
 
-              {/* Seção 3: Especialista Responsável (100% Blindado e Isolado) */}
+              {/* Seção 3: Especialista Responsável (Dinâmico para Toda a Equipe) */}
               <div className={cn(
                 "p-3.5 rounded-2xl border space-y-2",
                 isDentalClinic ? "bg-emerald-50/70 border-emerald-200/80" : "bg-blue-50/70 border-blue-200/80"
@@ -1644,30 +1690,50 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   <User size={14} className={isDentalClinic ? "text-emerald-600" : "text-blue-600"} />
                   {isDentalClinic ? "Especialista Odontológica Responsável" : "Médico Responsável"}
                 </label>
-                <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className={cn(
-                      "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs",
-                      isDentalClinic ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
-                    )}>
-                      {isDentalClinic ? "🌿" : "🧠"}
-                    </div>
-                    <div>
-                      <div className="text-xs font-black text-slate-900">
-                        {isDentalClinic ? "Dra. Lucy Murata" : "Dr. Carlos Morato"}
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-500">
-                        {isDentalClinic ? "CRO-SP 69246 • Odontologia Biológica & Implantes Zircônia" : "CRM/SP 145.892 • Neurologia & Medicina Integrativa"}
-                      </div>
-                    </div>
+                
+                {branchDoctors.length > 1 ? (
+                  <div className="space-y-1.5">
+                    <select
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-bold text-slate-800 shadow-2xs"
+                      value={newAppointment.medico_id}
+                      onChange={e => setNewAppointment({ ...newAppointment, medico_id: e.target.value })}
+                    >
+                      {branchDoctors.map(doc => (
+                        <option key={doc.id} value={doc.id}>
+                          {doc.full_name} {doc.crm_cro ? `(${doc.crm_cro})` : ''} {doc.especialidade ? `• ${doc.especialidade}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500 font-medium px-1">
+                      Selecione o profissional da equipe para este agendamento.
+                    </p>
                   </div>
-                  <span className={cn(
-                    "px-2 py-0.5 rounded-md text-[10px] font-black uppercase",
-                    isDentalClinic ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
-                  )}>
-                    {isDentalClinic ? "Atendimento Odonto" : "Atendimento Neuro"}
-                  </span>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                    <div className="flex items-center gap-2.5">
+                      <div className={cn(
+                        "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs",
+                        isDentalClinic ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
+                      )}>
+                        {isDentalClinic ? "🌿" : "🧠"}
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-slate-900">
+                          {isDentalClinic ? "Dra. Lucy Murata" : "Dr. Carlos Morato"}
+                        </div>
+                        <div className="text-[11px] font-semibold text-slate-500">
+                          {isDentalClinic ? "CRO-SP 69246 • Odontologia Biológica & Implantes Zircônia" : "CRM/SP 145.892 • Neurologia & Medicina Integrativa"}
+                        </div>
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-md text-[10px] font-black uppercase",
+                      isDentalClinic ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+                    )}>
+                      {isDentalClinic ? "Atendimento Odonto" : "Atendimento Neuro"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Seção 4: Data da Consulta */}
