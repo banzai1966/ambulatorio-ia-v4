@@ -37,7 +37,7 @@ import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getAvailableSlots, getDoctorsBySpecialty } from '../services/schedulingService';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
 import { calculateAge, formatDateMask } from '../lib/utils';
-import { getActiveClinicConfig } from '../constants/clinicProfiles';
+import { getActiveClinicConfig, resolveDoctorKey } from '../constants/clinicProfiles';
 
 interface Appointment {
   id: string;
