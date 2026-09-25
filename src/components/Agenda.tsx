@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 // Forçando reprocessamento do arquivo pelo Vite
 import { 
@@ -89,6 +89,47 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   user: any, 
   prefillPatient?: {name: string, phone: string} | null 
 }) {
+  const userDoctorKey = resolveDoctorKey(user);
+  const isMasterAdmin = userDoctorKey === 'marco_admin';
+
+  const [selectedClinicTab, setSelectedClinicTab] = useState<'dra_lucy' | 'dr_carlos'>(() => {
+    if (userDoctorKey === 'dra_lucy') return 'dra_lucy';
+    if (userDoctorKey === 'dr_carlos') return 'dr_carlos';
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('clinic_active_doctor_id');
+      if (saved === 'dra_lucy' || saved === 'dr_carlos') return saved;
+    }
+    return 'dra_lucy';
+  });
+
+  const isDentalClinic = selectedClinicTab === 'dra_lucy';
+
+  const isAppointmentLucy = (app: Appointment) => {
+    const doc = (app.medico_nome || '').toLowerCase();
+    const spec = (app.medico_especialidade || '').toLowerCase();
+    const tipo = (app.tipo_consulta || '').toLowerCase();
+    const motivo = (app.motivo || '').toLowerCase();
+    const id = (app.medico_id || '').toLowerCase();
+    return (
+      doc.includes('lucy') ||
+      doc.includes('luci') ||
+      doc.includes('murata') ||
+      doc.includes('morata') ||
+      id === 'dra_lucy' ||
+      spec.includes('odonto') ||
+      spec.includes('biolog') ||
+      spec.includes('dent') ||
+      tipo.includes('odonto') ||
+      tipo.includes('amálgama') ||
+      tipo.includes('smart') ||
+      tipo.includes('zircônia') ||
+      tipo.includes('cavitação') ||
+      tipo.includes('nico') ||
+      motivo.includes('odonto') ||
+      motivo.includes('dente')
+    );
+  };
+
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [specialties, setSpecialties] = useState<{id: string, nome: string}[]>([]);
@@ -847,8 +888,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         return { error: null };
       };
 
-      const selectedSpecialtyObj = specialties.find(s => s.id === newAppointment.especialidade_id);
-      const selectedDoctor = doctors.find(d => d.id === (newAppointment.medico_id || user?.id));
+      const isDental = isDentalClinic;
+      const targetDoctorId = isDental ? 'dra_lucy' : 'dr_carlos';
+      const targetDoctorName = isDental ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato';
+      const targetSpecialtyName = isDental ? 'Odontologia Biológica & Implantes Zircônia' : 'Neurologia & Medicina Integrativa';
       
       // Formata telefone para incluir 55 se omitido
       let formattedPhone = (newAppointment.paciente_telefone || '').replace(/\D/g, '');
@@ -874,15 +917,15 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         hora_consulta: formattedTime,
         data_hora: isoDateTime, 
         data_hora_inicio: isoDateTime,
-        medico_id: newAppointment.medico_id || user?.id,
-        medico_nome: selectedDoctor?.full_name || user?.full_name || 'Médico',
-        especialidade_id: (newAppointment.especialidade_id && newAppointment.especialidade_id.length > 20) ? newAppointment.especialidade_id : null,
-        especialidade_nome: selectedSpecialtyObj?.nome || 'Clínico Geral',
+        medico_id: targetDoctorId,
+        medico_nome: targetDoctorName,
+        especialidade_id: null,
+        especialidade_nome: targetSpecialtyName,
         motivo: newAppointment.motivo,
-        convenio: newAppointment.convenio,
+        convenio: newAppointment.convenio || 'Particular',
         valor_consulta: newAppointment.valor_consulta,
-        status_pagamento: newAppointment.status_pagamento,
-        tipo_consulta: newAppointment.tipo_consulta,
+        status_pagamento: newAppointment.status_pagamento || 'Pendente no Balcão',
+        tipo_consulta: newAppointment.tipo_consulta || (isDental ? 'Avaliação Odontológica Biológica & Laudo' : 'Primeira Consulta Neurológica'),
         status: 'Agendado'
       };
 
@@ -904,7 +947,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           id: String(Date.now()),
           paciente_nome: newAppointment.paciente_nome,
           paciente_telefone: newAppointment.paciente_telefone,
-          medico_nome: selectedDoctor?.full_name || user?.full_name || 'Dr(a). da Clínica',
+          medico_nome: targetDoctorName,
           data_hora_inicio: isoDateTime,
           data_consulta: date,
           hora_consulta: formattedTime,
@@ -926,21 +969,18 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           );
 
           if (!alreadyExists) {
-            const isLucy = (selectedSpecialtyObj?.nome || '').toLowerCase().includes('odonto') || (selectedDoctor?.full_name || '').toLowerCase().includes('lucy');
-            const isCarlos = (selectedSpecialtyObj?.nome || '').toLowerCase().includes('neuro') || (selectedDoctor?.full_name || '').toLowerCase().includes('carlos');
-
             const newCrmCard = {
               id: `crm_ag_${Date.now()}`,
               paciente_nome: newAppointment.paciente_nome,
               paciente_telefone: newAppointment.paciente_telefone || '',
               paciente_cpf: newAppointment.paciente_cpf || '',
               stage: 'avaliacao_agendada',
-              doctorKey: isLucy ? 'dra_lucy' : (isCarlos ? 'dr_carlos' : 'geral'),
-              procedimento_interesse: newAppointment.motivo || 'Consulta / Procedimento Agendado',
+              doctorKey: isDental ? 'dra_lucy' : 'dr_carlos',
+              procedimento_interesse: newAppointment.motivo || (isDental ? 'Avaliação Odontológica Biológica' : 'Consulta Neurológica'),
               valor_estimado: newAppointment.valor_consulta ? Number(newAppointment.valor_consulta) : 0,
               status_anamnese: 'preenchida',
               tags: ['Criado na Agenda', newAppointment.convenio || 'Particular'],
-              notas: `Agendado para ${date ? date.split('-').reverse().join('/') : ''} às ${formattedTime ? formattedTime.slice(0, 5) : ''}. Profissional: ${selectedDoctor?.full_name || 'Médico'}.`,
+              notas: `Agendado para ${date ? date.split('-').reverse().join('/') : ''} às ${formattedTime ? formattedTime.slice(0, 5) : ''}. Profissional: ${targetDoctorName}.`,
               origem: 'whatsapp',
               data_contato: new Date().toISOString()
             };
@@ -1004,60 +1044,144 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
   };
 
   const openModal = () => {
-    let targetMedico = newAppointment.medico_id;
-    if (selectedMedicoId) {
-      targetMedico = selectedMedicoId;
-    } else if (!targetMedico && doctors.length > 0) {
-      targetMedico = doctors[0].id;
-    }
-    if (targetMedico !== newAppointment.medico_id) {
-      setNewAppointment(prev => ({ ...prev, medico_id: targetMedico }));
-    }
+    const isDental = isDentalClinic;
+    setNewAppointment({
+      paciente_nome: '',
+      paciente_telefone: '',
+      paciente_cpf: '',
+      data_nascimento: '',
+      cep: '',
+      logradouro: '',
+      numero: '',
+      complemento: '',
+      bairro: '',
+      cidade: '',
+      estado: '',
+      data_hora_inicio: new Date().toISOString().split('T')[0] + 'T09:00',
+      motivo: '',
+      medico_id: isDental ? 'dra_lucy' : 'dr_carlos',
+      especialidade_id: isDental ? 'odontologia_biologica' : 'neurologia',
+      convenio: 'Particular',
+      valor_consulta: '',
+      status_pagamento: 'Pendente no Balcão',
+      tipo_consulta: isDental ? 'Avaliação Odontológica Biológica & Laudo' : 'Primeira Consulta Neurológica'
+    });
     setShowModal(true);
   };
+
+  const displayedAppointments = useMemo(() => {
+    return appointments.filter(app => {
+      if (isDentalClinic) {
+        return isAppointmentLucy(app);
+      } else {
+        return !isAppointmentLucy(app);
+      }
+    });
+  }, [appointments, isDentalClinic]);
 
   return (
     <div className="p-4 md:p-8 bg-slate-50 min-h-screen">
       <div className="max-w-5xl mx-auto">
+
+        {/* SELETOR DE AMBULATÓRIO PARA O GESTOR MESTRE MARCO */}
+        {isMasterAdmin && (
+          <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-200/90 backdrop-blur-sm rounded-2xl border border-slate-300/80 mb-6 max-w-fit shadow-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedClinicTab('dra_lucy');
+                localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+              }}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer",
+                selectedClinicTab === 'dra_lucy'
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-1 ring-emerald-500"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              )}
+            >
+              <span>🌿 Consultório Dra. Lucy (Odonto Biológica)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedClinicTab('dr_carlos');
+                localStorage.setItem('clinic_active_doctor_id', 'dr_carlos');
+              }}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs transition-all cursor-pointer",
+                selectedClinicTab === 'dr_carlos'
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-500"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              )}
+            >
+              <span>🧠 Clínica Dr. Carlos (Neuro & Integrativa)</span>
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-8 gap-4">
           <div>
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Agenda de Consultas</h2>
-            <p className="text-slate-500 mt-1">Gerencie os atendimentos do dia.</p>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider",
+                isDentalClinic 
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-200" 
+                  : "bg-blue-100 text-blue-800 border border-blue-200"
+              )}>
+                {isDentalClinic ? "🌿 Odontologia Biológica" : "🧠 Neurologia & Integrativa"}
+              </span>
+            </div>
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">
+              {isDentalClinic ? "Agenda de Atendimentos Odontológicos" : "Agenda de Consultas Neurológicas & Integrativas"}
+            </h2>
+            <p className="text-slate-500 mt-0.5 text-xs font-medium">
+              {isDentalClinic 
+                ? "Dra. Lucy Murata • CRO-SP 69246 • Gestão de consultas e procedimentos biológicos" 
+                : "Dr. Carlos Morato • CRM/SP 145.892 • Gestão de consultas neurológicas e integrativas"}
+            </p>
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
             <button 
               onClick={() => fetchAppointments(true)}
-              className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs"
+              className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs cursor-pointer"
               title="Atualizar Agenda"
             >
               <RefreshCw size={18} />
             </button>
             <button 
               onClick={openModal}
-              className="bg-clinical-blue text-white px-5 py-3.5 rounded-2xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 font-bold text-xs"
+              className={cn(
+                "text-white px-5 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-md font-bold text-xs cursor-pointer",
+                isDentalClinic
+                  ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
+                  : "bg-clinical-blue hover:bg-blue-700 shadow-blue-500/20"
+              )}
             >
-              <Plus size={18} /> Novo Agendamento
+              <Plus size={18} /> {isDentalClinic ? "Novo Agendamento Odonto" : "Novo Agendamento Clínico"}
             </button>
           </div>
         </div>
         
-        {/* ... resto do componente ... */}
-
+        {/* LISTAGEM DE AGENDAMENTOS */}
         <div className="grid gap-4">
           {isLoading ? (
             <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4">
-              <Loader2 size={48} className="text-clinical-blue animate-spin" />
-              <p className="text-slate-500 font-medium">Carregando agendamentos...</p>
+              <Loader2 size={48} className={isDentalClinic ? "text-emerald-600 animate-spin" : "text-clinical-blue animate-spin"} />
+              <p className="text-slate-500 font-medium text-xs">Carregando agendamentos...</p>
             </div>
-          ) : appointments.length === 0 ? (
+          ) : displayedAppointments.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
               <Calendar size={48} className="mx-auto text-slate-300 mb-4" />
-              <h3 className="text-lg font-bold text-slate-700">Nenhum agendamento para hoje</h3>
-              <p className="text-slate-500">Clique em "Novo Agendamento" para começar.</p>
+              <h3 className="text-lg font-bold text-slate-700">
+                {isDentalClinic ? "Nenhum agendamento odontológico para hoje" : "Nenhum agendamento clínico para hoje"}
+              </h3>
+              <p className="text-slate-500 text-xs mt-1">
+                Clique em "{isDentalClinic ? "Novo Agendamento Odonto" : "Novo Agendamento Clínico"}" para agendar.
+              </p>
             </div>
           ) : (
-            appointments.map((app) => {
+            displayedAppointments.map((app) => {
               const isMenuOpen = activeActionMenuId === app.id;
               const isPaid = (app.status_pagamento || '').startsWith('Pago');
               const isFree = app.status_pagamento === 'Cortesia / Isento';
@@ -1322,26 +1446,40 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
       {showModal && (
         <div 
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto"
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in"
           onClick={() => setShowModal(false)}
         >
           <div 
             className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-lg shadow-2xl border border-slate-100 my-auto max-h-[90vh] overflow-y-auto flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* CABEÇALHO DO MODAL */}
             <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-100 sticky top-0 bg-white z-10">
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Novo Agendamento</h3>
-                <p className="text-xs text-slate-500">Preencha os dados da consulta e do paciente</p>
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-10 h-10 rounded-2xl flex items-center justify-center text-lg shadow-xs",
+                  isDentalClinic ? "bg-emerald-100 text-emerald-800 border border-emerald-200" : "bg-blue-100 text-blue-800 border border-blue-200"
+                )}>
+                  {isDentalClinic ? "🌿" : "🧠"}
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                    {isDentalClinic ? "Novo Agendamento Odontológico" : "Novo Agendamento Clínico"}
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {isDentalClinic ? "Consultório Dra. Lucy Murata • CRO-SP 69246" : "Clínica Dr. Carlos Morato • CRM/SP 145.892"}
+                  </p>
+                </div>
               </div>
               <button 
                 onClick={() => setShowModal(false)} 
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all"
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-all cursor-pointer"
                 title="Fechar (Esc)"
               >
                 <X size={20} />
               </button>
             </div>
+
             <div className="space-y-4">
               {/* Seção 1: Dados do Paciente */}
               <div className="space-y-3">
@@ -1441,7 +1579,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     type="button"
                     onClick={() => handleCepSearch()}
                     disabled={isSearchingCep}
-                    className="px-3 py-2 bg-clinical-blue hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs"
+                    className="px-3 py-2 bg-clinical-blue hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs cursor-pointer"
                   >
                     <Search size={12} /> Buscar
                   </button>
@@ -1494,128 +1632,105 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
               </div>
 
-              {/* Seção 3: Especialidade e Médico Responsável */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
-                <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                  <User size={14} className="text-clinical-blue" />
-                  Especialidade & Profissional Responsável *
+              {/* Seção 3: Especialista Responsável (100% Blindado e Isolado) */}
+              <div className={cn(
+                "p-3.5 rounded-2xl border space-y-2",
+                isDentalClinic ? "bg-emerald-50/70 border-emerald-200/80" : "bg-blue-50/70 border-blue-200/80"
+              )}>
+                <label className={cn(
+                  "text-xs font-black flex items-center gap-1.5",
+                  isDentalClinic ? "text-emerald-900" : "text-blue-900"
+                )}>
+                  <User size={14} className={isDentalClinic ? "text-emerald-600" : "text-blue-600"} />
+                  {isDentalClinic ? "Especialista Odontológica Responsável" : "Médico Responsável"}
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <select 
-                    className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-semibold"
-                    value={newAppointment.especialidade_id}
-                    onChange={e => {
-                      const selectedVal = e.target.value;
-                      const nextMedicoId = user?.role === 'doctor' ? user.id : '';
-                      const isDentalSelected = selectedVal === 'odontologia_biologica' || selectedVal.toLowerCase().includes('odonto');
-                      setNewAppointment({
-                        ...newAppointment, 
-                        especialidade_id: selectedVal, 
-                        medico_id: nextMedicoId,
-                        convenio: isDentalSelected ? 'Particular' : (newAppointment.convenio || 'Particular'),
-                        tipo_consulta: isDentalSelected ? 'Avaliação Odontológica Biológica & Laudo' : 'Primeira Consulta'
-                      });
-                      fetchDoctors(selectedVal);
-                    }}
-                  >
-                    <option value="">Selecione a Especialidade</option>
-                    {specialties.length > 0 ? (
-                      specialties.map(s => (
-                        <option key={s.id} value={s.id}>{s.nome}</option>
-                      ))
-                    ) : (
-                      <>
-                        <option value="odontologia_biologica">Odontologia Biológica & Implantes Zircônia (Dra. Lucy)</option>
-                        <option value="integrativa">Medicina Integrativa (Dr. Carlos Morato)</option>
-                        <option value="neurologia">Neurologia Especializada (Dr. Carlos Morato)</option>
-                        <option value="clinica_geral">Clínica Geral & Rotina</option>
-                      </>
-                    )}
-                  </select>
-
-                  {user?.role === 'doctor' ? (
-                    <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-100 text-clinical-blue text-xs font-bold flex items-center">
-                      Profissional: {user.full_name || user.email}
+                <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className={cn(
+                      "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs",
+                      isDentalClinic ? "bg-emerald-600 text-white" : "bg-blue-600 text-white"
+                    )}>
+                      {isDentalClinic ? "🌿" : "🧠"}
                     </div>
-                  ) : (
-                    <select 
-                      className="w-full p-2.5 bg-white rounded-xl border border-slate-200 focus:border-clinical-blue outline-none text-xs font-semibold"
-                      value={newAppointment.medico_id}
-                      onChange={e => setNewAppointment({...newAppointment, medico_id: e.target.value})}
-                    >
-                      <option value="">Selecione o Profissional *</option>
-                      {doctors.map(doc => <option key={doc.id} value={doc.id}>{doc.full_name || doc.email}</option>)}
-                    </select>
-                  )}
+                    <div>
+                      <div className="text-xs font-black text-slate-900">
+                        {isDentalClinic ? "Dra. Lucy Murata" : "Dr. Carlos Morato"}
+                      </div>
+                      <div className="text-[11px] font-semibold text-slate-500">
+                        {isDentalClinic ? "CRO-SP 69246 • Odontologia Biológica & Implantes Zircônia" : "CRM/SP 145.892 • Neurologia & Medicina Integrativa"}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-md text-[10px] font-black uppercase",
+                    isDentalClinic ? "bg-emerald-100 text-emerald-800" : "bg-blue-100 text-blue-800"
+                  )}>
+                    {isDentalClinic ? "Atendimento Odonto" : "Atendimento Neuro"}
+                  </span>
                 </div>
               </div>
 
+              {/* Seção 4: Data da Consulta */}
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">Data da Consulta</label>
+                <label className="text-xs font-bold text-slate-700">Data da Consulta</label>
                 <input 
                   type="date"
-                  className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all"
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs font-semibold"
                   value={newAppointment.data_hora_inicio.split('T')[0]}
                   onChange={e => {
                     const date = e.target.value;
-                    const time = newAppointment.data_hora_inicio.split('T')[1] || '08:00';
+                    const time = newAppointment.data_hora_inicio.split('T')[1] || '09:00';
                     setNewAppointment({...newAppointment, data_hora_inicio: `${date}T${time}`});
                   }}
                 />
               </div>
               
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Clock size={16} className="text-clinical-blue" />
-                  Horário da Consulta
+              {/* Seção 5: Horário da Consulta */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-2.5">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Clock size={14} className="text-clinical-blue" />
+                  Horário de Início
                 </label>
                 
-                {!newAppointment.medico_id || !newAppointment.data_hora_inicio.split('T')[0] ? (
-                  <div className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 text-xs text-center italic">
-                    Selecione um profissional e uma data para ver os horários.
-                  </div>
-                ) : isLoadingSlots ? (
-                  <div className="p-3 bg-white border border-slate-100 rounded-xl text-slate-400 text-xs text-center flex items-center justify-center gap-2">
-                    <Loader2 size={14} className="animate-spin text-clinical-blue" /> Carregando horários...
-                  </div>
-                ) : availableSlots.length > 0 ? (
+                {availableSlots.length > 0 ? (
                   <div className="grid grid-cols-4 gap-2">
                     {availableSlots.map(slot => (
                       <button
                         key={slot}
                         type="button"
                         onClick={() => setNewAppointment({...newAppointment, data_hora_inicio: newAppointment.data_hora_inicio.split('T')[0] + 'T' + slot})}
-                        className={`p-2 rounded-lg text-xs border transition-all ${newAppointment.data_hora_inicio.includes(slot) ? 'bg-clinical-blue text-white border-clinical-blue shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-clinical-blue hover:bg-blue-50'}`}
+                        className={cn(
+                          "p-2 rounded-lg text-xs font-bold border transition-all cursor-pointer",
+                          newAppointment.data_hora_inicio.includes(slot) 
+                            ? (isDentalClinic ? "bg-emerald-600 text-white border-emerald-600 shadow-xs" : "bg-clinical-blue text-white border-clinical-blue shadow-xs")
+                            : "bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:bg-blue-50"
+                        )}
                       >
                         {slot}
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-xs flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <Clock size={14} />
-                      Nenhum horário pré-definido. Digite o horário:
-                    </div>
-                    <input 
-                      type="time"
-                      className="w-full p-2 bg-white border border-amber-200 rounded-lg outline-none"
-                      value={newAppointment.data_hora_inicio.split('T')[1] || '08:00'}
-                      onChange={e => setNewAppointment({...newAppointment, data_hora_inicio: newAppointment.data_hora_inicio.split('T')[0] + 'T' + e.target.value})}
-                    />
-                  </div>
+                  <input 
+                    type="time"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-700"
+                    value={newAppointment.data_hora_inicio.split('T')[1] || '09:00'}
+                    onChange={e => setNewAppointment({...newAppointment, data_hora_inicio: newAppointment.data_hora_inicio.split('T')[0] + 'T' + e.target.value})}
+                  />
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {/* Seção 6: Convênio e Procedimento */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Convênio / Modalidade</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">Modalidade / Convênio</label>
                   <select 
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none font-semibold"
                     value={newAppointment.convenio}
                     onChange={e => setNewAppointment({...newAppointment, convenio: e.target.value})}
                   >
                     <option value="Particular">Particular (Direto)</option>
-                    <option value="Particular (Reembolso)">Particular (Com Recibo para Reembolso)</option>
+                    <option value="Particular (Reembolso)">Particular (Recibo p/ Reembolso)</option>
                     <option value="SulAmérica Saúde">SulAmérica Saúde</option>
                     <option value="Bradesco Saúde">Bradesco Saúde</option>
                     <option value="Unimed">Unimed</option>
@@ -1627,41 +1742,46 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Tipo de Procedimento / Consulta</label>
+                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                    {isDentalClinic ? "Procedimento Odontológico" : "Procedimento Clínico"}
+                  </label>
                   <select 
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none font-semibold"
                     value={newAppointment.tipo_consulta}
                     onChange={e => setNewAppointment({...newAppointment, tipo_consulta: e.target.value})}
                   >
-                    {newAppointment.especialidade_id === 'odontologia_biologica' || newAppointment.especialidade_id.toLowerCase().includes('odonto') ? (
+                    {isDentalClinic ? (
                       <>
                         <option value="Avaliação Odontológica Biológica & Laudo">Avaliação Odontológica Biológica & Laudo</option>
-                        <option value="Remoção Segura de Amálgama (SMART)">Remoção Segura de Amálgama (SMART)</option>
-                        <option value="Implante Cerâmico de Zircônia">Implante Cerâmico de Zircônia</option>
-                        <option value="Cirurgia de Cavitação NICO / Foco Ósseo">Cirurgia de Cavitação NICO / Foco Ósseo</option>
+                        <option value="Remoção Segura de Amálgama (Protocolo SMART)">Remoção Segura de Amálgama (SMART)</option>
+                        <option value="Implante Cerâmico de Zircônia Metal-Free">Implante Cerâmico de Zircônia Metal-Free</option>
+                        <option value="Cirurgia de Cavitação NICO / Foco Ósseo (FDOK)">Cirurgia de Cavitação NICO / Foco Ósseo</option>
                         <option value="Terapia Neural & Ozonioterapia Odontológica">Terapia Neural & Ozonioterapia Odontológica</option>
-                        <option value="Retorno Odontológico">Retorno Odontológico</option>
+                        <option value="Cirurgia / Enxerto PRF & Membranas">Cirurgia / Enxerto PRF & Membranas</option>
+                        <option value="Retorno Odontológico / Manutenção">Retorno Odontológico / Manutenção</option>
                       </>
                     ) : (
                       <>
-                        <option value="Primeira Consulta">Primeira Consulta</option>
-                        <option value="Retorno">Retorno</option>
-                        <option value="Avaliação Integrativa">Avaliação Integrativa</option>
-                        <option value="Consulta Neurológica Especializada">Consulta Neurológica Especializada</option>
-                        <option value="Emergência / Encaixe">Emergência / Encaixe</option>
+                        <option value="Primeira Consulta Neurológica">Primeira Consulta Neurológica</option>
+                        <option value="Consulta em Medicina Integrativa">Consulta em Medicina Integrativa</option>
+                        <option value="Avaliação Cognitiva & MEEM">Avaliação Cognitiva & MEEM</option>
+                        <option value="Mapeamento Neurológico & Dermátomos">Mapeamento Neurológico & Dermátomos</option>
+                        <option value="Retorno de Exames & Prescrição">Retorno de Exames & Prescrição</option>
+                        <option value="Encaixe / Avaliação Rápida">Encaixe / Avaliação Rápida</option>
                       </>
                     )}
                   </select>
                 </div>
               </div>
 
+              {/* Seção 7: Honorários e Status do Pagamento */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Valor / Honorários (R$)</label>
                   <input 
                     type="number"
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
-                    placeholder="Definido por procedimento"
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none font-semibold"
+                    placeholder="Ex: 450"
                     value={newAppointment.valor_consulta}
                     onChange={e => setNewAppointment({...newAppointment, valor_consulta: e.target.value})}
                   />
@@ -1671,7 +1791,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 <div>
                   <label className="text-xs font-bold text-slate-600 block mb-1">Status Pagamento</label>
                   <select 
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none"
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:border-clinical-blue outline-none font-semibold"
                     value={newAppointment.status_pagamento}
                     onChange={e => setNewAppointment({...newAppointment, status_pagamento: e.target.value})}
                   >
@@ -1683,18 +1803,28 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 </div>
               </div>
 
-              <textarea 
-                className="w-full p-4 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs"
-                placeholder="Motivo da consulta"
-                rows={3}
-                value={newAppointment.motivo}
-                onChange={e => setNewAppointment({...newAppointment, motivo: e.target.value})}
-              />
+              {/* Seção 8: Motivo / Queixa Principal */}
+              <div>
+                <label className="text-xs font-bold text-slate-600 block mb-1">Motivo / Queixa Principal do Paciente</label>
+                <textarea 
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:border-clinical-blue outline-none transition-all text-xs font-medium"
+                  placeholder={
+                    isDentalClinic 
+                      ? "Ex: Avaliação para remoção segura de 3 amálgamas, estalos e dor na ATM, indicação para implante cerâmico..." 
+                      : "Ex: Investigação de cefaleia recorrente, tremores, queixa de memória e avaliação integrativa..."
+                  }
+                  rows={2}
+                  value={newAppointment.motivo}
+                  onChange={e => setNewAppointment({...newAppointment, motivo: e.target.value})}
+                />
+              </div>
+
+              {/* BOTÕES DE AÇÃO */}
               <div className="flex items-center gap-3 pt-2">
                 <button 
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="w-1/3 bg-slate-100 text-slate-700 p-4 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm"
+                  className="w-1/3 bg-slate-100 text-slate-700 p-3.5 rounded-xl font-bold hover:bg-slate-200 transition-all text-xs cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -1702,9 +1832,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   type="button"
                   onClick={addAppointment}
                   disabled={isSaving}
-                  className="w-2/3 bg-clinical-blue text-white p-4 rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/20 disabled:opacity-50 text-sm flex items-center justify-center gap-2"
+                  className={cn(
+                    "w-2/3 text-white p-3.5 rounded-xl font-bold transition-all shadow-md disabled:opacity-50 text-xs flex items-center justify-center gap-2 cursor-pointer",
+                    isDentalClinic
+                      ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30"
+                      : "bg-clinical-blue hover:bg-blue-700 shadow-blue-500/20"
+                  )}
                 >
-                  {isSaving ? 'Salvando...' : 'Salvar Agendamento'}
+                  {isSaving 
+                    ? 'Salvando...' 
+                    : (isDentalClinic ? 'Salvar Agendamento Odonto' : 'Salvar Agendamento Clínico')}
                 </button>
               </div>
             </div>

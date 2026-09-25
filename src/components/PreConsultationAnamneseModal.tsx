@@ -721,34 +721,6 @@ export default function PreConsultationAnamneseModal({
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto">
-            {/* Seletor Interativo de Especialidade da Anamnese */}
-            <div className="flex items-center p-1 bg-white/10 rounded-2xl border border-white/20">
-              <button
-                type="button"
-                onClick={() => setIsDentalMode(true)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  isDentalMode 
-                    ? 'bg-emerald-500 text-white shadow-sm' 
-                    : 'text-slate-300 hover:text-white hover:bg-white/10'
-                }`}
-                title="Alternar para o questionário de Odontologia Biológica da Dra. Lucy"
-              >
-                🌿 Dra. Lucy (Odonto)
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsDentalMode(false)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  !isDentalMode 
-                    ? 'bg-blue-600 text-white shadow-sm' 
-                    : 'text-slate-300 hover:text-white hover:bg-white/10'
-                }`}
-                title="Alternar para o questionário clínico/neurológico do Dr. Carlos"
-              >
-                🧠 Dr. Carlos (Geral)
-              </button>
-            </div>
-
             <button 
               type="button"
               onClick={onClose}
