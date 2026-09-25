@@ -53,7 +53,7 @@ let EVOLUTION_API_KEY = (process.env.EVOLUTION_API_KEY ||
 
 const KNOWN_INSTANCE_TOKENS: Record<string, string> = {
   ambulatorio: "BFA493146682-4CA6-B8CB-40E2D785AA23",
-  luci: "b2efa885a71ee2edf72b597df1a0ce9",
+  luci: "807FE1A424A0-4474-B3DC-C6EE5ACBF060",
   drcarlos: "E54C7FA2A036-4959-A843-5C258EA783BA"
 };
 

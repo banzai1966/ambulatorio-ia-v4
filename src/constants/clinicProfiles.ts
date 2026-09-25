@@ -36,7 +36,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     whatsapp_message_template: 'Olá {paciente}, segue a sua receita / orientação odontológica emitida pela Dra. Lucy Murata.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'luci',
-    evolution_apikey: 'b2efa885a71ee2edf72b597df1a0ce9'
+    evolution_apikey: '807FE1A424A0-4474-B3DC-C6EE5ACBF060'
   },
   dr_carlos: {
     id: 'dr_carlos',
@@ -288,29 +288,8 @@ export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): C
     const savedSpecific = localStorage.getItem(`clinic_info_${key}`);
     if (savedSpecific) {
       const parsed = JSON.parse(savedSpecific);
-      let apikey = (parsed.evolution_apikey || baseDefault.evolution_apikey || '').trim();
+      const apikey = (parsed.evolution_apikey || baseDefault.evolution_apikey || '').trim();
       
-      // Se a chave no cache local for antiga ou diferente da chave mestra da Evolution
-      const isOutdatedOrTruncated = 
-        apikey.includes("40E2D785AA23") ||
-        apikey.includes("4CA6-B8CB") ||
-        apikey.includes("BFA493146682") ||
-        apikey.includes("E6247913DB92") ||
-        apikey.includes("0452D343F39E") ||
-        apikey.includes("4CA4-915D") ||
-        apikey.length < 20 ||
-        apikey !== "b2efa885a71ee2edf72b597df1a0ce9";
-
-      if (isOutdatedOrTruncated) {
-        apikey = "b2efa885a71ee2edf72b597df1a0ce9";
-        try {
-          localStorage.setItem(`clinic_info_${key}`, JSON.stringify({
-            ...parsed,
-            evolution_apikey: apikey
-          }));
-        } catch (_) {}
-      }
-
       return {
         ...baseDefault,
         ...parsed,
