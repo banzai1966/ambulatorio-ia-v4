@@ -1599,9 +1599,20 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
     if (origin.includes('aistudio.google.com') || origin.includes('localhost')) {
       origin = 'https://ais-dev-rb5uztjihjvkduwo7bhuyk-51327969358.us-east1.run.app';
     }
-    const anamneseLink = `${origin}/#anamnese?phone=${cleanPhone}&id=${appointmentId || '1'}`;
+    const docKey = (doctorName || '').toLowerCase().includes('lucy') || (doctorName || '').toLowerCase().includes('luci')
+      ? 'dra_lucy'
+      : ((doctorName || '').toLowerCase().includes('carlos') ? 'dr_carlos' : undefined);
 
-    const msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde e envie sua foto pelo link:\n${anamneseLink}`;
+    const anamneseLink = `${origin}/?anamnese=true&phone=${cleanPhone}&id=${appointmentId || '1'}&doc=${docKey || ''}`;
+
+    let msgText = '';
+    if (docKey === 'dra_lucy') {
+      msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento no *Consultório da Dra. Lucy Murata* (Odontologia Biológica & Saúde Integrativa):\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n📍 *Local:* Torre II - Praça Maastricht, 200 - Sl 103 - Bragança Paulista/SP\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🌿 *Pré-Anamnese Odontológica Digital:*\nPara que sua avaliação biológica seja personalizada e sem filas na recepção, preencha sua ficha rápida pelo link oficial:\n${anamneseLink}`;
+    } else if (docKey === 'dr_carlos') {
+      msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na *Clínica do Dr. Carlos Morato* (Neurologia & Medicina Integrativa):\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🧠 *Pré-Anamnese Clínica Digital:*\nPara agilizar seu atendimento e preparar seu prontuário, preencha seus dados de saúde pelo link oficial:\n${anamneseLink}`;
+    } else {
+      msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde pelo link oficial:\n${anamneseLink}`;
+    }
 
     const { url, instance, apikey } = getEvolutionConfig(req);
 

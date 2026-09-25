@@ -372,16 +372,26 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     if (!aptDate) aptDate = 'Data da consulta';
     if (!aptTime) aptTime = 'Horário agendado';
 
-    const anamneseLink = `${baseUrl}/#anamnese?phone=${digitsPhone}&id=${app.id || '1'}`;
-    const msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha de Pré-Cadastro Digital:*\nPara agilizar sua recepção e evitar filas na clínica, preencha seus dados rápidos pelo link:\n${anamneseLink}`;
-
-    let sent = false;
-
-    // 1. Tenta envio através do servidor backend com as credenciais salvas
     const docKey = docName.toLowerCase().includes('lucy') || docName.toLowerCase().includes('luci')
       ? 'dra_lucy'
       : (docName.toLowerCase().includes('carlos') ? 'dr_carlos' : undefined);
     const clinicConfig = getActiveClinicConfig(undefined, docKey);
+
+    // Link oficial sem '#' para garantir 100% de abertura no WhatsApp de qualquer celular
+    const anamneseLink = `${baseUrl}/?anamnese=true&phone=${digitsPhone}&id=${app.id || '1'}&doc=${docKey || ''}`;
+
+    let msgText = '';
+    if (docKey === 'dra_lucy') {
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento no *Consultório da Dra. Lucy Murata* (Odontologia Biológica & Saúde Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n📍 *Local:* Torre II - Praça Maastricht, 200 - Sl 103 - Bragança Paulista/SP\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🌿 *Pré-Anamnese Odontológica Digital:*\nPara que sua avaliação biológica seja personalizada e sem filas na recepção, preencha sua ficha rápida pelo link oficial abaixo:\n${anamneseLink}`;
+    } else if (docKey === 'dr_carlos') {
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na *Clínica do Dr. Carlos Morato* (Neurologia & Medicina Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🧠 *Pré-Anamnese Clínica Digital:*\nPara agilizar seu atendimento e preparar seu prontuário, preencha seus dados de saúde pelo link oficial abaixo:\n${anamneseLink}`;
+    } else {
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha de Pré-Cadastro Digital:*\nPara agilizar sua recepção e evitar filas na clínica, preencha seus dados rápidos pelo link:\n${anamneseLink}`;
+    }
+
+    let sent = false;
+
+    // 1. Tenta envio através do servidor backend com as credenciais salvas
 
     try {
       const res = await fetch('/api/whatsapp/send-confirmation', {
