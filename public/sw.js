@@ -46,13 +46,23 @@ self.addEventListener('activate', (event) => {
 
 // Estratégia de Fetch: Network-First com Fallback de Cache para o App Shell
 self.addEventListener('fetch', (event) => {
-  // Ignora requisições de API / Supabase do cache direto (tradas via localStorage/IndexedDB)
-  if (event.request.url.includes('/rest/v1/') || event.request.url.includes('/api/')) {
+  const url = event.request.url;
+
+  // Ignora chamadas de API, Supabase e arquivos internos de desenvolvimento/Vite
+  if (
+    url.includes('/rest/v1/') || 
+    url.includes('/api/') ||
+    url.includes('/@vite') ||
+    url.includes('/@react-refresh') ||
+    url.includes('/node_modules/') ||
+    url.includes('/src/') ||
+    url.includes('chrome-extension')
+  ) {
     return;
   }
 
   // Apenas métodos GET e esquemas http/https
-  if (event.request.method !== 'GET' || (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://'))) return;
+  if (event.request.method !== 'GET' || (!url.startsWith('http://') && !url.startsWith('https://'))) return;
 
   event.respondWith(
     fetch(event.request)
