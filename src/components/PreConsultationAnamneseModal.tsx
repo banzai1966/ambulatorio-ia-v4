@@ -22,6 +22,7 @@ interface PreConsultationAnamneseModalProps {
   patientComplementoPrefill?: string;
   isDental?: boolean;
   specialty?: string;
+  doctorName?: string;
   onAnamneseSubmitted?: (updatedData: any) => void;
 }
 
@@ -43,9 +44,23 @@ export default function PreConsultationAnamneseModal({
   patientComplementoPrefill = '',
   isDental = false,
   specialty = '',
+  doctorName = '',
   onAnamneseSubmitted
 }: PreConsultationAnamneseModalProps) {
-  const isDentalMode = isDental || specialty.toLowerCase().includes('odonto') || specialty.toLowerCase().includes('biolog');
+  const detectedDental = isDental || 
+    specialty.toLowerCase().includes('odonto') || 
+    specialty.toLowerCase().includes('biolog') ||
+    specialty.toLowerCase().includes('dent') ||
+    (doctorName || '').toLowerCase().includes('lucy') ||
+    (doctorName || '').toLowerCase().includes('luci') ||
+    (doctorName || '').toLowerCase().includes('murata') ||
+    (doctorName || '').toLowerCase().includes('morata');
+
+  const [isDentalMode, setIsDentalMode] = useState<boolean>(detectedDental);
+
+  useEffect(() => {
+    setIsDentalMode(detectedDental);
+  }, [detectedDental, isDental, specialty, doctorName]);
 
   const [nome, setNome] = useState(patientNamePrefill);
   const [telefone, setTelefone] = useState(patientPhonePrefill);
@@ -70,15 +85,22 @@ export default function PreConsultationAnamneseModal({
   const [medicamentosAtuais, setMedicamentosAtuais] = useState('');
   const [observacoesClinicas, setObservacoesClinicas] = useState('');
 
-  // Perguntas Especializadas de Odontologia Biológica (Dra. Lucy)
+  // Perguntas Especializadas de Odontologia Biológica (Dra. Lucy Murata)
   const [temAmalgama, setTemAmalgama] = useState(false);
-  const [qtdAmalgamas, setQtdAmalgamas] = useState('1 a 3');
+  const [qtdAmalgamas, setQtdAmalgamas] = useState('1 a 2 dentes');
+  const [desejaSmart, setDesejaSmart] = useState(true);
   const [temTratamentoCanal, setTemTratamentoCanal] = useState(false);
-  const [qtdCanais, setQtdCanais] = useState('1');
+  const [dorIncomodoCanal, setDorIncomodoCanal] = useState(false);
+  const [extraiuSisos, setExtraiuSisos] = useState(false);
+  const [dorNevralgiaFace, setDorNevralgiaFace] = useState(false);
   const [temBruxismoApertamento, setTemBruxismoApertamento] = useState(false);
-  const [temDorMandibulaCabeca, setTemDorMandibulaCabeca] = useState(false);
+  const [dorAtmMatinal, setDorAtmMatinal] = useState(false);
   const [temImplanteTitanio, setTemImplanteTitanio] = useState(false);
+  const [interesseZirconia, setInteresseZirconia] = useState(false);
   const [alergiaMetaisBijuterias, setAlergiaMetaisBijuterias] = useState(false);
+  const [gostoMetalicoBoca, setGostoMetalicoBoca] = useState(false);
+  const [sintomasSistemicos, setSintomasSistemicos] = useState<string[]>([]);
+  const [suplementosAtuais, setSuplementosAtuais] = useState('');
   const [queixasOdonto, setQueixasOdonto] = useState<string[]>([]);
 
   // Foto / Selfie / Câmera
@@ -662,7 +684,7 @@ export default function PreConsultationAnamneseModal({
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100">
         
         {/* Header Modal */}
-        <div className={`text-white p-5 flex items-center justify-between transition-colors ${
+        <div className={`text-white p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
           isDentalMode 
             ? 'bg-gradient-to-r from-emerald-950 via-teal-900 to-slate-900' 
             : 'bg-gradient-to-r from-blue-900 to-indigo-900'
@@ -680,11 +702,13 @@ export default function PreConsultationAnamneseModal({
                 <h2 className="text-lg font-bold">
                   {isDentalMode ? 'Anamnese Odontológica Biológica & Cadastro Digital' : 'Anamnese Pré-Consulta & Cadastro Digital'}
                 </h2>
-                {isDentalMode && (
-                  <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 rounded-full text-[10px] font-extrabold uppercase">
-                    Dra. Lucy
-                  </span>
-                )}
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                  isDentalMode 
+                    ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/40' 
+                    : 'bg-blue-500/30 text-blue-200 border-blue-400/40'
+                }`}>
+                  {isDentalMode ? 'Dra. Lucy' : 'Dr. Carlos'}
+                </span>
               </div>
               <p className="text-xs text-slate-200">
                 {isDentalMode 
@@ -693,12 +717,44 @@ export default function PreConsultationAnamneseModal({
               </p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-xl text-slate-200 hover:text-white transition-all"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {/* Seletor Interativo de Especialidade da Anamnese */}
+            <div className="flex items-center p-1 bg-white/10 rounded-2xl border border-white/20">
+              <button
+                type="button"
+                onClick={() => setIsDentalMode(true)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  isDentalMode 
+                    ? 'bg-emerald-500 text-white shadow-sm' 
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+                title="Alternar para o questionário de Odontologia Biológica da Dra. Lucy"
+              >
+                🌿 Dra. Lucy (Odonto)
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDentalMode(false)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  !isDentalMode 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'text-slate-300 hover:text-white hover:bg-white/10'
+                }`}
+                title="Alternar para o questionário clínico/neurológico do Dr. Carlos"
+              >
+                🧠 Dr. Carlos (Geral)
+              </button>
+            </div>
+
+            <button 
+              type="button"
+              onClick={onClose}
+              className="p-2 hover:bg-white/10 rounded-xl text-slate-200 hover:text-white transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}

@@ -1599,7 +1599,7 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
     if (origin.includes('aistudio.google.com') || origin.includes('localhost')) {
       origin = 'https://ais-dev-rb5uztjihjvkduwo7bhuyk-51327969358.us-east1.run.app';
     }
-    const docKey = (doctorName || '').toLowerCase().includes('lucy') || (doctorName || '').toLowerCase().includes('luci')
+    const docKey = (doctorName || '').toLowerCase().includes('lucy') || (doctorName || '').toLowerCase().includes('luci') || (doctorName || '').toLowerCase().includes('murata')
       ? 'dra_lucy'
       : ((doctorName || '').toLowerCase().includes('carlos') ? 'dr_carlos' : undefined);
 
@@ -1614,19 +1614,53 @@ app.post("/api/whatsapp/send-confirmation", async (req, res) => {
       msgText = `Olá *${patientName || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${doctorName || 'Dr. Carlos Morato'}\n📅 *Data:* ${date || 'Hoje'}\n⏰ *Horário:* ${time || '14:00'}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Anamnese Pré-Consulta:* Para agilizar seu atendimento e evitar filas na recepção, preencha seus dados de saúde pelo link oficial:\n${anamneseLink}`;
     }
 
-    const { url, instance, apikey } = getEvolutionConfig(req);
+    // Determina a instância e a chave de forma estrita para evitar instâncias desconectadas
+    let instance = (req.body.evolution_instance || '').trim();
+    let apikey = (req.body.evolution_apikey || '').trim();
 
-    // Tenta enviar via Evolution API
+    if (docKey === 'dra_lucy') {
+      instance = instance || 'luci';
+      apikey = apikey || KNOWN_INSTANCE_TOKENS['luci'] || '807FE1A424A0-4474-B3DC-C6EE5ACBF060';
+    } else if (docKey === 'dr_carlos') {
+      instance = instance || 'drcarlos';
+      apikey = apikey || KNOWN_INSTANCE_TOKENS['drcarlos'] || 'E54C7FA2A036-4959-A843-5C258EA783BA';
+    } else {
+      instance = instance || EVOLUTION_INSTANCE_NAME || 'luci';
+      apikey = apikey || KNOWN_INSTANCE_TOKENS[instance] || EVOLUTION_GLOBAL_KEY;
+    }
+
+    const url = (req.body.evolution_url || EVOLUTION_API_URL || "https://api.makprojetosmake.com.br").replace(/\/$/, "");
+
+    // Tenta enviar via Evolution API com fallback seguro
+    let sendSuccess = false;
+    let sendErrorMsg = '';
+
     try {
       const evoRes = await axios.post(`${url}/message/sendText/${instance}`, {
         number: cleanPhone,
         text: msgText,
         linkPreview: true
       }, { headers: { 'apikey': apikey } });
+      sendSuccess = true;
       addLog(`✅ Confirmação enviada via Evolution (${instance}) para ${cleanPhone}`);
     } catch (e: any) {
-      const errorMsg = e.response?.data ? JSON.stringify(e.response.data) : e.message;
-      addLog(`❌ Erro Evolution confirmação (${cleanPhone}): ${errorMsg}`);
+      sendErrorMsg = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+      addLog(`⚠️ Tentativa primária falhou (${instance}): ${sendErrorMsg}. Tentando fallback com instância 'luci'...`);
+
+      // Se falhou e não era 'luci', tenta 'luci' que está 100% aberta
+      if (instance !== 'luci') {
+        try {
+          await axios.post(`${url}/message/sendText/luci`, {
+            number: cleanPhone,
+            text: msgText,
+            linkPreview: true
+          }, { headers: { 'apikey': '807FE1A424A0-4474-B3DC-C6EE5ACBF060' } });
+          sendSuccess = true;
+          addLog(`✅ Confirmação enviada via fallback 'luci' para ${cleanPhone}`);
+        } catch (fbErr: any) {
+          addLog(`❌ Falha no fallback Evolution: ${fbErr.message}`);
+        }
+      }
     }
 
     // Registra na tabela de mensagens do Supabase

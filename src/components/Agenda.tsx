@@ -1262,6 +1262,32 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       )}
                     </div>
 
+                    {/* BOTÃO QUESTIONÁRIO / PRÉ-ANAMNESE (ACESSO DIRETO E VISÍVEL) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAppointmentForAnamnese(app);
+                        setIsAnamneseModalOpen(true);
+                      }}
+                      className={cn(
+                        "px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 border",
+                        (app.medico_nome || '').toLowerCase().includes('lucy') || 
+                        (app.medico_nome || '').toLowerCase().includes('luci') || 
+                        (app.medico_nome || '').toLowerCase().includes('murata') ||
+                        (app.medico_especialidade || '').toLowerCase().includes('odonto')
+                          ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 ring-1 ring-emerald-500/20"
+                          : "bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200"
+                      )}
+                      title="Ver ou preencher Questionário / Pré-Anamnese do paciente"
+                    >
+                      <ClipboardList size={15} className={(app.medico_nome || '').toLowerCase().includes('lucy') || (app.medico_nome || '').toLowerCase().includes('luci') || (app.medico_nome || '').toLowerCase().includes('murata') ? "text-emerald-600" : "text-indigo-600"} />
+                      <span>
+                        {(app.medico_nome || '').toLowerCase().includes('lucy') || (app.medico_nome || '').toLowerCase().includes('luci') || (app.medico_nome || '').toLowerCase().includes('murata') || (app.medico_especialidade || '').toLowerCase().includes('odonto')
+                          ? "Questionário Odonto"
+                          : "Questionário Clínico"}
+                      </span>
+                    </button>
+
                     {/* BOTÃO PRINCIPAL: INICIAR ATENDIMENTO (ABRE A ANAMNESE COMPLETA) */}
                     <button 
                       onClick={() => {
@@ -1705,10 +1731,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         patientEstadoPrefill={selectedAppointmentForAnamnese?.estado || ''}
         patientNumeroPrefill={selectedAppointmentForAnamnese?.numero || ''}
         patientComplementoPrefill={selectedAppointmentForAnamnese?.complemento || ''}
+        doctorName={(selectedAppointmentForAnamnese as any)?.medico_nome || ''}
         isDental={
           String(selectedAppointmentForAnamnese?.medico_especialidade || (selectedAppointmentForAnamnese as any)?.especialidade_nome || '').toLowerCase().includes('odonto') ||
           String(selectedAppointmentForAnamnese?.medico_especialidade || (selectedAppointmentForAnamnese as any)?.especialidade_nome || '').toLowerCase().includes('biolog') ||
-          String((selectedAppointmentForAnamnese as any)?.medico_nome || '').toLowerCase().includes('lucy')
+          String((selectedAppointmentForAnamnese as any)?.medico_nome || '').toLowerCase().includes('lucy') ||
+          String((selectedAppointmentForAnamnese as any)?.medico_nome || '').toLowerCase().includes('luci') ||
+          String((selectedAppointmentForAnamnese as any)?.medico_nome || '').toLowerCase().includes('murata') ||
+          String((selectedAppointmentForAnamnese as any)?.medico_nome || '').toLowerCase().includes('morata') ||
+          selectedAppointmentForAnamnese?.medico_id === 'dra_lucy' ||
+          resolveDoctorKey(user) === 'dra_lucy'
         }
         specialty={selectedAppointmentForAnamnese?.medico_especialidade || (selectedAppointmentForAnamnese as any)?.especialidade_nome || ''}
         onAnamneseSubmitted={() => {
