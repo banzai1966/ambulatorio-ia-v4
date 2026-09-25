@@ -198,12 +198,15 @@ export default function CrmKanbanModule({
   const activeDoctorKey = useMemo(() => resolveDoctorKey(currentUser), [currentUser]);
   const activeClinic = useMemo(() => getActiveClinicConfig(currentUser), [currentUser]);
 
+  // Apenas Marco Duarte é o Administrador Mestre do sistema
   const isMasterAdmin = useMemo(() => {
     if (!currentUser) return false;
     const email = (currentUser.email || '').toLowerCase().trim();
     const fullName = (currentUser.full_name || '').toLowerCase().trim();
+    const id = (currentUser.id || '').toLowerCase().trim();
     return email === 'marco.agduarte22@gmail.com' || 
-           currentUser.role === 'admin' || 
+           id === 'master-admin-marco' ||
+           id === 'marco-duarte-admin' ||
            (fullName.includes('marco') && fullName.includes('duarte'));
   }, [currentUser]);
 
@@ -224,21 +227,19 @@ export default function CrmKanbanModule({
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDoctorFilter, setSelectedDoctorFilter] = useState<'all' | 'dr_carlos' | 'dra_lucy'>(() => {
-    if (activeDoctorKey === 'dr_carlos' || activeDoctorKey === 'dra_lucy') {
-      return activeDoctorKey;
+    if (!isMasterAdmin) {
+      return activeDoctorKey === 'dr_carlos' ? 'dr_carlos' : 'dra_lucy';
     }
     return 'all';
   });
 
   const effectiveDoctorFilter: 'all' | 'dr_carlos' | 'dra_lucy' = isMasterAdmin
     ? selectedDoctorFilter
-    : (activeDoctorKey === 'dra_lucy' ? 'dra_lucy' : (activeDoctorKey === 'dr_carlos' ? 'dr_carlos' : 'all'));
+    : (activeDoctorKey === 'dr_carlos' ? 'dr_carlos' : 'dra_lucy');
 
   useEffect(() => {
     if (!isMasterAdmin) {
-      if (activeDoctorKey === 'dra_lucy' || activeDoctorKey === 'dr_carlos') {
-        setSelectedDoctorFilter(activeDoctorKey);
-      }
+      setSelectedDoctorFilter(activeDoctorKey === 'dr_carlos' ? 'dr_carlos' : 'dra_lucy');
     }
   }, [isMasterAdmin, activeDoctorKey]);
 
