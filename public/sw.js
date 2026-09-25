@@ -52,7 +52,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Apenas métodos GET e esquemas http/https
-  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) return;
+  if (event.request.method !== 'GET' || (!event.request.url.startsWith('http://') && !event.request.url.startsWith('https://'))) return;
 
   event.respondWith(
     fetch(event.request)
@@ -61,8 +61,10 @@ self.addEventListener('fetch', (event) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+            try {
+              cache.put(event.request, responseToCache).catch(() => {});
+            } catch (_) {}
+          }).catch(() => {});
         }
         return networkResponse;
       })
