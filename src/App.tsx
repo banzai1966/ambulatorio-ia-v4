@@ -76,6 +76,7 @@ import VitalMonitor from './components/VitalMonitor';
 import PatientDossierView from './components/PatientDossierView';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { SPECIALTIES } from './constants/specialties';
 import { getActiveClinicConfig, resolveDoctorKey, detectRecordSpecialtyAndDoctor } from './constants/clinicProfiles';
 import { 
@@ -3724,23 +3725,8 @@ export default function App() {
                 </button>
               )}
 
-              {installPromptEvent && (
-                <button
-                  onClick={() => {
-                    installPromptEvent.prompt();
-                    installPromptEvent.userChoice.then((choice: any) => {
-                      if (choice.outcome === 'accepted') {
-                        toast.success("App instalado com sucesso no seu computador!");
-                        setInstallPromptEvent(null);
-                      }
-                    });
-                  }}
-                  className="w-full py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all border border-blue-200"
-                >
-                  <Download size={12} />
-                  Instalar App no Computador
-                </button>
-              )}
+              {/* Botão Oficial de Instalação PWA (Computador / Celular) */}
+              <PWAInstallButton variant="sidebar" />
 
               {/* Botão de Atualizar / Recarregar Sistema */}
               <button

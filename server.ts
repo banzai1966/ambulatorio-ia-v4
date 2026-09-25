@@ -3114,9 +3114,39 @@ app.post("/api/send-message", async (req, res) => {
 });
 
 const setupFrontend = async () => {
+  // PWA & Service Worker routes (garante Service-Worker-Allowed e Cache-Control adequados)
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'text/javascript');
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const swProd = path.join(process.cwd(), 'dist', 'sw.js');
+    const swPublic = path.join(process.cwd(), 'public', 'sw.js');
+    if (fs.existsSync(swProd)) {
+      return res.sendFile(swProd);
+    }
+    return res.sendFile(swPublic);
+  });
+
+  app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    const manifestProd = path.join(process.cwd(), 'dist', 'manifest.json');
+    const manifestPublic = path.join(process.cwd(), 'public', 'manifest.json');
+    if (fs.existsSync(manifestProd)) {
+      return res.sendFile(manifestProd);
+    }
+    return res.sendFile(manifestPublic);
+  });
+
   const isProd = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'));
   if (isProd) {
-    app.use(express.static(path.join(process.cwd(), 'dist')));
+    app.use(express.static(path.join(process.cwd(), 'dist'), {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.png') || filePath.endsWith('.svg') || filePath.endsWith('.ico')) {
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+        }
+      }
+    }));
     app.get('*', (req, res) => res.sendFile(path.join(process.cwd(), 'dist', 'index.html')));
   } else {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });

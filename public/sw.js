@@ -1,10 +1,14 @@
-// Service Worker para Ambulatório IA - Prontuário Médico Offline
-const CACHE_NAME = 'ambulatorio-ia-v4.6';
+// Service Worker para Ambulatório IA - Prontuário Médico Offline & PWA
+const CACHE_NAME = 'ambulatorio-ia-v4.7-pwa';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  'https://cdn-icons-png.flaticon.com/512/2966/2966327.png'
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-512x512.png',
+  '/apple-touch-icon.png',
+  '/icon.svg'
 ];
 
 // Instalação do Service Worker e Caches de Recursos
