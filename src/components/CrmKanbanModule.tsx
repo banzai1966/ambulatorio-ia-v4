@@ -198,6 +198,15 @@ export default function CrmKanbanModule({
   const activeDoctorKey = useMemo(() => resolveDoctorKey(currentUser), [currentUser]);
   const activeClinic = useMemo(() => getActiveClinicConfig(currentUser), [currentUser]);
 
+  const isMasterAdmin = useMemo(() => {
+    if (!currentUser) return false;
+    const email = (currentUser.email || '').toLowerCase().trim();
+    const fullName = (currentUser.full_name || '').toLowerCase().trim();
+    return email === 'marco.agduarte22@gmail.com' || 
+           currentUser.role === 'admin' || 
+           (fullName.includes('marco') && fullName.includes('duarte'));
+  }, [currentUser]);
+
   const [cards, setCards] = useState<CrmCard[]>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('ambulatorio_crm_cards_v1');
@@ -220,6 +229,18 @@ export default function CrmKanbanModule({
     }
     return 'all';
   });
+
+  const effectiveDoctorFilter: 'all' | 'dr_carlos' | 'dra_lucy' = isMasterAdmin
+    ? selectedDoctorFilter
+    : (activeDoctorKey === 'dra_lucy' ? 'dra_lucy' : (activeDoctorKey === 'dr_carlos' ? 'dr_carlos' : 'all'));
+
+  useEffect(() => {
+    if (!isMasterAdmin) {
+      if (activeDoctorKey === 'dra_lucy' || activeDoctorKey === 'dr_carlos') {
+        setSelectedDoctorFilter(activeDoctorKey);
+      }
+    }
+  }, [isMasterAdmin, activeDoctorKey]);
 
   const [showNewCardModal, setShowNewCardModal] = useState(false);
   const [editingCard, setEditingCard] = useState<CrmCard | null>(null);
@@ -338,14 +359,19 @@ export default function CrmKanbanModule({
         (card.procedimento_interesse && card.procedimento_interesse.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (card.tags && card.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase())));
 
-      // Filtro de profissional
-      const matchesDoctor = 
-        selectedDoctorFilter === 'all' || 
-        card.doctorKey === selectedDoctorFilter;
+      // Filtro de profissional estrito e isolado
+      let matchesDoctor = true;
+      if (effectiveDoctorFilter === 'dra_lucy') {
+        matchesDoctor = card.doctorKey === 'dra_lucy';
+      } else if (effectiveDoctorFilter === 'dr_carlos') {
+        matchesDoctor = card.doctorKey === 'dr_carlos';
+      } else {
+        matchesDoctor = true; // 'all' (apenas para Master Admin)
+      }
 
       return matchesSearch && matchesDoctor;
     });
-  }, [cards, searchTerm, selectedDoctorFilter]);
+  }, [cards, searchTerm, effectiveDoctorFilter]);
 
   // Estatísticas Rápidas do Funil
   const metrics = useMemo(() => {
@@ -475,8 +501,16 @@ export default function CrmKanbanModule({
       return;
     }
 
+    const targetDoctorKey = !isMasterAdmin
+      ? (activeDoctorKey === 'dra_lucy' ? 'dra_lucy' : (activeDoctorKey === 'dr_carlos' ? 'dr_carlos' : 'geral'))
+      : (formData.doctorKey || 'geral');
+
     if (editingCard) {
-      setCards(prev => prev.map(c => c.id === editingCard.id ? { ...c, ...formData } as CrmCard : c));
+      setCards(prev => prev.map(c => c.id === editingCard.id ? { 
+        ...c, 
+        ...formData, 
+        doctorKey: isMasterAdmin ? (formData.doctorKey || c.doctorKey) : c.doctorKey 
+      } as CrmCard : c));
       toast.success("Oportunidade atualizada no CRM!");
     } else {
       const newCard: CrmCard = {
@@ -485,7 +519,7 @@ export default function CrmKanbanModule({
         paciente_telefone: formData.paciente_telefone || '',
         paciente_cpf: formData.paciente_cpf || '',
         stage: formData.stage || 'novo_lead',
-        doctorKey: formData.doctorKey || 'geral',
+        doctorKey: targetDoctorKey,
         procedimento_interesse: formData.procedimento_interesse || '',
         valor_estimado: Number(formData.valor_estimado) || 0,
         status_anamnese: formData.status_anamnese || 'pendente',
@@ -649,44 +683,71 @@ export default function CrmKanbanModule({
 
       {/* Barra de Filtros por Especialidade e Busca */}
       <div className="bg-white rounded-3xl p-4 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Filtros de Profissional */}
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setSelectedDoctorFilter('all')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              selectedDoctorFilter === 'all'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Todos os Pacientes
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedDoctorFilter('dra_lucy')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              selectedDoctorFilter === 'dra_lucy'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Smile size={14} />
-            Dra. Lucy (Odonto Biológica)
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedDoctorFilter('dr_carlos')}
-            className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-              selectedDoctorFilter === 'dr_carlos'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Stethoscope size={14} />
-            Dr. Carlos (Neurologia)
-          </button>
-        </div>
+        {/* Filtros de Profissional (Exclusivo Administrador Mestre Marco Duarte) OU Identificador Blindado do Médico */}
+        {isMasterAdmin ? (
+          <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedDoctorFilter('all')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                selectedDoctorFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Todos os Pacientes
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDoctorFilter('dra_lucy')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedDoctorFilter === 'dra_lucy'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Smile size={14} />
+              Dra. Lucy (Odonto Biológica)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDoctorFilter('dr_carlos')}
+              className={`flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                selectedDoctorFilter === 'dr_carlos'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Stethoscope size={14} />
+              Dr. Carlos (Neurologia)
+            </button>
+          </div>
+        ) : (
+          /* Badge de Isolamento Clínico Total para Médicos */
+          <div className="flex items-center gap-2.5 px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-2xl w-full sm:w-auto">
+            {activeDoctorKey === 'dra_lucy' ? (
+              <>
+                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Smile size={17} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Funil Clínico Exclusivo</p>
+                  <p className="text-xs font-black text-emerald-950">Dra. Lucy Murata (Odontologia Biológica)</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <Stethoscope size={17} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Funil Clínico Exclusivo</p>
+                  <p className="text-xs font-black text-blue-950">Dr. Carlos Morato (Neurologia & Integrativa)</p>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Campo de Busca */}
         <div className="relative w-full sm:w-80">
@@ -916,15 +977,31 @@ export default function CrmKanbanModule({
 
                 <div className="space-y-1.5">
                   <label className="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Profissional Destino</label>
-                  <select
-                    value={formData.doctorKey || 'geral'}
-                    onChange={(e) => setFormData({ ...formData, doctorKey: e.target.value as any })}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-700"
-                  >
-                    <option value="dra_lucy">🦷 Dra. Lucy (Odonto Biológica)</option>
-                    <option value="dr_carlos">🧠 Dr. Carlos (Neurologia)</option>
-                    <option value="geral">🏥 Clínica Geral</option>
-                  </select>
+                  {isMasterAdmin ? (
+                    <select
+                      value={formData.doctorKey || 'geral'}
+                      onChange={(e) => setFormData({ ...formData, doctorKey: e.target.value as any })}
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-bold text-slate-700"
+                    >
+                      <option value="dra_lucy">🦷 Dra. Lucy (Odonto Biológica)</option>
+                      <option value="dr_carlos">🧠 Dr. Carlos (Neurologia)</option>
+                      <option value="geral">🏥 Clínica Geral</option>
+                    </select>
+                  ) : (
+                    <div className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs flex items-center gap-2">
+                      {activeDoctorKey === 'dra_lucy' ? (
+                        <>
+                          <Smile size={14} className="text-emerald-600 shrink-0" />
+                          <span className="truncate">Dra. Lucy Murata (Odonto)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Stethoscope size={14} className="text-blue-600 shrink-0" />
+                          <span className="truncate">Dr. Carlos Morato (Neuro)</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
