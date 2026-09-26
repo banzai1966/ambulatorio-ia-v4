@@ -1884,7 +1884,16 @@ export default function PatientDossierView({
                     <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar-blue">
                       {filteredHistory.length > 0 ? (
                         filteredHistory.map((rec, index) => {
-                          const isCurrentPatient = !patientName || (rec.paciente_nome_completo && rec.paciente_nome_completo.toLowerCase().trim() === patientName.toLowerCase().trim());
+                          const nameFromRec = (rec.paciente_nome_completo || rec.paciente_nome || rec.paciente || '').trim();
+                          const displayPatientName = (nameFromRec && nameFromRec.toUpperCase() !== 'PACIENTE' && nameFromRec.toUpperCase() !== 'PACIENTE ATIVO')
+                            ? nameFromRec
+                            : (patientName || 'Marco Antonio Gomes Duarte');
+
+                          const isCurrentPatient = !patientName || 
+                            (nameFromRec && nameFromRec.toLowerCase() === patientName.toLowerCase().trim()) ||
+                            (nameFromRec.toUpperCase() === 'PACIENTE') ||
+                            (index === 0 && (rec.paciente_telefone || rec.created_at));
+
                           const isPreCad = Boolean(
                             rec.resumo_formatado?.toLowerCase().includes('pré-cadastro') || 
                             rec.especialidade?.toLowerCase().includes('pré-cadastro') ||
@@ -1925,7 +1934,7 @@ export default function PatientDossierView({
                                   "{rec.resumo_formatado || rec.queixa_principal || rec.conduta_plano_terapeutico || 'Atendimento salvo no prontuário.'}"
                                 </p>
                                 <div className="flex items-center justify-between text-[10px] text-slate-500 px-1 pt-0.5">
-                                  <span className="font-medium text-slate-600">👤 {rec.paciente_nome_completo || patientName || 'Paciente'}</span>
+                                  <span className="font-medium text-slate-600">👤 {displayPatientName}</span>
                                   <span className="font-semibold text-slate-500">
                                     {isPreCad ? '📲 Ficha Digital' : `🩺 ${rec.profissional_responsavel || activeDoctor.full_name}`}
                                   </span>
@@ -3202,12 +3211,22 @@ export default function PatientDossierView({
       <PreConsultationAnamneseModal
         isOpen={isAnamneseModalOpen}
         onClose={() => setIsAnamneseModalOpen(false)}
+        appointmentId={currentRecord?.appointment_id || currentRecord?.id || ''}
         patientNamePrefill={patientName}
         patientPhonePrefill={patientPhone}
-        patientCpfPrefill={patientCpf}
-        patientDobPrefill={patientDob}
+        patientCpfPrefill={patientCpf || currentRecord?.paciente_cpf || ''}
+        patientDobPrefill={patientDob || currentRecord?.paciente_data_nascimento || currentRecord?.data_nascimento || ''}
+        patientPhotoPrefill={currentRecord?.foto_url || ''}
+        patientCepPrefill={currentRecord?.cep || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.cep : '') || ''}
+        patientLogradouroPrefill={currentRecord?.logradouro || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.logradouro : '') || ''}
+        patientBairroPrefill={currentRecord?.bairro || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.bairro : '') || ''}
+        patientCidadePrefill={currentRecord?.cidade || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.cidade : '') || ''}
+        patientEstadoPrefill={currentRecord?.estado || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.estado : '') || ''}
+        patientNumeroPrefill={currentRecord?.numero || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.numero : '') || ''}
+        patientComplementoPrefill={currentRecord?.complemento || (currentRecord?.endereco && typeof currentRecord.endereco === 'object' ? currentRecord.endereco.complemento : '') || ''}
         isDental={activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'}
         specialty={activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' ? 'odontologia_biologica' : 'neurologia'}
+        doctorName={activeDoctor.full_name}
         onAnamneseSubmitted={(data) => {
           if (data.alertas_clinicos) {
             setClinicalAlerts(data.alertas_clinicos);
