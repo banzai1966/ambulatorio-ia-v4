@@ -78,7 +78,7 @@ import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { SPECIALTIES } from './constants/specialties';
-import { getActiveClinicConfig, resolveDoctorKey, detectRecordSpecialtyAndDoctor } from './constants/clinicProfiles';
+import { getActiveClinicConfig, resolveDoctorKey, detectRecordSpecialtyAndDoctor, DEFAULT_CLINIC_LOGO_URL } from './constants/clinicProfiles';
 import { 
   getOfflineRecords, 
   saveRecordLocally, 
@@ -3223,13 +3223,16 @@ export default function App() {
                   toast("Pressione mais 1 vez para entrada rápida master.", { duration: 2000 });
                 }
               }}
-              className="w-16 h-16 bg-clinical-blue rounded-2xl flex items-center justify-center text-white shadow-xl shadow-clinical-blue/20 mb-4 cursor-pointer hover:scale-105 active:scale-95 transition-all select-none group"
-              title="Ambulatório IA - Sistema de Gestão Médica"
+              className="cursor-pointer hover:opacity-95 active:scale-95 transition-all select-none flex items-center justify-center w-full group py-2"
+              title="Ambulatório IA (Clique 3x para entrada master)"
             >
-              <Stethoscope size={32} className="group-hover:rotate-6 transition-transform" />
+              <img 
+                src={DEFAULT_CLINIC_LOGO_URL} 
+                alt="Logo Ambulatório IA" 
+                referrerPolicy="no-referrer"
+                className="h-20 sm:h-24 w-auto object-contain max-w-[320px]"
+              />
             </div>
-            <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Ambulatório IA</h1>
-            <p className="text-slate-400 text-sm font-medium mt-1">Acesso Restrito a Profissionais</p>
           </div>
 
           <form onSubmit={handleAuth} className="space-y-6">
@@ -3434,17 +3437,25 @@ export default function App() {
           {/* Logo Brand + Collapse Arrow Toggle Button */}
           <div className="flex items-center justify-between gap-1 p-1">
             <div 
-              className="flex items-center gap-3 cursor-pointer rounded-2xl hover:bg-slate-50 transition-all group overflow-hidden"
+              className="flex items-center cursor-pointer rounded-2xl hover:bg-slate-50 transition-all group overflow-hidden py-1 px-1.5"
               onClick={() => navigateToTab('dashboard')}
-              title="Ambulatório IA - Gestão Clínica Inteligente"
+              title="Ambulatório IA"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0 group-hover:scale-105 transition-transform">
-                <Stethoscope size={20} />
-              </div>
-              {!isSidebarCollapsed && (
-                <div className="min-w-0">
-                  <h1 className="font-extrabold text-base tracking-tight text-slate-900 leading-none truncate">Ambulatório IA</h1>
-                  <p className="text-[10px] uppercase tracking-wider text-blue-600 font-bold mt-1 truncate">Gestão Clínica Inteligente</p>
+              {!isSidebarCollapsed ? (
+                <img 
+                  src={DEFAULT_CLINIC_LOGO_URL} 
+                  alt="Logo Ambulatório IA" 
+                  referrerPolicy="no-referrer"
+                  className="h-11 w-auto max-w-[180px] object-contain"
+                />
+              ) : (
+                <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={DEFAULT_CLINIC_LOGO_URL} 
+                    alt="Logo" 
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-contain"
+                  />
                 </div>
               )}
             </div>

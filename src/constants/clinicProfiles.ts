@@ -19,6 +19,8 @@ export interface ClinicProfileConfig {
   evolution_apikey: string;
 }
 
+export const DEFAULT_CLINIC_LOGO_URL = 'https://res.cloudinary.com/dlllwevvk/image/upload/v1790638512/Imagem_2_-fotor-20260928203337_ujmkfz.png';
+
 export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
   dra_lucy: {
     id: 'dra_lucy',
@@ -31,7 +33,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     email: 'lucimurata@gmail.com',
     website: 'www.dralucymurata.com.br',
     slogan: 'Odontologia Biológica, Cirurgia Zircônia & Saúde Integrativa',
-    logo_url: LUCY_LOGO_DATA_URL,
+    logo_url: DEFAULT_CLINIC_LOGO_URL,
     prescription_footer: 'Receituário odontológico & integrativo emitido em conformidade com as normas do CFO/CRO. Válido em território nacional.',
     whatsapp_message_template: 'Olá {paciente}, segue a sua receita / orientação odontológica emitida pela Dra. Lucy Murata.',
     evolution_url: 'https://api.makprojetosmake.com.br',
@@ -49,6 +51,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     email: 'carvalhomorato@gmail.com',
     website: 'www.drcarlosmorato.com.br',
     slogan: 'Neurologia Clínica e Medicina Integrativa',
+    logo_url: DEFAULT_CLINIC_LOGO_URL,
     prescription_footer: 'Receituário médico digital válido em território nacional nos termos da Lei 14.063/2020 e Portaria SVS/MS 344/98.',
     whatsapp_message_template: 'Olá {paciente}, segue o seu receituário médico / pedido emitido pelo Dr. Carlos Morato em sua consulta.',
     evolution_url: 'https://api.makprojetosmake.com.br',
@@ -66,7 +69,7 @@ export const CLINIC_PROFILES_CONFIG: Record<string, ClinicProfileConfig> = {
     email: 'marco.agduarte22@gmail.com',
     website: 'www.ambulatorioia.com',
     slogan: 'Gestão Integrada de Saúde, Neurologia e Odontologia Biológica',
-    prescription_footer: 'Documento clínico emitido via Ambulatório IA. Válido em território nacional.',
+    logo_url: DEFAULT_CLINIC_LOGO_URL,
     whatsapp_message_template: 'Olá {paciente}, segue seu documento clínico emitido pelo Ambulatório IA.',
     evolution_url: 'https://api.makprojetosmake.com.br',
     evolution_instance: 'ambulatorio',
@@ -289,10 +292,14 @@ export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): C
     if (savedSpecific) {
       const parsed = JSON.parse(savedSpecific);
       const apikey = (parsed.evolution_apikey || baseDefault.evolution_apikey || '').trim();
+      const logoUrl = (parsed.logo_url && !parsed.logo_url.startsWith('data:image')) 
+        ? parsed.logo_url 
+        : (baseDefault.logo_url || DEFAULT_CLINIC_LOGO_URL);
       
       return {
         ...baseDefault,
         ...parsed,
+        logo_url: logoUrl,
         evolution_url: parsed.evolution_url || baseDefault.evolution_url,
         evolution_instance: parsed.evolution_instance || baseDefault.evolution_instance,
         evolution_apikey: apikey
