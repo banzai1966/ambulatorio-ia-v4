@@ -31,6 +31,7 @@ import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { sendWhatsAppMessage } from '../services/whatsappService';
 import { getActiveClinicConfig, resolveDoctorKey, CLINIC_PROFILES_CONFIG } from '../constants/clinicProfiles';
+import { formatBrazilDate } from '../lib/timezoneUtils';
 
 export type CrmStageId = 
   | 'novo_lead' 
@@ -288,7 +289,11 @@ export default function CrmKanbanModule({
     };
 
     window.addEventListener('crm_cards_updated', handleCrmUpdate);
-    return () => window.removeEventListener('crm_cards_updated', handleCrmUpdate);
+    window.addEventListener('anamnese_submitted', handleCrmUpdate);
+    return () => {
+      window.removeEventListener('crm_cards_updated', handleCrmUpdate);
+      window.removeEventListener('anamnese_submitted', handleCrmUpdate);
+    };
   }, []);
 
   // Carrega também leads do Supabase e mescla se houver
@@ -327,7 +332,7 @@ export default function CrmKanbanModule({
                 valor_estimado: ag.valor_consulta ? Number(ag.valor_consulta) : 0,
                 status_anamnese: 'preenchida',
                 tags: ['Vindo da Agenda', ag.convenio || 'Particular'],
-                notas: `Agendamento: ${ag.data_hora_inicio ? new Date(ag.data_hora_inicio).toLocaleDateString('pt-BR') : 'Data não definida'}`,
+                notas: `Agendamento: ${ag.data_consulta ? formatBrazilDate(ag.data_consulta) : (ag.data_hora_inicio ? formatBrazilDate(ag.data_hora_inicio) : 'Data não definida')}`,
                 origem: 'whatsapp',
                 data_contato: ag.created_at || new Date().toISOString()
               });

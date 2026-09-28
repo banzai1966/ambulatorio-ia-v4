@@ -785,7 +785,56 @@ export default function PreConsultationAnamneseModal({
         console.warn("Aviso submit API:", apiErr);
       }
 
+      // 4. Sincronização automática com o Funil / CRM Kanban
       if (typeof window !== 'undefined') {
+        try {
+          const savedCrm = localStorage.getItem('ambulatorio_crm_cards_v1');
+          const currentCards = savedCrm ? JSON.parse(savedCrm) : [];
+          const cleanP = cleanPhone;
+          const cleanN = nome.toLowerCase().trim();
+
+          let cardUpdated = false;
+          const updatedCards = currentCards.map((c: any) => {
+            const cPhone = (c.paciente_telefone || '').replace(/\D/g, '');
+            const cName = (c.paciente_nome || '').toLowerCase().trim();
+            if ((cleanP && cPhone && (cPhone === cleanP || cPhone.endsWith(cleanP) || cleanP.endsWith(cPhone))) || (cleanN && cName === cleanN)) {
+              cardUpdated = true;
+              return {
+                ...c,
+                status_anamnese: 'preenchida',
+                paciente_cpf: cpf || c.paciente_cpf,
+                notas: c.notas ? `${c.notas} | Pré-Anamnese preenchida!` : `Pré-Anamnese digital preenchida em ${new Date().toLocaleDateString('pt-BR')}`,
+                tags: Array.from(new Set([...(c.tags || []), 'Anamnese OK'])),
+                updated_at: new Date().toISOString()
+              };
+            }
+            return c;
+          });
+
+          if (!cardUpdated && cleanN) {
+            updatedCards.unshift({
+              id: `crm_anam_${Date.now()}`,
+              paciente_nome: nome,
+              paciente_telefone: telefone || '',
+              paciente_cpf: cpf || '',
+              stage: 'pre_anamnese',
+              doctorKey: isDentalMode ? 'dra_lucy' : 'dr_carlos',
+              procedimento_interesse: observacoesClinicas || (isDentalMode ? 'Odontologia Biológica' : 'Neurologia Integrativa'),
+              valor_estimado: 0,
+              status_anamnese: 'preenchida',
+              tags: ['Anamnese Preenchida', isDentalMode ? 'Dra. Lucy' : 'Dr. Carlos'],
+              notas: `Pré-Anamnese realizada. Queixas: ${observacoesClinicas || 'Avaliação Geral'}`,
+              origem: 'whatsapp',
+              data_contato: new Date().toISOString()
+            });
+          }
+
+          localStorage.setItem('ambulatorio_crm_cards_v1', JSON.stringify(updatedCards));
+          window.dispatchEvent(new CustomEvent('crm_cards_updated'));
+        } catch (crmErr) {
+          console.warn("Aviso ao sincronizar CRM:", crmErr);
+        }
+
         try {
           window.dispatchEvent(new CustomEvent('anamnese_submitted', { detail: payload }));
         } catch (e) {}

@@ -38,6 +38,13 @@ import { getAvailableSlots, getDoctorsBySpecialty } from '../services/scheduling
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
 import { cn, calculateAge, formatDateMask, isValidUUID } from '../lib/utils';
 import { getActiveClinicConfig, resolveDoctorKey } from '../constants/clinicProfiles';
+import { 
+  getBrazilTodayDate, 
+  formatBrazilDate, 
+  extractBrazilDateISO, 
+  extractBrazilTime, 
+  buildBrazilDateTime 
+} from '../lib/timezoneUtils';
 
 interface Appointment {
   id: string;
@@ -54,6 +61,8 @@ interface Appointment {
   cidade?: string;
   estado?: string;
   data_hora_inicio: string;
+  data_consulta?: string;
+  hora_consulta?: string;
   status: string;
   motivo: string;
   medico_id: string;
@@ -168,7 +177,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     bairro: '',
     cidade: '',
     estado: '',
-    data_hora_inicio: '', 
+    data_hora_inicio: `${getBrazilTodayDate()}T09:00`, 
     motivo: '', 
     medico_id: user?.role === 'doctor' ? user.id : '',
     especialidade_id: '',
@@ -328,7 +337,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           category: payingAppointment.medico_especialidade || 'Consulta Médica',
           paymentMethod: paymentMethod,
           status: 'paid',
-          date: new Date().toISOString().split('T')[0],
+          date: getBrazilTodayDate(),
           doctorName: payingAppointment.medico_nome || 'Dr(a). da Clínica',
           notes: paymentNotes || `Recebido na recepção via ${labelMethod}`
         };
@@ -400,17 +409,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     }
     const docName = app.medico_nome || 'Dr(a). da Clínica';
     
-    // Tratamento robusto de data e hora para evitar 'Invalid Date'
-    let aptDate = (app as any).data_consulta || '';
-    let aptTime = (app as any).hora_consulta || '';
+    // Tratamento robusto de data e hora para evitar 'Invalid Date' e fusos incorretos
+    let aptDate = (app as any).data_consulta ? formatBrazilDate((app as any).data_consulta) : '';
+    let aptTime = (app as any).hora_consulta ? (app as any).hora_consulta.slice(0, 5) : '';
     if (!aptDate || !aptTime) {
       const raw = app.data_hora_inicio || (app as any).data_hora;
       if (raw) {
-        const d = new Date(raw);
-        if (!isNaN(d.getTime())) {
-          if (!aptDate) aptDate = d.toLocaleDateString('pt-BR');
-          if (!aptTime) aptTime = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-        }
+        if (!aptDate) aptDate = formatBrazilDate(raw);
+        if (!aptTime) aptTime = extractBrazilTime(raw);
       }
     }
     if (!aptDate) aptDate = 'Data da consulta';
@@ -780,12 +786,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             }
           }
 
-          // Normalização de data/hora
-          let dataHoraInicio = app.data_hora_inicio || app.data_hora;
-          if (!dataHoraInicio && data_consulta) {
-            dataHoraInicio = hora_consulta ? `${data_consulta}T${hora_consulta}` : `${data_consulta}T08:00:00`;
-          }
-          if (!dataHoraInicio) dataHoraInicio = new Date().toISOString();
+          // Normalização de data/hora protegida contra deslocamento UTC
+          const normalizedDataConsulta = app.data_consulta || (app.data_hora_inicio ? extractBrazilDateISO(app.data_hora_inicio) : (app.data_hora ? extractBrazilDateISO(app.data_hora) : getBrazilTodayDate()));
+          const normalizedHoraConsulta = app.hora_consulta || (app.data_hora_inicio ? extractBrazilTime(app.data_hora_inicio) : (app.data_hora ? extractBrazilTime(app.data_hora) : '09:00'));
+          let dataHoraInicio = app.data_hora_inicio || `${normalizedDataConsulta}T${normalizedHoraConsulta}-03:00`;
 
           const convenio = app.convenio || app.health_insurance || '';
           const valor_consulta = app.valor_consulta || '';
@@ -810,6 +814,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             cidade: app.cidade || '',
             estado: app.estado || '',
             data_hora_inicio: dataHoraInicio,
+            data_consulta: normalizedDataConsulta,
+            hora_consulta: normalizedHoraConsulta,
             motivo,
             medico_id,
             status,
@@ -854,9 +860,8 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     console.log("Agenda: Salvando agendamento completo...", newAppointment);
     
     try {
-      const [date, time] = newAppointment.data_hora_inicio.split('T');
-      const formattedTime = time ? (time.length === 5 ? `${time}:00` : time) : '00:00:00';
-      const isoDateTime = new Date(newAppointment.data_hora_inicio).toISOString();
+      const [rawDate, rawTime] = newAppointment.data_hora_inicio.split('T');
+      const { data_consulta, hora_consulta, data_hora_inicio: brazilTzDateTime } = buildBrazilDateTime(rawDate, rawTime || '09:00');
 
       const tryInsert = async (data: any, table: string = 'agendamentos'): Promise<{ error: any }> => {
         const { error } = await supabase.from(table).insert([data]).select('id');
@@ -933,10 +938,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         bairro: newAppointment.bairro,
         cidade: newAppointment.cidade,
         estado: newAppointment.estado,
-        data_consulta: date,
-        hora_consulta: formattedTime,
-        data_hora: isoDateTime, 
-        data_hora_inicio: isoDateTime,
+        data_consulta: data_consulta,
+        hora_consulta: hora_consulta,
+        data_hora: brazilTzDateTime, 
+        data_hora_inicio: brazilTzDateTime,
         medico_id: safeDoctorUuid,
         medico_nome: targetDoctorName,
         especialidade_id: null,
@@ -968,9 +973,9 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           paciente_nome: newAppointment.paciente_nome,
           paciente_telefone: newAppointment.paciente_telefone,
           medico_nome: targetDoctorName,
-          data_hora_inicio: isoDateTime,
-          data_consulta: date,
-          hora_consulta: formattedTime,
+          data_hora_inicio: brazilTzDateTime,
+          data_consulta: data_consulta,
+          hora_consulta: hora_consulta,
           status: 'Agendado'
         } as any);
       }
@@ -1000,7 +1005,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               valor_estimado: newAppointment.valor_consulta ? Number(newAppointment.valor_consulta) : 0,
               status_anamnese: 'preenchida',
               tags: ['Criado na Agenda', newAppointment.convenio || 'Particular'],
-              notas: `Agendado para ${date ? date.split('-').reverse().join('/') : ''} às ${formattedTime ? formattedTime.slice(0, 5) : ''}. Profissional: ${targetDoctorName}.`,
+              notas: `Agendado para ${formatBrazilDate(data_consulta)} às ${hora_consulta ? hora_consulta.slice(0, 5) : '09:00'}. Profissional: ${targetDoctorName}.`,
               origem: 'whatsapp',
               data_contato: new Date().toISOString()
             };
@@ -1026,7 +1031,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         bairro: '',
         cidade: '',
         estado: '',
-        data_hora_inicio: '', 
+        data_hora_inicio: `${getBrazilTodayDate()}T09:00`, 
         motivo: '', 
         medico_id: user?.role === 'doctor' ? user.id : '',
         especialidade_id: '',
@@ -1077,7 +1082,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
       bairro: '',
       cidade: '',
       estado: '',
-      data_hora_inicio: new Date().toISOString().split('T')[0] + 'T09:00',
+      data_hora_inicio: `${getBrazilTodayDate()}T09:00`,
       motivo: '',
       medico_id: isDental ? 'dra_lucy' : 'dr_carlos',
       especialidade_id: isDental ? 'odontologia_biologica' : 'neurologia',
@@ -1231,13 +1236,12 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
               const isMenuOpen = activeActionMenuId === app.id;
               const isPaid = (app.status_pagamento || '').startsWith('Pago');
               const isFree = app.status_pagamento === 'Cortesia / Isento';
-              const timeDate = new Date(app.data_hora_inicio);
-              const timeFormatted = !isNaN(timeDate.getTime()) 
-                ? `${timeDate.getHours().toString().padStart(2, '0')}:${timeDate.getMinutes().toString().padStart(2, '0')}`
-                : '--:--';
-              const dateFormatted = !isNaN(timeDate.getTime())
-                ? timeDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
-                : '';
+              const timeFormatted = app.hora_consulta 
+                ? app.hora_consulta.slice(0, 5) 
+                : extractBrazilTime(app.data_hora_inicio);
+              const dateFormatted = app.data_consulta 
+                ? formatBrazilDate(app.data_consulta) 
+                : formatBrazilDate(app.data_hora_inicio);
 
               return (
                 <div 

@@ -22,6 +22,7 @@ import {
 import toast from 'react-hot-toast';
 import { calculateAge, formatDateMask } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { formatBrazilDate, extractBrazilTime } from '../lib/timezoneUtils';
 
 interface PublicAnamneseViewProps {
   initialPhone?: string;
@@ -32,28 +33,14 @@ interface PublicAnamneseViewProps {
 function formatAppointmentDate(app: any): { dateStr: string; timeStr: string } {
   if (!app) return { dateStr: '', timeStr: '' };
 
-  let dateStr = '';
-  let timeStr = app.hora_consulta || '';
+  let dateStr = app.data_consulta ? formatBrazilDate(app.data_consulta) : '';
+  let timeStr = app.hora_consulta ? app.hora_consulta.slice(0, 5) : '';
 
-  if (app.data_consulta && typeof app.data_consulta === 'string') {
-    if (app.data_consulta.includes('-')) {
-      const parts = app.data_consulta.split('-');
-      if (parts.length === 3) {
-        dateStr = `${parts[2]}/${parts[1]}/${parts[0]}`;
-      }
-    } else {
-      dateStr = app.data_consulta;
-    }
-  }
-
-  const rawDate = app.data_hora_inicio || app.data_hora;
-  if (rawDate) {
-    const d = new Date(rawDate);
-    if (!isNaN(d.getTime())) {
-      if (!dateStr) dateStr = d.toLocaleDateString('pt-BR');
-      if (!timeStr) {
-        timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-      }
+  if (!dateStr || !timeStr) {
+    const rawDate = app.data_hora_inicio || app.data_hora;
+    if (rawDate) {
+      if (!dateStr) dateStr = formatBrazilDate(rawDate);
+      if (!timeStr) timeStr = extractBrazilTime(rawDate);
     }
   }
 
@@ -458,7 +445,56 @@ export default function PublicAnamneseView({ initialPhone = '', initialAppointme
       });
     } catch (_) {}
 
+    // Sincronização automática com o Funil / CRM Kanban
     if (typeof window !== 'undefined') {
+      try {
+        const savedCrm = localStorage.getItem('ambulatorio_crm_cards_v1');
+        const currentCards = savedCrm ? JSON.parse(savedCrm) : [];
+        const cleanP = cleanPhone;
+        const cleanN = nome.toLowerCase().trim();
+
+        let cardUpdated = false;
+        const updatedCards = currentCards.map((c: any) => {
+          const cPhone = (c.paciente_telefone || '').replace(/\D/g, '');
+          const cName = (c.paciente_nome || '').toLowerCase().trim();
+          if ((cleanP && cPhone && (cPhone === cleanP || cPhone.endsWith(cleanP) || cleanP.endsWith(cPhone))) || (cleanN && cName === cleanN)) {
+            cardUpdated = true;
+            return {
+              ...c,
+              status_anamnese: 'preenchida',
+              paciente_cpf: cpf || c.paciente_cpf,
+              notas: c.notas ? `${c.notas} | Pré-Anamnese preenchida online!` : `Pré-Anamnese digital preenchida em ${new Date().toLocaleDateString('pt-BR')}`,
+              tags: Array.from(new Set([...(c.tags || []), 'Anamnese OK'])),
+              updated_at: new Date().toISOString()
+            };
+          }
+          return c;
+        });
+
+        if (!cardUpdated && cleanN) {
+          updatedCards.unshift({
+            id: `crm_anam_${Date.now()}`,
+            paciente_nome: nome,
+            paciente_telefone: telefone || '',
+            paciente_cpf: cpf || '',
+            stage: 'pre_anamnese',
+            doctorKey: isDentalMode ? 'dra_lucy' : 'dr_carlos',
+            procedimento_interesse: observacoesClinicas || (isDentalMode ? 'Odontologia Biológica' : 'Neurologia Integrativa'),
+            valor_estimado: 0,
+            status_anamnese: 'preenchida',
+            tags: ['Anamnese Preenchida', isDentalMode ? 'Dra. Lucy' : 'Dr. Carlos'],
+            notas: `Pré-Anamnese enviada online. Queixas: ${observacoesClinicas || 'Avaliação Geral'}`,
+            origem: 'whatsapp',
+            data_contato: new Date().toISOString()
+          });
+        }
+
+        localStorage.setItem('ambulatorio_crm_cards_v1', JSON.stringify(updatedCards));
+        window.dispatchEvent(new CustomEvent('crm_cards_updated'));
+      } catch (crmErr) {
+        console.warn("Aviso ao sincronizar CRM:", crmErr);
+      }
+
       try {
         window.dispatchEvent(new CustomEvent('anamnese_submitted', { detail: payload }));
       } catch (_) {}

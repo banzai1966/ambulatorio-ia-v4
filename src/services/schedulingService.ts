@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { extractBrazilDateISO, extractBrazilTime } from '../lib/timezoneUtils';
 
 export interface AvailabilityRule {
   doctor_id: string;
@@ -59,16 +60,16 @@ export const getAvailableSlots = async (doctorId: string, date: string) => {
             
             if (simpleError) throw simpleError;
             return (simpleData || []).map(app => ({
-              [dateCol]: app.data_hora_inicio.split('T')[0],
-              [timeCol]: app.data_hora_inicio.split('T')[1]
+              [dateCol]: extractBrazilDateISO(app.data_hora_inicio),
+              [timeCol]: extractBrazilTime(app.data_hora_inicio)
             }));
           }
 
           return (data || []).map(app => {
             const val = app.data_hora_inicio || app.data_hora;
             return {
-              [dateCol]: val.split('T')[0],
-              [timeCol]: val.split('T')[1]
+              [dateCol]: app[dateCol] || extractBrazilDateISO(val),
+              [timeCol]: app[timeCol] ? app[timeCol].slice(0, 5) : extractBrazilTime(val)
             };
           });
         }
@@ -127,16 +128,16 @@ export const getAvailableSlots = async (doctorId: string, date: string) => {
           
           if (simpleError) throw simpleError;
           return (simpleData || []).map(app => ({
-            [dateCol]: app.data_hora_inicio.split('T')[0],
-            [timeCol]: app.data_hora_inicio.split('T')[1]
+            [dateCol]: extractBrazilDateISO(app.data_hora_inicio),
+            [timeCol]: extractBrazilTime(app.data_hora_inicio)
           }));
         }
 
         return (data || []).map(app => {
           const val = app.data_hora_inicio || app.data_hora;
           return {
-            [dateCol]: val.split('T')[0],
-            [timeCol]: val.split('T')[1]
+            [dateCol]: app[dateCol] || extractBrazilDateISO(val),
+            [timeCol]: app[timeCol] ? app[timeCol].slice(0, 5) : extractBrazilTime(val)
           };
         });
       }
