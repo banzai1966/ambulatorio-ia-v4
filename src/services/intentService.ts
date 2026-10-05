@@ -27,7 +27,7 @@ export async function analyzeIntent(message: string, history: any[] = []) {
       REGRAS ABSOLUTAS: 1. Você NÃO responde diretamente ao paciente. 2. Analise a intenção. 3. Sugestões curtas e profissionais.`;
 
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash-lite",
+        model: "gemini-3.8-flash",
         systemInstruction
       });
 

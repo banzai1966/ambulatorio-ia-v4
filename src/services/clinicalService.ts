@@ -17,9 +17,9 @@ const getGeminiKey = () => {
 
 async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig: any) {
   const modelsToTry = [
-    "gemini-2.5-flash",
-    "gemini-3.7-flash",
-    "gemini-flash-latest"
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
+    "gemini-3.1-flash-lite"
   ];
   
   let lastError: any = null;
@@ -92,11 +92,15 @@ export async function processClinicalInput(
     }
     return response.data;
   } catch (error: any) {
-    console.warn("[IA] Falha no backend, tentando processamento local (Frontend)...");
+    const backendMsg = error?.response?.data?.message || error?.response?.data?.error;
+    console.warn("[IA] Falha no backend, tentando processamento local (Frontend)...", backendMsg || error.message);
     
     const key = getGeminiKey();
     if (!key) {
-      throw new Error("API_KEY_MISSING");
+      if (backendMsg) {
+        throw new Error(backendMsg);
+      }
+      throw new Error(error?.message || "API_KEY_MISSING");
     }
 
     try {

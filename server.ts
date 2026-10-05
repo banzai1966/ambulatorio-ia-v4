@@ -173,15 +173,17 @@ function formatPhoneBR(phone: string): string {
 }
 
 // --- LÓGICA GEMINI NO BACKEND (MAIS ESTÁVEL) ---
-const getGeminiKey = () => {
-  return process.env.MINHA_CHAVE_PAGA || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+const getGeminiKey = (req?: any) => {
+  const headerKey = req ? (req.headers?.['x-gemini-key'] as string) : undefined;
+  const bodyKey = req?.body?.geminiApiKey;
+  return headerKey || bodyKey || process.env.MINHA_CHAVE_PAGA || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
 };
 
 async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig: any) {
   const modelsToTry = [
-    "gemini-2.5-flash",
-    "gemini-2.5-pro",
-    "gemini-flash-latest"
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
+    "gemini-3.1-flash-lite"
   ];
   
   let lastError: any = null;
@@ -762,10 +764,14 @@ app.post("/api/admin/delete-member", async (req, res) => {
 app.post("/api/process-clinical", async (req, res) => {
   try {
     const { input, examMode, reason } = req.body;
-    const key = getGeminiKey();
+    const key = getGeminiKey(req);
     
     if (!key) {
-      return res.status(500).json({ error: "API_KEY_MISSING" });
+      console.error("[GEMINI] ❌ API_KEY_MISSING: Chave Gemini não configurada.");
+      return res.status(500).json({ 
+        error: "API_KEY_MISSING",
+        message: "Chave de API do Gemini não configurada no servidor (GEMINI_API_KEY)."
+      });
     }
 
     const ai = new GoogleGenAI({ 
@@ -1006,14 +1012,28 @@ app.post("/api/process-clinical", async (req, res) => {
     const responseText = response.text || "{}";
     const cleaned = responseText.replace(/```json\n?|\n?```/g, '').trim();
     console.log("[GEMINI] Resposta gerada:", cleaned.slice(0, 150));
-    let parsed = JSON.parse(cleaned);
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (parseErr) {
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        parsed = JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+      } else {
+        throw parseErr;
+      }
+    }
     if (Array.isArray(parsed)) {
       parsed = parsed.length > 0 ? parsed[0] : {};
     }
     res.json(parsed);
   } catch (err: any) {
-    console.error("[GEMINI] ❌ Erro no processamento:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error("[GEMINI] ❌ Erro no processamento:", err?.message || err);
+    res.status(500).json({ 
+      error: err?.message || "Erro ao processar com a IA",
+      message: err?.message || "Erro interno no processamento do modelo Gemini"
+    });
   }
 });
 

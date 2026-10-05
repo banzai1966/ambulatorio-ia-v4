@@ -179,7 +179,7 @@ Responda ESTRITAMENTE em formato JSON sem markdown adicional:
   "recommendedBiologicalProtocol": "Resumo das etapas cirúrgicas e biológicas"
 }`;
 
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+  const models = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite'];
   let rawText = '';
 
   // 1. Tentar via SDK @google/genai

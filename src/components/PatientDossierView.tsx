@@ -860,6 +860,17 @@ export default function PatientDossierView({
       toast.error("Por favor, digite ou cole um texto antes de processar com a IA.");
       return;
     }
+
+    const cleanText = text.trim();
+    // Verifica se o texto é apenas uma sequência repetida de caracteres sem conteúdo real (ex: "dddddddddddd...")
+    const isRepetitiveGibberish = /^([a-zA-Z0-9\s.,;!?])\1{7,}$/i.test(cleanText.replace(/\s+/g, '')) || 
+      (cleanText.length > 15 && new Set(cleanText.toLowerCase().replace(/[^a-z0-9]/g, '')).size <= 2);
+
+    if (isRepetitiveGibberish) {
+      toast.error("O texto inserido contém apenas caracteres repetidos ou teste. Por favor, digite o relato da consulta do paciente (ex: queixas, exames ou medicações) para que a IA possa extrair e preencher a ficha.", { duration: 6000 });
+      return;
+    }
+
     setIsLocalProcessing(true);
     const toastId = toast.loading("Processando texto com IA e preenchendo prontuário...");
     try {
@@ -1041,9 +1052,16 @@ export default function PatientDossierView({
         }
         toast.success("✨ IA preencheu a ficha, especialidade e condutas com sucesso!", { id: toastId });
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Falha ao processar texto com a IA.", { id: toastId });
+    } catch (err: any) {
+      console.error("[IA Error]", err);
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || '';
+      if (errMsg.includes('API_KEY_MISSING')) {
+        toast.error("Chave da IA (GEMINI_API_KEY) não configurada no servidor. Verifique o arquivo .env.", { id: toastId, duration: 6000 });
+      } else if (errMsg.includes('quota') || errMsg.includes('429')) {
+        toast.error("Limite temporário da API atingido. Aguarde alguns segundos e tente novamente.", { id: toastId, duration: 5000 });
+      } else {
+        toast.error(errMsg ? `Falha ao processar texto com a IA: ${errMsg}` : "Falha ao processar texto com a IA.", { id: toastId, duration: 5000 });
+      }
     } finally {
       setIsLocalProcessing(false);
     }
