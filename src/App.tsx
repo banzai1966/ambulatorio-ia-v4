@@ -4619,6 +4619,7 @@ export default function App() {
                   integrativeData={integrativeData}
                   setIntegrativeData={setIntegrativeData}
                   currentUser={user}
+                  onDeleteRecord={(recId, e) => handleDelete(recId, e)}
                 />
 
 

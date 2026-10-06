@@ -28,6 +28,7 @@ import {
   Zap,
   Printer,
   Brain,
+  Trash2,
   Leaf,
   Layers,
   Square,
@@ -176,6 +177,7 @@ interface PatientDossierViewProps {
   setIntegrativeData: (data: any) => void;
   teamProfiles?: any[];
   currentUser?: any;
+  onDeleteRecord?: (recordId: string, e?: React.MouseEvent) => void;
 }
 
 // Precise age calculation function according to AGENTS.md Rule 1
@@ -451,6 +453,7 @@ export default function PatientDossierView({
   setIntegrativeData,
   teamProfiles,
   currentUser,
+  onDeleteRecord,
 }: PatientDossierViewProps) {
   const [activeTab, setActiveTab] = useState<
     'evolucao' | 'anamnese' | 'plano' | 'especialidade' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
@@ -1971,15 +1974,11 @@ export default function PatientDossierView({
               {(() => {
                 const isDental = activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry' || activeDoctor.especialidade.toLowerCase().includes('odonto');
                 const filteredHistory = (history || []).filter(rec => {
+                  const detected = detectRecordSpecialtyAndDoctor(rec, teamProfiles);
                   if (isDental) {
-                    return (
-                      rec.especialidade?.toLowerCase().includes('odonto') || 
-                      rec.especialidade?.toLowerCase().includes('biolog') ||
-                      rec.dados_especialidade?.odontograma || 
-                      rec.profissional_responsavel?.toLowerCase().includes('lucy')
-                    );
+                    return detected.isDental;
                   }
-                  return true;
+                  return detected.isNeuro || detected.isIntegrative || detected.doctorId === 'dr_carlos';
                 });
 
                 return (
@@ -2039,15 +2038,32 @@ export default function PatientDossierView({
                                   <Clock size={13} className={isPreCad ? "text-slate-500" : isCurrentPatient ? "text-sky-600" : "text-slate-400"} />
                                   {rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : 'Atendimento')}
                                 </span>
-                                <span className={`px-2 py-0.5 text-[9px] rounded-md uppercase flex items-center gap-1 font-bold ${
-                                  isPreCad 
-                                    ? 'bg-slate-100 text-slate-700 border border-slate-200' 
-                                    : isCurrentPatient 
-                                      ? 'bg-sky-100 text-sky-800 border border-sky-200/80' 
-                                      : 'bg-slate-100 text-slate-600 border border-slate-200'
-                                }`}>
-                                  <Eye size={10} /> {isPreCad ? 'PRÉ-CADASTRO' : (rec.especialidade ? rec.especialidade.toUpperCase() : 'CONSULTA')}
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`px-2 py-0.5 text-[9px] rounded-md uppercase flex items-center gap-1 font-bold ${
+                                    isPreCad 
+                                      ? 'bg-slate-100 text-slate-700 border border-slate-200' 
+                                      : isCurrentPatient 
+                                        ? 'bg-sky-100 text-sky-800 border border-sky-200/80' 
+                                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                  }`}>
+                                    <Eye size={10} /> {isPreCad ? 'PRÉ-CADASTRO' : (rec.especialidade ? rec.especialidade.toUpperCase() : 'CONSULTA')}
+                                  </span>
+                                  {onDeleteRecord && rec.id && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(`Deseja realmente excluir este prontuário de ${displayPatientName}?`)) {
+                                          onDeleteRecord(rec.id, e);
+                                        }
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-all shrink-0"
+                                      title="Excluir este prontuário do histórico"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="space-y-1.5 text-xs">
