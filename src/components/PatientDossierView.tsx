@@ -107,6 +107,36 @@ export function isValidExtractedName(name?: string | null): boolean {
   return clean.length >= 3;
 }
 
+export function generateBodyMapFromText(text: string): Array<{ x: number; y: number; side: 'anterior' | 'posterior'; label: string }> {
+  if (!text || typeof text !== 'string') return [];
+  const lower = text.toLowerCase();
+  const points: Array<{ x: number; y: number; side: 'anterior' | 'posterior'; label: string }> = [];
+
+  if (lower.includes('abdom') || lower.includes('barriga') || lower.includes('flanco') || lower.includes('epigast')) {
+    points.push({ x: 50, y: 45, side: 'anterior', label: 'Dor Abdominal' });
+  }
+  if (lower.includes('ombro direito') || lower.includes('ombro d') || lower.includes('supraespinhoso') || lower.includes('manguito rotador direito')) {
+    points.push({ x: 32, y: 28, side: 'anterior', label: 'Ombro Direito' });
+  }
+  if (lower.includes('ombro esquerdo') || lower.includes('ombro e')) {
+    points.push({ x: 68, y: 28, side: 'anterior', label: 'Ombro Esquerdo' });
+  }
+  if (lower.includes('cervic') || lower.includes('pescoço') || lower.includes('pescoco') || lower.includes('trapezio')) {
+    points.push({ x: 50, y: 20, side: 'posterior', label: 'Coluna Cervical' });
+  }
+  if (lower.includes('lomb') || lower.includes('l4') || lower.includes('l5') || lower.includes('s1') || lower.includes('ciat') || lower.includes('lumbar')) {
+    points.push({ x: 50, y: 52, side: 'posterior', label: 'Coluna Lombar' });
+  }
+  if (lower.includes('joelho direito') || lower.includes('joelho d')) {
+    points.push({ x: 42, y: 78, side: 'anterior', label: 'Joelho Direito' });
+  }
+  if (lower.includes('joelho esquerdo') || lower.includes('joelho e')) {
+    points.push({ x: 58, y: 78, side: 'anterior', label: 'Joelho Esquerdo' });
+  }
+
+  return points;
+}
+
 interface PatientDossierViewProps {
   patientName: string;
   patientPhone?: string;
@@ -1103,7 +1133,9 @@ export default function PatientDossierView({
               exame_neurologico: (examMode === 'neurological' || (mergedNeuroResult && hasMeaningfulData(mergedNeuroResult))) ? mergedNeuro : prev?.exame_neurologico,
               mapeamento_corporal: (result.mapeamento_corporal && result.mapeamento_corporal.length > 0)
                 ? result.mapeamento_corporal
-                : (prev?.mapeamento_corporal || []),
+                : ((prev?.mapeamento_corporal && prev.mapeamento_corporal.length > 0)
+                    ? prev.mapeamento_corporal
+                    : generateBodyMapFromText(cleanText)),
               dados_especialidade: mergedDadosEspecialidade
             };
           });

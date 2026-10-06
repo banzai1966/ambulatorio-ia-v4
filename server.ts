@@ -882,6 +882,10 @@ app.post("/api/process-clinical", async (req, res) => {
       9. IDENTIFICAÇÃO DO PACIENTE:
          - NUNCA invente nomes e NUNCA retorne 'Não informado', 'N/A' ou 'Paciente'. Se o relato não mencionar expressamente o nome da pessoa, retorne "paciente_nome_completo": "".
 
+      10. MAPEAMENTO CORPORAL DE DORES (BODY MAP 360°):
+          - Se o relato mencionar dores ou queixas anatômicas, preencha obrigatoriamente o array 'mapeamento_corporal' com objetos { "x": number, "y": number, "side": "anterior"|"posterior", "label": string }.
+            Exemplo: Dor abdominal -> { "x": 50, "y": 45, "side": "anterior", "label": "Dor Abdominal" }; Ombro D -> { "x": 32, "y": 28, "side": "anterior", "label": "Ombro Direito" }; Lombar / Lombociatalgia -> { "x": 50, "y": 52, "side": "posterior", "label": "Coluna Lombar" }; Cervical -> { "x": 50, "y": 20, "side": "posterior", "label": "Coluna Cervical" }.
+
       Extraia em formato JSON com a seguinte estrutura:
       {
         "paciente_nome_completo": "Nome do paciente se citado expressamente no relato, caso contrário deixe string vazia \"\"",
