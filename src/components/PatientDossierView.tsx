@@ -86,6 +86,27 @@ const DEFAULT_DOCTOR_PROFILES: ClinicalDoctorProfile[] = [
   }
 ];
 
+export function isValidExtractedName(name?: string | null): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const clean = name.trim().toLowerCase();
+  if (
+    !clean ||
+    clean === 'não informado' ||
+    clean === 'nao informado' ||
+    clean === 'n/a' ||
+    clean === 'n/d' ||
+    clean === 'paciente' ||
+    clean === 'nome do paciente' ||
+    clean === 'paciente não informado' ||
+    clean === 'paciente nao informado' ||
+    clean === 'null' ||
+    clean === 'undefined'
+  ) {
+    return false;
+  }
+  return clean.length >= 3;
+}
+
 interface PatientDossierViewProps {
   patientName: string;
   patientPhone?: string;
@@ -1041,9 +1062,43 @@ export default function PatientDossierView({
               ...(mergedOdonto ? { odontograma: mergedOdonto } : {})
             };
 
+            // Preservação absoluta dos dados cadastrais do paciente (NUNCA substitui por "Não informado" ou vazio)
+            const preservedName = (prev?.paciente_nome_completo && isValidExtractedName(prev.paciente_nome_completo))
+              ? prev.paciente_nome_completo
+              : (isValidExtractedName(patientName)
+                  ? patientName
+                  : (isValidExtractedName(result.paciente_nome_completo) ? result.paciente_nome_completo : (prev?.paciente_nome_completo || '')));
+
+            const preservedCpf = (prev?.paciente_cpf && prev.paciente_cpf.trim().length > 0)
+              ? prev.paciente_cpf
+              : (patientCpf || result.paciente_cpf || '');
+
+            const preservedDob = (prev?.paciente_data_nascimento && prev.paciente_data_nascimento.trim().length > 0)
+              ? prev.paciente_data_nascimento
+              : (patientDob || result.paciente_data_nascimento || '');
+
+            const preservedPhone = (prev?.paciente_telefone && prev.paciente_telefone.trim().length > 0)
+              ? prev.paciente_telefone
+              : (patientPhone || result.paciente_telefone || '');
+
+            const preservedId = prev?.id || prev?.agendamento_id;
+            const preservedDoctor = prev?.profissional_responsavel || activeDoctor.full_name;
+            const preservedDoctorId = prev?.medico_id || activeDoctor.id;
+            const preservedSpecialty = prev?.especialidade || activeDoctor.especialidade;
+
             return {
               ...prev,
               ...result,
+              id: preservedId,
+              paciente_nome_completo: preservedName,
+              paciente_nome: preservedName,
+              paciente_cpf: preservedCpf,
+              paciente_data_nascimento: preservedDob,
+              paciente_telefone: preservedPhone,
+              foto_url: prev?.foto_url || result.foto_url,
+              profissional_responsavel: preservedDoctor,
+              medico_id: preservedDoctorId,
+              especialidade: preservedSpecialty,
               checklist_integrativo: result.checklist_integrativo ? mergedChecklist : prev?.checklist_integrativo,
               exame_neurologico: (examMode === 'neurological' || (mergedNeuroResult && hasMeaningfulData(mergedNeuroResult))) ? mergedNeuro : prev?.exame_neurologico,
               mapeamento_corporal: (result.mapeamento_corporal && result.mapeamento_corporal.length > 0)
@@ -1083,9 +1138,15 @@ export default function PatientDossierView({
           ? 'Medicina Integrativa' 
           : (isNeuro ? 'Neurologia' : (assignedDoctor.especialidade || 'Clínica Geral')));
 
+    const effectiveSaveName = (isValidExtractedName(patientName) ? patientName : '') || 
+      (isValidExtractedName(currentRecord?.paciente_nome_completo) ? currentRecord.paciente_nome_completo : '') || 
+      (currentRecord as any)?.paciente_nome || 
+      "PACIENTE";
+
     const recordToSave = {
       ...currentRecord,
-      paciente_nome_completo: patientName || currentRecord?.paciente_nome_completo || "PACIENTE",
+      paciente_nome_completo: effectiveSaveName,
+      paciente_nome: effectiveSaveName,
       paciente_cpf: patientCpf || currentRecord?.paciente_cpf || "",
       paciente_data_nascimento: patientDob || currentRecord?.paciente_data_nascimento || "",
       paciente_telefone: patientPhone || currentRecord?.paciente_telefone || "",

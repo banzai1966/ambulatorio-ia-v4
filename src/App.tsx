@@ -73,7 +73,7 @@ import IntegrativeBodyMap from './components/IntegrativeBodyMapAnatomy';
 import IntegrativeEvolution from './components/IntegrativeEvolution';
 import SpecialtyFields from './components/SpecialtyFields';
 import VitalMonitor from './components/VitalMonitor';
-import PatientDossierView from './components/PatientDossierView';
+import PatientDossierView, { isValidExtractedName } from './components/PatientDossierView';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
 import { PWAInstallButton } from './components/PWAInstallButton';
@@ -2246,13 +2246,19 @@ export default function App() {
 
         // If examMode is NOT standard, we force currentSpecialty to use the examMode, completely ignoring detectedSpec
         const currentSpecialty = examMode !== 'standard' ? SPECIALTIES.find(s => s.id === examMode) : (detectedSpec || SPECIALTIES.find(s => s.id === examMode));
+        const existingName = currentRecord?.paciente_nome_completo || selectedPatient || '';
+        const validAiName = isValidExtractedName(result.paciente_nome_completo) ? result.paciente_nome_completo : '';
+        const finalPatientName = existingName || validAiName || 'PACIENTE';
+
         const newRecord: ClinicalRecord = {
-          paciente_nome_completo: result.paciente_nome_completo || selectedPatient || '',
-          paciente_cpf: result.paciente_cpf || '',
-          paciente_data_nascimento: result.paciente_data_nascimento || '',
-          paciente_telefone: selectedPatientPhone || '',
+          ...(currentRecord || {}),
+          id: currentRecord?.id,
+          paciente_nome_completo: finalPatientName,
+          paciente_cpf: currentRecord?.paciente_cpf || result.paciente_cpf || '',
+          paciente_data_nascimento: currentRecord?.paciente_data_nascimento || result.paciente_data_nascimento || '',
+          paciente_telefone: currentRecord?.paciente_telefone || selectedPatientPhone || result.paciente_telefone || '',
           especialidade: stripEmojis(currentSpecialty?.name || result.especialidade || selectedAppointmentReason || 'Geral'),
-          paciente_status: result.paciente_status || 'Estável',
+          paciente_status: result.paciente_status || currentRecord?.paciente_status || 'Estável',
           dados_clinicos: (() => {
             let dados = result.dados_clinicos || {};
             if (typeof result.dados_clinicos === 'string') {

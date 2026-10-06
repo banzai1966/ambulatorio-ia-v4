@@ -879,10 +879,12 @@ app.post("/api/process-clinical", async (req, res) => {
            b) Diarize e separe queixas do paciente (para anamnese/queixa principal) dos achados clínicos, dentes, reflexos, suplementos e prescrições decididos pelo profissional.
       8. CORREÇÃO DE TRANSCRIÇÃO:
          - Gere todos os textos em português médico impecável, formal e gramaticalmente perfeito.
+      9. IDENTIFICAÇÃO DO PACIENTE:
+         - NUNCA invente nomes e NUNCA retorne 'Não informado', 'N/A' ou 'Paciente'. Se o relato não mencionar expressamente o nome da pessoa, retorne "paciente_nome_completo": "".
 
       Extraia em formato JSON com a seguinte estrutura:
       {
-        "paciente_nome_completo": "Nome do paciente",
+        "paciente_nome_completo": "Nome do paciente se citado expressamente no relato, caso contrário deixe string vazia \"\"",
         "paciente_cpf": "CPF se mencionado",
         "paciente_data_nascimento": "YYYY-MM-DD se mencionada",
         "resumo_formatado": "Resumo clínico estruturado e detalhado da consulta",
