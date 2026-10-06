@@ -3082,7 +3082,7 @@ export default function PatientDossierView({
               )}
 
               {/* Odontologia Biológica - Suplementação e Procedimentos da Dra. Lucy */}
-              {selectedHistoryRecord.dados_especialidade && hasMeaningfulData(selectedHistoryRecord.dados_especialidade) && (
+              {detectRecordSpecialtyAndDoctor(selectedHistoryRecord).isDental && selectedHistoryRecord.dados_especialidade && hasMeaningfulData(selectedHistoryRecord.dados_especialidade) && (
                 <div className="bg-blue-50/90 p-4 rounded-2xl border border-blue-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
