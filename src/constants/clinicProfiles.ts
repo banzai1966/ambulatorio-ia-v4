@@ -1,4 +1,5 @@
 import { LUCY_LOGO_DATA_URL } from './lucyLogoBase64';
+import { hasMeaningfulData } from '../lib/utils';
 
 export interface ClinicProfileConfig {
   id: 'dra_lucy' | 'dr_carlos' | 'marco_admin' | string;
@@ -105,27 +106,66 @@ export function detectRecordSpecialtyAndDoctor(record: any, allDoctorProfiles?: 
   const medicoId = (record.medico_id || '').toLowerCase();
   const dados = record.dados_especialidade || {};
 
-  // Detecção de Odontologia Biológica (Dra. Lucy Murata)
-  const isDental = Boolean(
-    spec.includes('odonto') ||
-    spec.includes('dent') ||
-    spec.includes('dente') ||
-    spec.includes('biol') ||
+  // 1. Identificação explícita por Dr. Carlos Morato (Neurologia & Integrativa)
+  const isCarlosExplicit = Boolean(
+    medicoId === 'dr_carlos' ||
+    medicoId.includes('carlos') ||
+    medicoId.includes('morato') ||
+    prof.includes('carlos') ||
+    prof.includes('morato') ||
+    spec.includes('neuro') ||
+    spec.includes('neurolog')
+  );
+
+  // 2. Identificação explícita por Dra. Lucy Murata (Odontologia Biológica)
+  const isLucyExplicit = Boolean(
     medicoId === 'dra_lucy' ||
     medicoId.includes('lucy') ||
     medicoId.includes('luci') ||
     prof.includes('lucy') ||
     prof.includes('luci') ||
     prof.includes('murata') ||
-    prof.includes('morata') ||
-    dados.odontograma ||
-    dados.amalgama_ativo !== undefined ||
-    dados.implante_zirconia_ativo !== undefined ||
-    dados.focos_cavitacao_ativo !== undefined ||
-    dados.terapia_neural_ativo !== undefined
+    spec.includes('odonto') ||
+    spec.includes('dent')
   );
 
-  if (isDental) {
+  // 3. Verificação precisa de dados clínicos substantivos (hasMeaningfulData)
+  const hasNeuroFindings = Boolean(
+    (record.exame_neurologico && hasMeaningfulData(record.exame_neurologico)) ||
+    (dados.exame_neurologico && hasMeaningfulData(dados.exame_neurologico))
+  );
+
+  const hasDentalFindings = Boolean(
+    (dados.odontograma?.teeth && hasMeaningfulData(dados.odontograma.teeth)) ||
+    (dados.odontograma && typeof dados.odontograma === 'object' && Object.keys(dados.odontograma).some(k => k !== 'teeth' && typeof dados.odontograma[k] === 'object' && dados.odontograma[k]?.status && dados.odontograma[k]?.status !== 'healthy')) ||
+    dados.amalgama_ativo === true ||
+    dados.implante_zirconia_ativo === true ||
+    dados.focos_cavitacao_ativo === true ||
+    dados.terapia_neural_ativo === true
+  );
+
+  const hasIntegrativeFindings = Boolean(
+    (record.checklist_integrativo && hasMeaningfulData(record.checklist_integrativo)) ||
+    (dados.checklist_integrativo && hasMeaningfulData(dados.checklist_integrativo))
+  );
+
+  // DECISÃO 1: Se for Dr. Carlos explícito OU tiver achados neurológicos
+  if (isCarlosExplicit || hasNeuroFindings) {
+    const isPurelyIntegrative = (spec.includes('integrat') || hasIntegrativeFindings) && !spec.includes('neuro') && !hasNeuroFindings;
+    return {
+      mode: isPurelyIntegrative ? 'integrative' : 'neurological',
+      doctorId: 'dr_carlos',
+      doctorName: 'Dr. Carlos Morato',
+      specialtyLabel: isPurelyIntegrative ? 'Medicina Integrativa' : 'Neurologia & Medicina Integrativa',
+      councilBadge: 'CRM/SP 145.892',
+      isDental: false,
+      isNeuro: !isPurelyIntegrative,
+      isIntegrative: isPurelyIntegrative
+    };
+  }
+
+  // DECISÃO 2: Se for Dra. Lucy explícito OU tiver achados odontológicos
+  if (isLucyExplicit || hasDentalFindings) {
     return {
       mode: 'biological_dentistry',
       doctorId: 'dra_lucy',
@@ -138,36 +178,8 @@ export function detectRecordSpecialtyAndDoctor(record: any, allDoctorProfiles?: 
     };
   }
 
-  // Detecção de Neurologia (Dr. Carlos Morato)
-  const isNeuro = Boolean(
-    spec.includes('neuro') ||
-    medicoId === 'dr_carlos' ||
-    medicoId.includes('carlos') ||
-    prof.includes('carlos') ||
-    (record.exame_neurologico && Object.keys(record.exame_neurologico).length > 0) ||
-    (dados.exame_neurologico && Object.keys(dados.exame_neurologico).length > 0)
-  );
-
-  if (isNeuro) {
-    return {
-      mode: 'neurological',
-      doctorId: 'dr_carlos',
-      doctorName: 'Dr. Carlos Morato',
-      specialtyLabel: 'Neurologia',
-      councilBadge: 'CRM/SP 145.892',
-      isDental: false,
-      isNeuro: true,
-      isIntegrative: false
-    };
-  }
-
-  // Detecção de Medicina Integrativa pura (Dr. Carlos Morato)
-  const isIntegrative = Boolean(
-    spec.includes('integrat') ||
-    (record.checklist_integrativo && Object.keys(record.checklist_integrativo).length > 0)
-  );
-
-  if (isIntegrative) {
+  // DECISÃO 3: Medicina Integrativa (Dr. Carlos Morato)
+  if (spec.includes('integrat') || hasIntegrativeFindings) {
     return {
       mode: 'integrative',
       doctorId: 'dr_carlos',
@@ -180,7 +192,7 @@ export function detectRecordSpecialtyAndDoctor(record: any, allDoctorProfiles?: 
     };
   }
 
-  // Detecção de Marco Duarte (Admin / Gestor)
+  // DECISÃO 4: Marco Duarte (Admin / Gestor)
   if (
     prof.includes('marco') ||
     medicoId === 'marco_admin' ||
@@ -200,7 +212,7 @@ export function detectRecordSpecialtyAndDoctor(record: any, allDoctorProfiles?: 
 
   // Fallback padrão se houver perfil em allDoctorProfiles
   if (allDoctorProfiles && allDoctorProfiles.length > 0 && record.medico_id) {
-    const matchedProfile = allDoctorProfiles.find(d => d.id === record.medico_id || d.full_name?.toLowerCase().includes(prof));
+    const matchedProfile = allDoctorProfiles.find(d => d.id === record.medico_id || (prof && d.full_name?.toLowerCase().includes(prof)));
     if (matchedProfile) {
       return {
         mode: matchedProfile.default_mode || 'standard',
@@ -215,14 +227,15 @@ export function detectRecordSpecialtyAndDoctor(record: any, allDoctorProfiles?: 
     }
   }
 
+  // Padrão seguro do Ambulatório IA: Dr. Carlos Morato
   return {
-    mode: 'standard',
+    mode: 'neurological',
     doctorId: 'dr_carlos',
     doctorName: 'Dr. Carlos Morato',
-    specialtyLabel: record.especialidade || 'Clínica Geral',
+    specialtyLabel: record.especialidade || 'Neurologia & Medicina Integrativa',
     councilBadge: 'CRM/SP 145.892',
     isDental: false,
-    isNeuro: false,
+    isNeuro: true,
     isIntegrative: false
   };
 }

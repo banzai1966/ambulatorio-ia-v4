@@ -11,8 +11,8 @@ services:
       - NODE_ENV=development
       
       # 🧠 Inteligência Artificial (Gemini)
-      - GEMINI_API_KEY=AQ.Ab8RN6JM0UB5KrGFRIwmMgzgX6gjEPjmeQLCM5Y9Qdt89Haa4A
-      - VITE_GEMINI_API_KEY=AQ.Ab8RN6JM0UB5KrGFRIwmMgzgX6gjEPjmeQLCM5Y9Qdt89Haa4A
+      - GEMINI_API_KEY=AIzaSyABiep06hKyB9Ny1EKUZetqxyeSiMSBadE
+      - VITE_GEMINI_API_KEY=AIzaSyABiep06hKyB9Ny1EKUZetqxyeSiMSBadE
       
       # 🗄️ Banco de Dados (Supabase Ambulatório)
       - SUPABASE_URL=https://qmnbbpoubacuctlokmgq.supabase.co

@@ -51,7 +51,7 @@ import NPSAndGoogleReviewModal from './NPSAndGoogleReviewModal';
 import { initialIntegrativeData } from '../types/integrativeChecklist';
 import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
-import { processClinicalInput } from '../services/clinicalService';
+import { processClinicalInput, formatAiErrorMessage } from '../services/clinicalService';
 import { resolveDoctorKey, detectRecordSpecialtyAndDoctor } from '../constants/clinicProfiles';
 
 interface ClinicalDoctorProfile {
@@ -452,18 +452,21 @@ export default function PatientDossierView({
 
   // Identificação do profissional responsável ativo
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>(() => {
-    // 1. Se o prontuário atual estiver definido, detecta sua especialidade e profissional exatos
+    // 1. Se houver médico logado (Dr. Carlos ou Dra. Lucy), seu perfil é a prioridade mestre
+    if (currentUser) {
+      const docKey = resolveDoctorKey(currentUser);
+      if (docKey === 'dr_carlos') return 'dr_carlos';
+      if (docKey === 'dra_lucy') return 'dra_lucy';
+    }
+
+    // 2. Se o prontuário atual estiver definido, detecta sua especialidade e profissional exatos
     if (currentRecord) {
       const detected = detectRecordSpecialtyAndDoctor(currentRecord, allDoctorProfiles);
       if (detected.doctorId) return detected.doctorId;
     }
 
-    // 2. Se houver usuário logado (Dr. Carlos, Dra. Lucy ou outro profissional)
+    // 3. Se houver outro profissional logado
     if (currentUser) {
-      const docKey = resolveDoctorKey(currentUser);
-      if (docKey === 'dr_carlos') return 'dr_carlos';
-      if (docKey === 'dra_lucy') return 'dra_lucy';
-      
       const email = (currentUser.email || '').toLowerCase().trim();
       const name = (currentUser.full_name || '').toLowerCase().trim();
       const match = allDoctorProfiles.find(d => 
@@ -473,7 +476,7 @@ export default function PatientDossierView({
       if (match && match.id !== 'dr_marco') return match.id;
     }
 
-    // 3. Se o modo de exame inicial estiver explícito
+    // 4. Se o modo de exame inicial estiver explícito
     if (examMode === 'biological_dentistry') {
       return 'dra_lucy';
     }
@@ -481,7 +484,7 @@ export default function PatientDossierView({
       return 'dr_carlos';
     }
 
-    // 4. Se for Marco Admin ou recuperação do localStorage
+    // 5. Se for Marco Admin ou recuperação do localStorage
     const saved = typeof window !== 'undefined' ? localStorage.getItem('clinic_active_doctor_id') : null;
     if (saved && allDoctorProfiles.some(d => d.id === saved)) return saved;
 
@@ -973,7 +976,7 @@ export default function PatientDossierView({
             }
             return updated;
           });
-        } else if (examMode === 'biological_dentistry' || (result.dados_especialidade && Object.keys(result.dados_especialidade).length > 0)) {
+        } else if (examMode === 'biological_dentistry' || (result.dados_especialidade && hasMeaningfulData(result.dados_especialidade))) {
           const incomingOdonto = result.dados_especialidade?.odontograma || result.odontograma;
           setSpecialtyData((prev: any) => ({
             ...(prev || {}),
@@ -1054,14 +1057,8 @@ export default function PatientDossierView({
       }
     } catch (err: any) {
       console.error("[IA Error]", err);
-      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || '';
-      if (errMsg.includes('API_KEY_MISSING')) {
-        toast.error("Chave da IA (GEMINI_API_KEY) não configurada no servidor. Verifique o arquivo .env.", { id: toastId, duration: 6000 });
-      } else if (errMsg.includes('quota') || errMsg.includes('429')) {
-        toast.error("Limite temporário da API atingido. Aguarde alguns segundos e tente novamente.", { id: toastId, duration: 5000 });
-      } else {
-        toast.error(errMsg ? `Falha ao processar texto com a IA: ${errMsg}` : "Falha ao processar texto com a IA.", { id: toastId, duration: 5000 });
-      }
+      const friendlyMsg = formatAiErrorMessage(err);
+      toast.error(friendlyMsg, { id: toastId, duration: 8000 });
     } finally {
       setIsLocalProcessing(false);
     }
@@ -1190,20 +1187,35 @@ export default function PatientDossierView({
   useEffect(() => {
     if (currentRecord) {
       const detected = detectRecordSpecialtyAndDoctor(currentRecord, allDoctorProfiles);
-      if (detected.isDental) {
+      const userDocKey = currentUser ? resolveDoctorKey(currentUser) : null;
+
+      if (userDocKey === 'dr_carlos') {
+        setSelectedDoctorId('dr_carlos');
+        if (detected.mode === 'integrative') {
+          if (examMode !== 'integrative') setExamMode('integrative');
+        } else {
+          if (examMode !== 'neurological' && examMode !== 'integrative') setExamMode('neurological');
+        }
+      } else if (userDocKey === 'dra_lucy') {
         setSelectedDoctorId('dra_lucy');
-        if (examMode !== 'biological_dentistry') {
-          setExamMode('biological_dentistry');
-        }
-      } else if (detected.isNeuro) {
-        setSelectedDoctorId('dr_carlos');
-        if (examMode !== 'neurological' && examMode !== 'integrative') {
-          setExamMode('neurological');
-        }
-      } else if (detected.isIntegrative) {
-        setSelectedDoctorId('dr_carlos');
-        if (examMode !== 'integrative' && examMode !== 'neurological') {
-          setExamMode('integrative');
+        if (examMode !== 'biological_dentistry') setExamMode('biological_dentistry');
+      } else {
+        // Marco Admin ou login genérico: adota a especialidade detectada do prontuário
+        if (detected.isDental) {
+          setSelectedDoctorId('dra_lucy');
+          if (examMode !== 'biological_dentistry') {
+            setExamMode('biological_dentistry');
+          }
+        } else if (detected.isNeuro) {
+          setSelectedDoctorId('dr_carlos');
+          if (examMode !== 'neurological' && examMode !== 'integrative') {
+            setExamMode('neurological');
+          }
+        } else if (detected.isIntegrative) {
+          setSelectedDoctorId('dr_carlos');
+          if (examMode !== 'integrative' && examMode !== 'neurological') {
+            setExamMode('integrative');
+          }
         }
       }
 

@@ -173,10 +173,31 @@ function formatPhoneBR(phone: string): string {
 }
 
 // --- LÓGICA GEMINI NO BACKEND (MAIS ESTÁVEL) ---
+const sanitizeGeminiKey = (k?: any): string | undefined => {
+  if (!k || typeof k !== 'string') return undefined;
+  const cleaned = k.trim().replace(/^["']|["']$/g, '').trim();
+  if (
+    !cleaned || 
+    cleaned === 'sua_chave_aqui' || 
+    cleaned === 'your_key_here' || 
+    cleaned === 'undefined' || 
+    cleaned === 'null' ||
+    cleaned.length < 15
+  ) {
+    return undefined;
+  }
+  return cleaned;
+};
+
 const getGeminiKey = (req?: any) => {
   const headerKey = req ? (req.headers?.['x-gemini-key'] as string) : undefined;
   const bodyKey = req?.body?.geminiApiKey;
-  return headerKey || bodyKey || process.env.MINHA_CHAVE_PAGA || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  return sanitizeGeminiKey(headerKey) ||
+         sanitizeGeminiKey(bodyKey) ||
+         sanitizeGeminiKey(process.env.MINHA_CHAVE_PAGA) ||
+         sanitizeGeminiKey(process.env.GEMINI_API_KEY) ||
+         sanitizeGeminiKey(process.env.VITE_GEMINI_API_KEY) ||
+         sanitizeGeminiKey(process.env.API_KEY);
 };
 
 async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig: any) {
@@ -197,6 +218,16 @@ async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig:
     } catch (err: any) {
       console.warn(`[GEMINI] Tentativa com modelo ${modelName} falhou:`, err.message);
       lastError = err;
+      const errStr = String(err?.message || '');
+      // Se a chave for inválida ou não autenticada (401), não adianta tentar outros modelos
+      if (
+        errStr.includes('API key not valid') ||
+        errStr.includes('API_KEY_INVALID') ||
+        errStr.includes('UNAUTHENTICATED') ||
+        err?.status === 401
+      ) {
+        throw err;
+      }
     }
   }
   throw lastError;
@@ -1030,9 +1061,65 @@ app.post("/api/process-clinical", async (req, res) => {
     res.json(parsed);
   } catch (err: any) {
     console.error("[GEMINI] ❌ Erro no processamento:", err?.message || err);
+    const errText = String(err?.message || err || '');
+    const isAuthError = errText.includes('API key not valid') || 
+                        errText.includes('API_KEY_INVALID') || 
+                        errText.includes('UNAUTHENTICATED') || 
+                        errText.includes('INVALID_ARGUMENT') ||
+                        err?.status === 401;
+
+    if (isAuthError) {
+      return res.status(401).json({ 
+        error: "API_KEY_INVALID",
+        message: "Chave do Google Gemini (GEMINI_API_KEY) inválida, ausente ou expirada. Verifique se a variável GEMINI_API_KEY no arquivo .env ou no Portainer do seu servidor possui uma chave ativa gerada no Google AI Studio (iniciando com AIzaSy... e sem aspas)."
+      });
+    }
+
     res.status(500).json({ 
       error: err?.message || "Erro ao processar com a IA",
       message: err?.message || "Erro interno no processamento do modelo Gemini"
+    });
+  }
+});
+
+// Endpoint de Diagnóstico da IA para verificar se a chave GEMINI_API_KEY no servidor está funcional
+app.get("/api/ai/diagnostic", async (req, res) => {
+  const key = getGeminiKey(req);
+  if (!key) {
+    return res.json({
+      status: "missing_key",
+      message: "Chave GEMINI_API_KEY não configurada ou vazia no servidor (.env / Portainer)."
+    });
+  }
+
+  try {
+    const ai = new GoogleGenAI({ 
+      apiKey: key,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    });
+    const resp = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: [{ parts: [{ text: "ping" }] }]
+    });
+    return res.json({
+      status: "ok",
+      model: "gemini-3.8-flash",
+      maskedKey: key.slice(0, 7) + "..." + key.slice(-4),
+      message: "Conexão com Google Gemini ativa e operacional!"
+    });
+  } catch (err: any) {
+    const errText = String(err?.message || err || '');
+    const isAuth = errText.includes('API key not valid') || 
+                   errText.includes('API_KEY_INVALID') || 
+                   errText.includes('UNAUTHENTICATED') || 
+                   errText.includes('INVALID_ARGUMENT') ||
+                   err?.status === 401;
+    return res.json({
+      status: isAuth ? "invalid_key" : "error",
+      maskedKey: key.length > 10 ? (key.slice(0, 7) + "..." + key.slice(-4)) : "Chave muito curta",
+      message: isAuth 
+        ? "Chave rejeitada pelo Google (API_KEY_INVALID / 401). Verifique se a chave está ativa no Google AI Studio e não possui aspas ou espaços."
+        : `Erro na API do Google: ${err?.message || 'Falha de conexão'}`
     });
   }
 });

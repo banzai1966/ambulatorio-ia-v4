@@ -20,7 +20,30 @@ interface ClinicSettingsProps {
 }
 
 export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey }: ClinicSettingsProps) {
-  const [activeTab, setActiveTab] = useState<'whatsapp' | 'clinic'>('whatsapp');
+  const [activeTab, setActiveTab] = useState<'whatsapp' | 'clinic' | 'ai_status'>('whatsapp');
+  const [aiDiagnostic, setAiDiagnostic] = useState<{ status?: string, message?: string, model?: string, maskedKey?: string } | null>(null);
+  const [testingAi, setTestingAi] = useState(false);
+
+  const checkAiStatus = async () => {
+    setTestingAi(true);
+    try {
+      const res = await fetch('/api/ai/diagnostic');
+      const data = await res.json();
+      setAiDiagnostic(data);
+      if (data.status === 'ok') {
+        toast.success("✨ Google Gemini conectado e operacional!");
+      } else if (data.status === 'invalid_key') {
+        toast.error("⚠️ Chave GEMINI_API_KEY inválida ou expirada no servidor.");
+      } else {
+        toast.error("Aviso da IA: " + data.message);
+      }
+    } catch (e: any) {
+      setAiDiagnostic({ status: 'error', message: 'Falha ao conectar com o endpoint de diagnóstico do servidor: ' + e.message });
+      toast.error("Erro ao testar diagnóstico da IA.");
+    } finally {
+      setTestingAi(false);
+    }
+  };
   
   // Marco Duarte é o Administrador Mestre exclusivo
   const isMasterAdmin = useMemo(() => {
@@ -253,7 +276,29 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
           }`}
         >
           <Building2 size={16} className={activeTab === 'clinic' ? 'text-indigo-600' : 'text-slate-400'} />
-          <span>Receituário & Dados do Consultório</span>
+          <span>Receituário & Consultório</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('ai_status');
+            if (!aiDiagnostic) checkAiStatus();
+          }}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all ${
+            activeTab === 'ai_status'
+              ? 'bg-white text-purple-700 shadow-sm border border-slate-200/60'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+          }`}
+        >
+          <Sparkles size={16} className={activeTab === 'ai_status' ? 'text-purple-600' : 'text-slate-400'} />
+          <span>Status da IA (Gemini)</span>
+          {aiDiagnostic?.status === 'ok' && (
+            <span className="w-2 h-2 rounded-full bg-emerald-500" title="IA Operacional"></span>
+          )}
+          {aiDiagnostic && aiDiagnostic.status !== 'ok' && (
+            <span className="w-2 h-2 rounded-full bg-rose-500" title="IA com Alerta"></span>
+          )}
         </button>
       </div>
 
@@ -602,6 +647,100 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
                 placeholder="Ex: Olá {paciente}, segue o seu receituário médico / pedido emitido em sua consulta."
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ABA 3: STATUS DA IA (GEMINI) */}
+      {activeTab === 'ai_status' && (
+        <div className="space-y-4 animate-in fade-in duration-150">
+          <div className="p-5 bg-gradient-to-r from-purple-50/80 via-indigo-50/50 to-slate-50 border border-purple-200/80 rounded-3xl space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-2xl shadow-sm">
+                  <Sparkles size={22} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    Diagnóstico do Google Gemini (IA)
+                    {aiDiagnostic?.status === 'ok' && (
+                      <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold flex items-center gap-1 border border-emerald-300">
+                        <CheckCircle2 size={12} className="text-emerald-600" /> Operacional
+                      </span>
+                    )}
+                    {aiDiagnostic?.status === 'invalid_key' && (
+                      <span className="px-2.5 py-0.5 bg-rose-100 text-rose-800 rounded-full text-[10px] font-bold flex items-center gap-1 border border-rose-300">
+                        Chave Inválida (401)
+                      </span>
+                    )}
+                    {aiDiagnostic?.status === 'missing_key' && (
+                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold flex items-center gap-1 border border-amber-300">
+                        Não Configurada
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Verificação direta da conexão do servidor com o modelo oficial de IA
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={checkAiStatus}
+                disabled={testingAi}
+                className="w-full sm:w-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {testingAi ? <Loader2 size={15} className="animate-spin" /> : <Server size={15} />}
+                {testingAi ? "Testando Conexão..." : "Testar Conexão Agora"}
+              </button>
+            </div>
+
+            {aiDiagnostic && (
+              <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
+                aiDiagnostic.status === 'ok'
+                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                  : 'bg-rose-50/70 border-rose-200 text-rose-950'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">Resultado do Servidor:</span>
+                  <span className="font-mono text-[11px] bg-white/80 px-2 py-0.5 rounded border">
+                    Modelo: {aiDiagnostic.model || 'gemini-3.8-flash'}
+                  </span>
+                </div>
+                <p className="font-medium">{aiDiagnostic.message}</p>
+                {aiDiagnostic.maskedKey && (
+                  <p className="text-[11px] font-mono text-slate-600">
+                    Chave no Servidor: <strong className="text-slate-800">{aiDiagnostic.maskedKey}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Caixa Informativa para o Gestor Marco Duarte */}
+            <div className="p-4 bg-white/80 border border-slate-200 rounded-2xl space-y-2.5 text-xs text-slate-700">
+              <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                <HelpCircle size={15} className="text-purple-600" />
+                Como configurar ou atualizar a GEMINI_API_KEY no seu servidor:
+              </h4>
+              <ol className="list-decimal list-inside space-y-1.5 text-slate-600 pl-1 leading-relaxed">
+                <li>
+                  Gere ou renove sua chave de API gratuitamente no painel oficial do <strong>Google AI Studio</strong> (<a href="https://aistudio.google.com" target="_blank" rel="noreferrer" className="text-purple-600 underline font-semibold">aistudio.google.com</a>).
+                </li>
+                <li>
+                  No seu servidor (VPS Contabo, Portainer ou arquivo <code>.env</code>), defina:
+                  <div className="mt-1 p-2 bg-slate-900 text-slate-100 rounded-lg font-mono text-[11px] select-all">
+                    GEMINI_API_KEY=AIzaSy...sua_chave_aqui
+                  </div>
+                </li>
+                <li>
+                  <strong>Atenção:</strong> Não utilize aspas (<code>&quot;</code> ou <code>&apos;</code>) nem espaços extras antes ou depois da chave.
+                </li>
+                <li>
+                  Reinicie o container ou o serviço Node.js para que as novas variáveis de ambiente entrem em vigor.
+                </li>
+              </ol>
             </div>
           </div>
         </div>

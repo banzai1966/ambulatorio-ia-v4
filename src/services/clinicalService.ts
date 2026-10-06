@@ -11,9 +11,74 @@ export interface ClinicalSummary {
   prescricao: string;
 }
 
-const getGeminiKey = () => {
-  return process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+const getGeminiKey = (): string | undefined => {
+  const raw = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+  if (!raw || typeof raw !== 'string') return undefined;
+  const cleaned = raw.trim().replace(/^["']|["']$/g, '').trim();
+  if (
+    !cleaned || 
+    cleaned === 'sua_chave_aqui' || 
+    cleaned === 'your_key_here' || 
+    cleaned === 'undefined' || 
+    cleaned.length < 15
+  ) {
+    return undefined;
+  }
+  return cleaned;
 };
+
+export function formatAiErrorMessage(err: any): string {
+  if (!err) return "Erro ao processar com a IA.";
+  
+  let str = '';
+  if (typeof err === 'string') {
+    str = err;
+  } else if (err.response?.data?.message) {
+    str = typeof err.response.data.message === 'string' ? err.response.data.message : JSON.stringify(err.response.data.message);
+  } else if (err.response?.data?.error) {
+    str = typeof err.response.data.error === 'string' ? err.response.data.error : JSON.stringify(err.response.data.error);
+  } else if (err.message) {
+    str = err.message;
+  } else {
+    str = JSON.stringify(err);
+  }
+
+  // Tenta analisar se o texto contém um objeto JSON bruto de erro da Google
+  try {
+    const jsonMatch = str.match(/\{[\s\S]*"error"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed?.error?.message) {
+        str = parsed.error.message;
+      }
+    }
+  } catch (_) {}
+
+  if (
+    str.includes('API key not valid') ||
+    str.includes('API_KEY_INVALID') ||
+    str.includes('UNAUTHENTICATED') ||
+    str.includes('INVALID_ARGUMENT') ||
+    str.includes('"code": 401') ||
+    str.includes('"code":401')
+  ) {
+    return "Chave do Google Gemini (GEMINI_API_KEY) inválida ou expirada no servidor. Verifique a variável GEMINI_API_KEY no arquivo .env ou no Portainer (ela deve começar com AIzaSy... e não conter aspas nem espaços).";
+  }
+
+  if (str.includes('API_KEY_MISSING')) {
+    return "Chave de IA (GEMINI_API_KEY) não configurada no servidor. Adicione GEMINI_API_KEY no arquivo .env.";
+  }
+
+  if (str.includes('quota') || str.includes('429') || str.includes('RESOURCE_EXHAUSTED')) {
+    return "Limite temporário de requisições da IA atingido. Aguarde alguns instantes e tente novamente.";
+  }
+
+  if (str.includes('404') || str.includes('is no longer available')) {
+    return "Modelo da IA em atualização. Tente novamente em instantes.";
+  }
+
+  return str.length > 200 ? str.slice(0, 200) + '...' : str;
+}
 
 async function generateGeminiContentWithFallback(ai: GoogleGenAI, requestConfig: any) {
   const modelsToTry = [
@@ -93,6 +158,19 @@ export async function processClinicalInput(
     return response.data;
   } catch (error: any) {
     const backendMsg = error?.response?.data?.message || error?.response?.data?.error;
+    const isAuth = error?.response?.status === 401 || (backendMsg && (
+      typeof backendMsg === 'string' && (
+        backendMsg.includes('API key not valid') || 
+        backendMsg.includes('API_KEY_INVALID') || 
+        backendMsg.includes('UNAUTHENTICATED')
+      )
+    ));
+
+    // Se o backend retornou erro de chave de API inválida ou ausente, propagamos a mensagem clara diretamente
+    if (isAuth && backendMsg) {
+      throw new Error(backendMsg);
+    }
+
     console.warn("[IA] Falha no backend, tentando processamento local (Frontend)...", backendMsg || error.message);
     
     const key = getGeminiKey();

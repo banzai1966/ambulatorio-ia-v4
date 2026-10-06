@@ -55,7 +55,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from './lib/supabase';
 import { cn, hasMeaningfulData } from './lib/utils';
-import { processClinicalInput, generateClinicalSummary, ClinicalSummary } from './services/clinicalService';
+import { processClinicalInput, generateClinicalSummary, ClinicalSummary, formatAiErrorMessage } from './services/clinicalService';
 import { sendWhatsAppMessage } from './services/whatsappService';
 import Dashboard from './components/Dashboard';
 import Agenda from './components/Agenda';
@@ -2301,17 +2301,9 @@ export default function App() {
         toast.success("✨ IA preencheu a ficha e prontuário com sucesso!", { id: toastId });
     } catch (err: any) {
       console.error("Erro no processamento clínico:", err);
-      const msg = err.message || "";
-      if (msg.includes("API_KEY_MISSING")) {
-        setError("Configuração pendente: Chave de API não encontrada.");
-        toast.error("Chave de API não configurada.", { id: toastId });
-      } else if (msg.includes("quota") || msg.includes("429")) {
-        setError("Limite de uso da IA atingido. Tente novamente em alguns minutos.");
-        toast.error("Limite de IA atingido temporariamente.", { id: toastId });
-      } else {
-        setError(`Erro ao processar áudio: ${msg || 'Verifique sua conexão e tente novamente.'}`);
-        toast.error("Erro ao processar áudio. O rascunho da conversa está salvo com segurança.", { id: toastId });
-      }
+      const friendlyMsg = formatAiErrorMessage(err);
+      setError(friendlyMsg);
+      toast.error(friendlyMsg, { id: toastId, duration: 8000 });
     } finally {
       setIsProcessing(false);
     }
@@ -2848,7 +2840,7 @@ export default function App() {
       }
 
       // Especialidade
-      if (record.dados_especialidade && Object.keys(record.dados_especialidade).length > 0) {
+      if (record.dados_especialidade && hasMeaningfulData(record.dados_especialidade)) {
         const specDataStr = Object.entries(record.dados_especialidade)
           .filter(([k]) => k !== 'mapeamento_corporal' && k !== 'vitals')
           .map(([k, v]) => `${k.replace(/_/g, ' ').toUpperCase()}: ${safeText(v)}`)
@@ -3087,16 +3079,16 @@ export default function App() {
       doc.setTextColor(0, 50, 100);
       doc.setFont('helvetica', 'bold');
       
-      const isDental = record.especialidade?.toLowerCase().includes('odonto') || record.especialidade?.toLowerCase().includes('biol') || examMode === 'biological_dentistry';
-      const fallbackDoc = isDental ? 'Dra. Lucy Murata' : (examMode === 'neurological' ? 'Dr. Carlos Morato' : 'Dr. Marco Duarte');
-      const docName = record.profiles?.full_name || record.profissional_responsavel || fallbackDoc;
+      const detected = detectRecordSpecialtyAndDoctor(record);
+      const isDental = detected.isDental || examMode === 'biological_dentistry';
+      const docName = record.profiles?.full_name || record.profissional_responsavel || (isDental ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato');
       const prefix = (docName.toLowerCase().startsWith('dr.') || docName.toLowerCase().startsWith('dra.') || docName.toLowerCase().startsWith('dr ') || docName.toLowerCase().startsWith('dra ')) ? '' : 'Dr(a). ';
       doc.text(`${prefix}${docName}`, pageWidth / 2, footerY + 6, { align: 'center' });
       
       doc.setFontSize(8.5);
       doc.setTextColor(80, 80, 80);
       doc.setFont('helvetica', 'normal');
-      const councilText = isDental ? 'CRO-SP: 69246 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Medicina Integrativa';
+      const councilText = isDental ? 'CRO-SP: 69246 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Neurologia & Medicina Integrativa';
       doc.text(councilText, pageWidth / 2, footerY + 11, { align: 'center' });
 
       doc.setFontSize(7.5);
