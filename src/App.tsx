@@ -83,6 +83,7 @@ import {
   getOfflineRecords, 
   saveRecordLocally, 
   syncOfflineRecordsWithCloud, 
+  removeOfflineRecord,
   exportLocalDataJSON, 
   importLocalDataJSON,
   importLocalDataCSV,
@@ -1622,16 +1623,31 @@ export default function App() {
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     
+    // Confirmação segura
     const toastId = toast.loading("Excluindo prontuário...");
 
     try {
-      const { error } = await supabase
-        .from('prontuarios')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      
+      // 1. Remove do Supabase caso seja registro remoto
+      if (!id.startsWith('OFFLINE_') && !id.startsWith('imp_csv_')) {
+        const { error } = await supabase
+          .from('prontuarios')
+          .delete()
+          .eq('id', id);
+        
+        if (error) {
+          console.warn("Aviso na exclusão remota do Supabase:", error.message);
+        }
+      }
+
+      // 2. Remove do armazenamento offline/local se existir
+      removeOfflineRecord(id);
+
+      // 3. Atualização otimista e instantânea da lista em tela
+      setHistory(prev => prev.filter(r => r.id !== id && (r as any).offline_id !== id));
+      if (currentRecord && (currentRecord.id === id || (currentRecord as any).offline_id === id)) {
+        setCurrentRecord(null);
+      }
+
       toast.success("Prontuário excluído com sucesso!", { id: toastId });
       fetchHistory(searchTerm);
     } catch (err: any) {

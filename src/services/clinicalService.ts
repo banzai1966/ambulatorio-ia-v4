@@ -59,10 +59,14 @@ export function formatAiErrorMessage(err: any): string {
     str.includes('API_KEY_INVALID') ||
     str.includes('UNAUTHENTICATED') ||
     str.includes('INVALID_ARGUMENT') ||
+    str.includes('leaked') ||
+    str.includes('PERMISSION_DENIED') ||
     str.includes('"code": 401') ||
-    str.includes('"code":401')
+    str.includes('"code":401') ||
+    str.includes('"code": 403') ||
+    str.includes('"code":403')
   ) {
-    return "Chave do Google Gemini (GEMINI_API_KEY) inválida ou expirada no servidor. Verifique a variável GEMINI_API_KEY no arquivo .env ou no Portainer (ela deve começar com AIzaSy... e não conter aspas nem espaços).";
+    return "Chave do Google Gemini (GEMINI_API_KEY) inválida, ausente, revogada ou expirada no servidor. Verifique a variável GEMINI_API_KEY no arquivo .env ou no Portainer (formato AQ... ou AIzaSy... sem aspas nem espaços).";
   }
 
   if (str.includes('API_KEY_MISSING')) {

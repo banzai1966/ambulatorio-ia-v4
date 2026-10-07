@@ -327,6 +327,10 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
       // 2. Registra a transação no Módulo Financeiro (Fluxo de Caixa)
       try {
+        const docKey = (payingAppointment.medico_nome || '').toLowerCase().includes('lucy') || (payingAppointment.medico_nome || '').toLowerCase().includes('luci')
+          ? 'dra_lucy'
+          : ((payingAppointment.medico_nome || '').toLowerCase().includes('carlos') ? 'dr_carlos' : undefined);
+
         const newTransaction = {
           id: String(Date.now()),
           type: 'income',
@@ -334,11 +338,13 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           patientName: payingAppointment.paciente_nome,
           patientCpf: payingAppointment.paciente_cpf || '',
           amount: numAmount,
-          category: payingAppointment.medico_especialidade || 'Consulta Médica',
+          category: payingAppointment.medico_especialidade || (docKey === 'dra_lucy' ? 'Odontologia Biológica' : 'Consulta Neurológica'),
           paymentMethod: paymentMethod,
           status: 'paid',
           date: getBrazilTodayDate(),
-          doctorName: payingAppointment.medico_nome || 'Dr(a). da Clínica',
+          doctorName: payingAppointment.medico_nome || (docKey === 'dra_lucy' ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato'),
+          doctorKey: docKey,
+          doctorCouncil: docKey === 'dra_lucy' ? 'CRO/SP 69246' : (docKey === 'dr_carlos' ? 'CRM/SP 145.892' : undefined),
           notes: paymentNotes || `Recebido na recepção via ${labelMethod}`
         };
 
@@ -2024,7 +2030,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     key={m.id}
                     type="button"
                     onClick={() => setPaymentMethod(m.id as any)}
-                    className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                    className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                       paymentMethod === m.id
                         ? 'border-blue-500 bg-blue-50/80 text-blue-900 font-extrabold shadow-xs scale-102 ring-2 ring-blue-500/20'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-medium'
@@ -2036,6 +2042,75 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                   </button>
                 ))}
               </div>
+
+              {/* Box de Chave PIX Rápida quando PIX selecionado */}
+              {paymentMethod === 'pix' && (() => {
+                const docName = payingAppointment.medico_nome || '';
+                const isLucy = docName.toLowerCase().includes('lucy') || docName.toLowerCase().includes('luci');
+                const isCarlos = docName.toLowerCase().includes('carlos');
+                const key = isLucy ? 'dra_lucy' : (isCarlos ? 'dr_carlos' : 'geral');
+
+                let bankInfo = {
+                  doctorName: isLucy ? 'Dra. Lucy Murata (CRO/SP 69246)' : (isCarlos ? 'Dr. Carlos Morato (CRM/SP 145.892)' : 'Ambulatório IA'),
+                  pixKeyType: isLucy ? 'CNPJ' : (isCarlos ? 'E-mail' : 'Telefone'),
+                  pixKey: isLucy ? '98.412.000/0001-90' : (isCarlos ? 'carlos.morato@neurologia.med.br' : '11999998888'),
+                  pixBeneficiary: isLucy ? 'Dra. Lucy Murata Odontologia Biológica' : (isCarlos ? 'Dr. Carlos Morato Neurologia Integrativa' : 'Ambulatório IA Recepção'),
+                  bankName: isLucy ? 'Banco Itaú' : (isCarlos ? 'Banco Santander' : 'Banco do Brasil')
+                };
+
+                if (typeof window !== 'undefined') {
+                  try {
+                    const saved = localStorage.getItem('ambulatorio_doctor_bank_settings_v1');
+                    if (saved) {
+                      const parsed = JSON.parse(saved);
+                      if (parsed && parsed[key]) bankInfo = parsed[key];
+                    }
+                  } catch (e) {}
+                }
+
+                return (
+                  <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2 mt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-black uppercase text-emerald-800 flex items-center gap-1.5">
+                        <QrCode className="w-3.5 h-3.5 text-emerald-600" />
+                        Chave PIX ({isLucy ? 'Dra. Lucy' : (isCarlos ? 'Dr. Carlos' : 'Clínica')})
+                      </span>
+                      <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                        {bankInfo.pixKeyType.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-emerald-200">
+                      <span className="font-mono font-bold text-xs text-slate-800 select-all">
+                        {bankInfo.pixKey}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(bankInfo.pixKey);
+                          toast.success('Chave PIX copiada para a área de transferência!');
+                        }}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Copy className="w-3 h-3" /> Copiar
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <span>Titular: <strong>{bankInfo.pixBeneficiary}</strong></span>
+                      <span>{bankInfo.bankName}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Informação sobre Maquininha Balcão física */}
+              {(paymentMethod === 'credit_card' || paymentMethod === 'debit_card') && (
+                <div className="p-3 bg-slate-100 rounded-2xl border border-slate-200 text-xs text-slate-600 flex items-center gap-2 mt-2">
+                  <CreditCard className="w-4 h-4 text-slate-500 shrink-0" />
+                  <span>
+                    Cobrança realizada na <strong>maquininha física do balcão</strong> (Stone, PagBank, Cielo, etc.). Registrado no sistema para conferência e fechamento de caixa.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Valor do Recebimento */}

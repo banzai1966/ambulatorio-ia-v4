@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { 
   RotateCcw, 
   ZoomIn, 
@@ -7,22 +8,24 @@ import {
   Eye, 
   Layers, 
   Sparkles, 
-  Info, 
   ShieldCheck, 
-  Activity, 
   Zap,
-  Maximize2,
-  Minimize2,
   RefreshCw,
-  Sun,
-  Flame,
-  CheckCircle2,
-  AlertTriangle,
   UploadCloud,
-  FileCode,
-  ArrowUp,
-  ArrowDown,
-  MoveVertical
+  Camera,
+  Box,
+  Compass,
+  ArrowLeft,
+  ArrowRight,
+  MousePointerClick,
+  CheckCircle2,
+  X,
+  HeartPulse,
+  Scan,
+  Maximize2,
+  Sliders,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { 
@@ -33,18 +36,115 @@ import {
   normalizeToothStatus 
 } from './InteractiveOdontogram';
 
-// Cores odontológicas biológicas em hexadecimal para materiais Three.js
-const STATUS_COLORS_3D: Record<ToothStatus, number> = {
-  healthy: 0xf8fafc,         // Esmalte dental natural marfim/pérola
-  amalgam: 0x334155,         // Metal escuro metálico
-  zirconia_implant: 0x38bdf8,// Zircônia pura cerâmica brilhante azul claro
-  titanium_implant: 0x64748b,// Titânio acinzentado fosco
-  endodontic: 0xf97316,      // Guta-percha laranja vibrante
-  cavitation_nico: 0xe11d48, // NICO / Isquemia óssea vermelho-rubi
-  missing: 0x94a3b8,         // Translúcido fantasma
-  caries: 0xd97706,          // Cárie / resina âmbar
-  ceramic_crown: 0x0d9488    // Coroa cerâmica verde-azulado
+// Tipo de Ângulo Clínico Realístico
+export type ClinicalDentalAngle = 
+  | 'maxilla'      // Arcada Superior Oclusal (Maxila)
+  | 'mandible'     // Arcada Inferior Oclusal (Mandíbula)
+  | 'frontal'      // Visão Frontal (Oclusão & Sorriso)
+  | 'typodont'     // Manequim Articulado de Mentoria
+  | 'cbct'         // Tomografia Computadorizada 3D
+  | 'stl_scanner'; // Malha STL Real de Scanner Intraoral
+
+// Coordenadas interativas (% left e top) para cada ângulo clínico
+const MAXILLA_COORDINATES: Record<number, { left: number; top: number; labelPos?: 'top' | 'bottom' | 'left' | 'right' }> = {
+  18: { left: 23, top: 78, labelPos: 'left' },
+  17: { left: 24, top: 66, labelPos: 'left' },
+  16: { left: 26, top: 54, labelPos: 'left' },
+  15: { left: 30, top: 43, labelPos: 'left' },
+  14: { left: 35, top: 33, labelPos: 'left' },
+  13: { left: 40, top: 25, labelPos: 'top' },
+  12: { left: 45, top: 20, labelPos: 'top' },
+  11: { left: 49, top: 18, labelPos: 'top' },
+  21: { left: 53, top: 18, labelPos: 'top' },
+  22: { left: 57, top: 20, labelPos: 'top' },
+  23: { left: 62, top: 25, labelPos: 'top' },
+  24: { left: 67, top: 33, labelPos: 'right' },
+  25: { left: 72, top: 43, labelPos: 'right' },
+  26: { left: 75, top: 54, labelPos: 'right' },
+  27: { left: 77, top: 66, labelPos: 'right' },
+  28: { left: 78, top: 78, labelPos: 'right' }
 };
+
+const MANDIBLE_COORDINATES: Record<number, { left: number; top: number; labelPos?: 'top' | 'bottom' | 'left' | 'right' }> = {
+  48: { left: 24, top: 23, labelPos: 'left' },
+  47: { left: 25, top: 35, labelPos: 'left' },
+  46: { left: 27, top: 48, labelPos: 'left' },
+  45: { left: 31, top: 60, labelPos: 'left' },
+  44: { left: 36, top: 69, labelPos: 'left' },
+  43: { left: 41, top: 75, labelPos: 'bottom' },
+  42: { left: 46, top: 80, labelPos: 'bottom' },
+  41: { left: 49, top: 82, labelPos: 'bottom' },
+  31: { left: 52, top: 82, labelPos: 'bottom' },
+  32: { left: 55, top: 80, labelPos: 'bottom' },
+  33: { left: 60, top: 75, labelPos: 'bottom' },
+  34: { left: 65, top: 69, labelPos: 'right' },
+  35: { left: 70, top: 60, labelPos: 'right' },
+  36: { left: 74, top: 48, labelPos: 'right' },
+  37: { left: 76, top: 35, labelPos: 'right' },
+  38: { left: 77, top: 23, labelPos: 'right' }
+};
+
+const FRONTAL_COORDINATES: Record<number, { left: number; top: number }> = {
+  14: { left: 20, top: 41 },
+  13: { left: 27, top: 39 },
+  12: { left: 35, top: 38 },
+  11: { left: 45, top: 37 },
+  21: { left: 55, top: 37 },
+  22: { left: 65, top: 38 },
+  23: { left: 73, top: 39 },
+  24: { left: 80, top: 41 },
+  43: { left: 30, top: 62 },
+  42: { left: 38, top: 63 },
+  41: { left: 46, top: 64 },
+  31: { left: 54, top: 64 },
+  32: { left: 62, top: 63 },
+  33: { left: 70, top: 62 }
+};
+
+const TYPODONT_COORDINATES: Record<number, { left: number; top: number }> = {
+  // Arcada Superior
+  18: { left: 24, top: 22 },
+  17: { left: 27, top: 20 },
+  16: { left: 31, top: 18 },
+  15: { left: 36, top: 17 },
+  14: { left: 41, top: 16 },
+  13: { left: 46, top: 15 },
+  12: { left: 50, top: 15 },
+  11: { left: 54, top: 15 },
+  21: { left: 58, top: 15 },
+  22: { left: 62, top: 15 },
+  23: { left: 66, top: 15 },
+  24: { left: 71, top: 16 },
+  25: { left: 76, top: 17 },
+  26: { left: 81, top: 18 },
+  27: { left: 85, top: 20 },
+  28: { left: 88, top: 22 },
+  // Arcada Inferior
+  48: { left: 24, top: 62 },
+  47: { left: 27, top: 65 },
+  46: { left: 31, top: 67 },
+  45: { left: 36, top: 69 },
+  44: { left: 41, top: 71 },
+  43: { left: 46, top: 72 },
+  42: { left: 50, top: 72 },
+  41: { left: 54, top: 72 },
+  31: { left: 58, top: 72 },
+  32: { left: 62, top: 72 },
+  33: { left: 66, top: 72 },
+  34: { left: 71, top: 71 },
+  35: { left: 76, top: 69 },
+  36: { left: 81, top: 67 },
+  37: { left: 85, top: 65 },
+  38: { left: 88, top: 62 },
+};
+
+// Ordem dos dentes para barra de seleção rápida
+const ALL_TEETH_ORDER = [
+  18, 17, 16, 15, 14, 13, 12, 11,
+  21, 22, 23, 24, 25, 26, 27, 28,
+  48, 47, 46, 45, 44, 43, 42, 41,
+  31, 32, 33, 34, 35, 36, 37, 38
+];
 
 interface Dental3DViewerProps {
   odontogramData?: OdontogramData;
@@ -61,574 +161,590 @@ export default function Dental3DViewer({
   onScanAiRequest,
   className = ''
 }: Dental3DViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const teethMeshesRef = useRef<Map<number, THREE.Mesh>>(new Map());
-  const boneMeshesRef = useRef<THREE.Mesh[]>([]);
-  const animationFrameIdRef = useRef<number | null>(null);
-
-  // Estados interativos
-  const [boneTransparency, setBoneTransparency] = useState<number>(0.35); // 0 = invisível, 1 = opaco
-  const [showNerves, setShowNerves] = useState<boolean>(true);
-  const [autoRotate, setAutoRotate] = useState<boolean>(false);
-  const [activeArchView, setActiveArchView] = useState<'both' | 'upper' | 'lower'>('both');
-  const [viewAngle, setViewAngle] = useState<'front' | 'occlusal_upper' | 'occlusal_lower' | 'right' | 'left'>('front');
+  // Ângulo Clínico Selecionado (Padrão: Arcada Superior Oclusal HD)
+  const [activeAngle, setActiveAngle] = useState<ClinicalDentalAngle>('maxilla');
   const [hoveredTooth, setHoveredTooth] = useState<number | null>(null);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [importedFileName, setImportedFileName] = useState<string | null>(null);
+  const [localSelectedTooth, setLocalSelectedTooth] = useState<number | null>(selectedToothNumber ?? 16);
+  
+  // Controle de Zoom e Pan na Imagem Realística
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState<boolean>(false);
+  const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Dente ativo selecionado
-  const activeTooth = selectedToothNumber ? TOOTH_METADATA[selectedToothNumber] : null;
-  const activeRecord = selectedToothNumber && odontogramData.teeth ? odontogramData.teeth[selectedToothNumber] : null;
+  // Estado para Arquivo STL de Scanner Intraoral Real
+  const [stlFile, setStlFile] = useState<File | null>(null);
+  const [stlLoading, setStlLoading] = useState<boolean>(false);
+  const [stlError, setStlError] = useState<string | null>(null);
+  const stlContainerRef = useRef<HTMLDivElement>(null);
+  const stlRendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const stlSceneRef = useRef<THREE.Scene | null>(null);
+  const stlCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const stlMeshRef = useRef<THREE.Mesh | null>(null);
+  const stlAnimFrameRef = useRef<number | null>(null);
 
-  // Estatísticas rápidas da arcada 3D
+  // Sincroniza dente selecionado externo
+  useEffect(() => {
+    if (selectedToothNumber !== undefined && selectedToothNumber !== null) {
+      setLocalSelectedTooth(selectedToothNumber);
+      // Se for dente inferior e estiver na arcada superior, sugere alternar se desejado
+      if (selectedToothNumber >= 31 && selectedToothNumber <= 48 && activeAngle === 'maxilla') {
+        setActiveAngle('mandible');
+      } else if (selectedToothNumber >= 11 && selectedToothNumber <= 28 && activeAngle === 'mandible') {
+        setActiveAngle('maxilla');
+      }
+    }
+  }, [selectedToothNumber]);
+
+  // Estatísticas de achados biológicos
   const stats = useMemo(() => {
-    const teeth = odontogramData.teeth || {};
     let amalgams = 0;
     let zirconias = 0;
     let nicos = 0;
-    let endos = 0;
-    let galvanismHigh = 0;
+    let endodontics = 0;
+    let others = 0;
 
-    Object.values(teeth).forEach(t => {
-      if (t.status === 'amalgam') amalgams++;
-      if (t.status === 'zirconia_implant') zirconias++;
-      if (t.status === 'cavitation_nico') nicos++;
-      if (t.status === 'endodontic') endos++;
-      if (t.galvanismo_mv && Math.abs(t.galvanismo_mv) > 100) galvanismHigh++;
-    });
+    if (odontogramData.teeth) {
+      Object.values(odontogramData.teeth).forEach(tooth => {
+        const s = normalizeToothStatus(tooth?.status);
+        if (s === 'amalgam') amalgams++;
+        else if (s === 'zirconia_implant') zirconias++;
+        else if (s === 'cavitation_nico') nicos++;
+        else if (s === 'endodontic') endodontics++;
+        else if (s !== 'healthy') others++;
+      });
+    }
 
-    return { amalgams, zirconias, nicos, endos, galvanismHigh };
-  }, [odontogramData]);
+    return { amalgams, zirconias, nicos, endodontics, others };
+  }, [odontogramData.teeth]);
 
-  // Inicialização da Cena 3D Three.js
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  // Ângulos disponíveis para navegação clínica
+  const ANGLES_LIST: { id: ClinicalDentalAngle; label: string; icon: string; desc: string }[] = [
+    { id: 'maxilla', label: 'Arcada Superior', icon: '🦷', desc: 'Maxila Oclusal (Dentes 18 a 28)' },
+    { id: 'mandible', label: 'Arcada Inferior', icon: '🦷', desc: 'Mandíbula Oclusal (Dentes 48 a 38)' },
+    { id: 'frontal', label: 'Visão Frontal', icon: '👄', desc: 'Sorriso e Oclusão Anterior' },
+    { id: 'typodont', label: 'Manequim Completo', icon: '✨', desc: 'Modelo Articulado 32 Dentes' },
+    { id: 'cbct', label: 'Tomografia CBCT', icon: '🩻', desc: 'Cortes Tomográficos e Raio-X' },
+    { id: 'stl_scanner', label: 'Scanner 3D (.STL)', icon: '📦', desc: 'Malha 3D Real do Scanner' }
+  ];
 
-    const width = container.clientWidth || 600;
-    const height = container.clientHeight || 450;
+  // Alterna para o próximo/anterior ângulo
+  const cycleAngle = (direction: 'prev' | 'next') => {
+    const currentIndex = ANGLES_LIST.findIndex(a => a.id === activeAngle);
+    if (currentIndex === -1) return;
+    let nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+    if (nextIndex < 0) nextIndex = ANGLES_LIST.length - 1;
+    if (nextIndex >= ANGLES_LIST.length) nextIndex = 0;
+    setActiveAngle(ANGLES_LIST[nextIndex].id);
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
 
-    // 1. Cena
+  // Trata seleção de dente
+  const handleSelectToothInternal = (toothNum: number) => {
+    setLocalSelectedTooth(toothNum);
+    if (onSelectTooth) {
+      onSelectTooth(toothNum);
+    }
+  };
+
+  // Controles de Zoom
+  const zoomIn = () => setZoomLevel(prev => Math.min(prev + 0.35, 2.8));
+  const zoomOut = () => setZoomLevel(prev => Math.max(prev - 0.35, 1));
+  const resetView = () => {
+    setZoomLevel(1);
+    setPanOffset({ x: 0, y: 0 });
+  };
+
+  // Handlers de Pan (Arrastar a imagem)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomLevel > 1) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isPanning && zoomLevel > 1) {
+      setPanOffset({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => setIsPanning(false);
+
+  // Manipulação de upload de arquivo .STL de Scanner Intraoral Real
+  const handleStlUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.stl')) {
+      setStlError('Selecione um arquivo de malha 3D .STL válido gerado pelo scanner (ex: iTero, Trios, Medit).');
+      return;
+    }
+
+    setStlFile(file);
+    setStlError(null);
+    setActiveAngle('stl_scanner');
+    loadStlMesh(file);
+  };
+
+  // Carrega e renderiza o arquivo STL Real no Three.js
+  const loadStlMesh = (file: File) => {
+    if (!stlContainerRef.current) return;
+    setStlLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const contents = event.target?.result as ArrayBuffer;
+        const loader = new STLLoader();
+        const geometry = loader.parse(contents);
+
+        geometry.computeVertexNormals();
+        geometry.center();
+
+        // Inicializa cena Three.js para o STL
+        initStlViewer(geometry);
+        setStlLoading(false);
+      } catch (err) {
+        console.error('Erro ao processar STL:', err);
+        setStlError('Não foi possível ler o arquivo STL. Verifique se o arquivo não está corrompido.');
+        setStlLoading(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Inicializa visualizador Three.js dedicado para o arquivo STL do Scanner
+  const initStlViewer = (geometry: THREE.BufferGeometry) => {
+    if (!stlContainerRef.current) return;
+
+    // Limpa render anterior se existir
+    if (stlRendererRef.current && stlContainerRef.current) {
+      stlContainerRef.current.innerHTML = '';
+      if (stlAnimFrameRef.current) cancelAnimationFrame(stlAnimFrameRef.current);
+    }
+
+    const width = stlContainerRef.current.clientWidth || 800;
+    const height = stlContainerRef.current.clientHeight || 500;
+
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a0f1d); // Fundo escuro azul-noite médico cirúrgico
-    sceneRef.current = scene;
+    scene.background = new THREE.Color(0x020617); // Slate 950
+    stlSceneRef.current = scene;
 
-    // Grid sutil no chão cirúrgico
-    const gridHelper = new THREE.GridHelper(260, 26, 0x1e293b, 0x0f172a);
-    gridHelper.position.y = -65;
-    scene.add(gridHelper);
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.set(0, 0, 150);
+    stlCameraRef.current = camera;
 
-    // 2. Câmera
-    const camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
-    camera.position.set(0, 20, 220);
-    cameraRef.current = camera;
-
-    // 3. Renderer WebGL com antialias e cores vibrantes
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    stlContainerRef.current.appendChild(renderer.domElement);
+    stlRendererRef.current = renderer;
 
-    // 4. Iluminação Cirúrgica Odontológica
+    // Luzes clínicas cirúrgicas
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     scene.add(ambientLight);
 
-    const mainSpot = new THREE.DirectionalLight(0xe0f2fe, 1.8);
-    mainSpot.position.set(60, 100, 140);
-    scene.add(mainSpot);
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight1.position.set(100, 100, 100);
+    scene.add(dirLight1);
 
-    const rimLight = new THREE.DirectionalLight(0x0284c7, 1.2);
-    rimLight.position.set(-80, -40, -100);
-    scene.add(rimLight);
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.8);
+    dirLight2.position.set(-100, -50, -100);
+    scene.add(dirLight2);
 
-    const fillLight = new THREE.PointLight(0x38bdf8, 0.6, 300);
-    fillLight.position.set(0, 0, 80);
-    scene.add(fillLight);
+    // Material cerâmico de esmalte de alta definição
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xf8fafc,
+      roughness: 0.25,
+      metalness: 0.05,
+      side: THREE.DoubleSide
+    });
 
-    // 5. Construção Anatômica dos Arcos Dentários (Maxila e Mandíbula)
-    buildDentalAnatomy(scene);
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+    stlMeshRef.current = mesh;
 
-    // 6. Loop de Renderização e Controles Manuais com Mouse/Touch
-    let mouseX = 0;
-    let mouseY = 0;
-    let targetRotationX = 0.1;
-    let targetRotationY = 0;
-    let currentRotationX = 0.1;
-    let currentRotationY = 0;
+    // Rotação orbital
     let isMouseDown = false;
-    let previousMousePosition = { x: 0, y: 0 };
+    let prevMousePos = { x: 0, y: 0 };
 
-    const onMouseDown = (e: MouseEvent) => {
+    const domElem = renderer.domElement;
+    domElem.onmousedown = (e) => {
       isMouseDown = true;
-      setIsDragging(true);
-      previousMousePosition = { x: e.clientX, y: e.clientY };
+      prevMousePos = { x: e.clientX, y: e.clientY };
     };
 
-    const onMouseMove = (e: MouseEvent) => {
-      // Raycasting para detectar dente sob o cursor
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-      const meshes = Array.from(teethMeshesRef.current.values());
-      const intersects = raycaster.intersectObjects(meshes);
-
-      if (intersects.length > 0) {
-        const hit = intersects[0].object as THREE.Mesh;
-        const toothNum = hit.userData.toothNumber;
-        setHoveredTooth(toothNum || null);
-        renderer.domElement.style.cursor = 'pointer';
-      } else {
-        setHoveredTooth(null);
-        renderer.domElement.style.cursor = isMouseDown ? 'grabbing' : 'grab';
-      }
-
-      if (!isMouseDown) return;
-
-      const deltaX = e.clientX - previousMousePosition.x;
-      const deltaY = e.clientY - previousMousePosition.y;
-
-      targetRotationY += deltaX * 0.008;
-      targetRotationX += deltaY * 0.008;
-      targetRotationX = Math.max(-Math.PI / 1.8, Math.min(Math.PI / 1.8, targetRotationX));
-
-      previousMousePosition = { x: e.clientX, y: e.clientY };
+    domElem.onmousemove = (e) => {
+      if (!isMouseDown || !mesh) return;
+      const deltaX = e.clientX - prevMousePos.x;
+      const deltaY = e.clientY - prevMousePos.y;
+      mesh.rotation.y += deltaX * 0.01;
+      mesh.rotation.x += deltaY * 0.01;
+      prevMousePos = { x: e.clientX, y: e.clientY };
     };
 
-    const onMouseUp = () => {
-      isMouseDown = false;
-      setIsDragging(false);
-    };
+    domElem.onmouseup = () => { isMouseDown = false; };
+    domElem.onmouseleave = () => { isMouseDown = false; };
 
-    const onWheel = (e: WheelEvent) => {
-      // Se pressionar Ctrl ou Meta, faz o zoom 3D. Caso contrário, permite a rolagem natural da página.
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        camera.position.z += e.deltaY * 0.12;
-        camera.position.z = Math.max(80, Math.min(380, camera.position.z));
-      }
-    };
-
-    const onClick = (e: MouseEvent) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
-      const meshes = Array.from(teethMeshesRef.current.values());
-      const intersects = raycaster.intersectObjects(meshes);
-
-      if (intersects.length > 0) {
-        const hit = intersects[0].object as THREE.Mesh;
-        const toothNum = hit.userData.toothNumber;
-        if (toothNum && onSelectTooth) {
-          onSelectTooth(toothNum);
-        }
-      }
-    };
-
-    // Suporte a Touch em dispositivos móveis e tablets
-    let touchStartPos = { x: 0, y: 0 };
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        isMouseDown = true;
-        touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }
-    };
-
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 1 && isMouseDown) {
-        const deltaX = e.touches[0].clientX - touchStartPos.x;
-        const deltaY = e.touches[0].clientY - touchStartPos.y;
-
-        targetRotationY += deltaX * 0.01;
-        targetRotationX += deltaY * 0.01;
-        targetRotationX = Math.max(-Math.PI / 1.8, Math.min(Math.PI / 1.8, targetRotationX));
-
-        touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      }
-    };
-
-    const onTouchEnd = () => {
-      isMouseDown = false;
-    };
-
-    const dom = renderer.domElement;
-    dom.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    dom.addEventListener('wheel', onWheel, { passive: false });
-    dom.addEventListener('click', onClick);
-    dom.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchend', onTouchEnd);
-
-    // Função de Animação
+    // Animação de rotação suave
     const animate = () => {
-      animationFrameIdRef.current = requestAnimationFrame(animate);
-
-      if (autoRotate && !isMouseDown) {
-        targetRotationY += 0.005;
+      stlAnimFrameRef.current = requestAnimationFrame(animate);
+      if (!isMouseDown && mesh) {
+        mesh.rotation.y += 0.003;
       }
-
-      // Suavização da rotação da cena
-      currentRotationX += (targetRotationX - currentRotationX) * 0.1;
-      currentRotationY += (targetRotationY - currentRotationY) * 0.1;
-
-      scene.rotation.x = currentRotationX;
-      scene.rotation.y = currentRotationY;
-
       renderer.render(scene, camera);
     };
-
     animate();
-
-    // Redimensionamento responsivo
-    const handleResize = () => {
-      if (!container || !rendererRef.current || !cameraRef.current) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      cameraRef.current.aspect = w / h;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(w, h);
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      if (animationFrameIdRef.current) {
-        cancelAnimationFrame(animationFrameIdRef.current);
-      }
-      window.removeEventListener('resize', handleResize);
-      dom.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      dom.removeEventListener('wheel', onWheel);
-      dom.removeEventListener('click', onClick);
-      dom.removeEventListener('touchstart', onTouchStart);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', onTouchEnd);
-      renderer.dispose();
-    };
-  }, []);
-
-  // Atualização dos Materiais e Cores dos dentes quando o odontograma muda
-  useEffect(() => {
-    teethMeshesRef.current.forEach((mesh, toothNum) => {
-      const rec = odontogramData.teeth ? odontogramData.teeth[toothNum] : undefined;
-      const status = normalizeToothStatus(rec?.status);
-      const isSelected = selectedToothNumber === toothNum;
-      const isHovered = hoveredTooth === toothNum;
-
-      const baseColor = STATUS_COLORS_3D[status] || 0xf8fafc;
-      const material = mesh.material as THREE.MeshStandardMaterial;
-
-      if (material) {
-        if (isSelected) {
-          material.color.setHex(0x10b981); // Verde esmeralda brilhante para dente selecionado
-          material.emissive.setHex(0x065f46);
-          material.emissiveIntensity = 0.6;
-        } else if (isHovered) {
-          material.color.setHex(0x38bdf8); // Ciano no hover
-          material.emissive.setHex(0x0284c7);
-          material.emissiveIntensity = 0.4;
-        } else if (status === 'cavitation_nico') {
-          material.color.setHex(0xe11d48);
-          material.emissive.setHex(0x881337);
-          material.emissiveIntensity = 0.5;
-        } else if (status === 'amalgam') {
-          material.color.setHex(0x334155);
-          material.metalness = 0.9;
-          material.roughness = 0.25;
-          material.emissive.setHex(0x000000);
-        } else if (status === 'zirconia_implant') {
-          material.color.setHex(0xf0fdfa);
-          material.metalness = 0.1;
-          material.roughness = 0.1;
-          material.emissive.setHex(0x0284c7);
-          material.emissiveIntensity = 0.2;
-        } else {
-          material.color.setHex(baseColor);
-          material.metalness = 0.2;
-          material.roughness = 0.35;
-          material.emissive.setHex(0x000000);
-          material.emissiveIntensity = 0;
-        }
-      }
-    });
-  }, [odontogramData, selectedToothNumber, hoveredTooth]);
-
-  // Atualização da transparência do osso
-  useEffect(() => {
-    boneMeshesRef.current.forEach(mesh => {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      if (mat) {
-        mat.opacity = boneTransparency;
-        mat.transparent = boneTransparency < 0.98;
-      }
-    });
-  }, [boneTransparency]);
-
-  // Construção procedural do modelo anatômico 3D da arcada dentária
-  const buildDentalAnatomy = (scene: THREE.Scene) => {
-    teethMeshesRef.current.clear();
-    boneMeshesRef.current = [];
-
-    // Grupo Geral
-    const dentalGroup = new THREE.Group();
-    dentalGroup.name = 'dental_anatomy_group';
-
-    // 1. MODELAGEM DA MAXILA (Osso Superior)
-    const upperBoneGeo = new THREE.TorusGeometry(52, 14, 16, 40, Math.PI);
-    const boneMaterial = new THREE.MeshStandardMaterial({
-      color: 0xe2e8f0,
-      roughness: 0.7,
-      metalness: 0.1,
-      transparent: true,
-      opacity: boneTransparency
-    });
-    const upperBoneMesh = new THREE.Mesh(upperBoneGeo, boneMaterial);
-    upperBoneMesh.rotation.x = Math.PI / 2;
-    upperBoneMesh.rotation.z = Math.PI;
-    upperBoneMesh.position.set(0, 18, -10);
-    dentalGroup.add(upperBoneMesh);
-    boneMeshesRef.current.push(upperBoneMesh);
-
-    // 2. MODELAGEM DA MANDÍBULA (Osso Inferior)
-    const lowerBoneGeo = new THREE.TorusGeometry(48, 13, 16, 40, Math.PI);
-    const lowerBoneMesh = new THREE.Mesh(lowerBoneGeo, boneMaterial.clone());
-    lowerBoneMesh.rotation.x = Math.PI / 2;
-    lowerBoneMesh.rotation.z = Math.PI;
-    lowerBoneMesh.position.set(0, -18, -10);
-    dentalGroup.add(lowerBoneMesh);
-    boneMeshesRef.current.push(lowerBoneMesh);
-
-    // 3. CANAIS NERVOSOS (Nervo Alveolar Inferior e Seio Maxilar)
-    if (showNerves) {
-      // Nervo mandibular direito e esquerdo (amarelo bioelétrico)
-      const nerveCurveRight = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(42, -22, -30),
-        new THREE.Vector3(34, -26, 0),
-        new THREE.Vector3(18, -26, 26),
-        new THREE.Vector3(0, -26, 32)
-      ]);
-      const nerveCurveLeft = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(-42, -22, -30),
-        new THREE.Vector3(-34, -26, 0),
-        new THREE.Vector3(-18, -26, 26),
-        new THREE.Vector3(0, -26, 32)
-      ]);
-
-      const nerveMaterial = new THREE.MeshStandardMaterial({
-        color: 0xfacc15, // Amarelo nervo cirúrgico
-        emissive: 0xca8a04,
-        emissiveIntensity: 0.4,
-        roughness: 0.3
-      });
-
-      const nerveTubeRight = new THREE.Mesh(new THREE.TubeGeometry(nerveCurveRight, 20, 1.8, 8, false), nerveMaterial);
-      const nerveTubeLeft = new THREE.Mesh(new THREE.TubeGeometry(nerveCurveLeft, 20, 1.8, 8, false), nerveMaterial);
-      dentalGroup.add(nerveTubeRight);
-      dentalGroup.add(nerveTubeLeft);
-    }
-
-    // 4. POSICIONAMENTO ANATÔMICO DOS 32 DENTES (FDI 11 a 48)
-    const upperTeethOrder = [
-      18, 17, 16, 15, 14, 13, 12, 11,
-      21, 22, 23, 24, 25, 26, 27, 28
-    ];
-
-    const lowerTeethOrder = [
-      48, 47, 46, 45, 44, 43, 42, 41,
-      31, 32, 33, 34, 35, 36, 37, 38
-    ];
-
-    // Arco Superior (Maxila)
-    upperTeethOrder.forEach((num, index) => {
-      const angle = (Math.PI / 16) * (index + 0.5); // Distribuição parabólica
-      const radiusX = 46;
-      const radiusZ = 40;
-
-      const posX = -Math.cos(angle) * radiusX;
-      const posZ = Math.sin(angle) * radiusZ - 10;
-      const posY = 14;
-
-      const toothMesh = createAnatomicalToothMesh(num, 'superior');
-      toothMesh.position.set(posX, posY, posZ);
-      toothMesh.rotation.y = -(angle - Math.PI / 2);
-      toothMesh.userData = { toothNumber: num, arch: 'superior' };
-
-      dentalGroup.add(toothMesh);
-      teethMeshesRef.current.set(num, toothMesh);
-    });
-
-    // Arco Inferior (Mandíbula)
-    lowerTeethOrder.forEach((num, index) => {
-      const angle = (Math.PI / 16) * (index + 0.5);
-      const radiusX = 43;
-      const radiusZ = 37;
-
-      const posX = -Math.cos(angle) * radiusX;
-      const posZ = Math.sin(angle) * radiusZ - 10;
-      const posY = -14;
-
-      const toothMesh = createAnatomicalToothMesh(num, 'inferior');
-      toothMesh.position.set(posX, posY, posZ);
-      toothMesh.rotation.y = -(angle - Math.PI / 2);
-      toothMesh.userData = { toothNumber: num, arch: 'inferior' };
-
-      dentalGroup.add(toothMesh);
-      teethMeshesRef.current.set(num, toothMesh);
-    });
-
-    scene.add(dentalGroup);
   };
 
-  // Criação da geometria refinada de cada dente (Coroa + Raiz)
-  const createAnatomicalToothMesh = (toothNumber: number, arch: 'superior' | 'inferior'): THREE.Mesh => {
-    const meta = TOOTH_METADATA[toothNumber];
-    const isMolar = meta?.type === 'molar';
-    const isPremolar = meta?.type === 'premolar';
-    const isCanine = meta?.type === 'canine';
-
-    // Dimensões proporcionais por tipo de elemento dental
-    let crownWidth = 5.2;
-    let crownHeight = 7.5;
-    let rootLength = 11.5;
-
-    if (isMolar) {
-      crownWidth = 8.5;
-      crownHeight = 6.8;
-      rootLength = 13.0;
-    } else if (isPremolar) {
-      crownWidth = 6.2;
-      crownHeight = 7.2;
-      rootLength = 12.0;
-    } else if (isCanine) {
-      crownWidth = 5.8;
-      crownHeight = 9.0;
-      rootLength = 15.0; // Canino tem a maior raiz da arcada
+  // Coordenadas ativas com base no ângulo clínico selecionado
+  const activeCoordinates = useMemo(() => {
+    switch (activeAngle) {
+      case 'maxilla':
+        return MAXILLA_COORDINATES;
+      case 'mandible':
+        return MANDIBLE_COORDINATES;
+      case 'frontal':
+        return FRONTAL_COORDINATES;
+      case 'typodont':
+        return TYPODONT_COORDINATES;
+      default:
+        return {};
     }
+  }, [activeAngle]);
 
-    // Geometria Composta: Coroa esférica facetada + Raiz cônica
-    const toothGeometry = new THREE.BufferGeometry();
-    
-    // Coroa
-    const crownGeo = isMolar
-      ? new THREE.BoxGeometry(crownWidth, crownHeight, crownWidth * 0.9, 2, 2, 2)
-      : new THREE.CylinderGeometry(crownWidth * 0.45, crownWidth * 0.6, crownHeight, 8);
-
-    // Raiz apontando para dentro do osso
-    const rootGeo = new THREE.ConeGeometry(crownWidth * 0.4, rootLength, 6);
-    
-    // Orientação correta da raiz (Superior aponta para cima +Y, Inferior aponta para baixo -Y)
-    if (arch === 'superior') {
-      rootGeo.translate(0, crownHeight / 2 + rootLength / 2, 0);
-    } else {
-      rootGeo.rotateX(Math.PI);
-      rootGeo.translate(0, -(crownHeight / 2 + rootLength / 2), 0);
+  // Imagem correspondente ao ângulo
+  const activeImagePath = useMemo(() => {
+    switch (activeAngle) {
+      case 'maxilla':
+        return '/dental_arch_maxilla_hd.jpg';
+      case 'mandible':
+        return '/dental_arch_mandible_hd.jpg';
+      case 'frontal':
+        return '/dental_frontal_smile_hd.jpg';
+      case 'typodont':
+        return '/typodont_dental_model.jpg';
+      case 'cbct':
+        return '/sample_cbct_scan.jpg';
+      default:
+        return '/dental_arch_maxilla_hd.jpg';
     }
+  }, [activeAngle]);
 
-    const rec = odontogramData.teeth ? odontogramData.teeth[toothNumber] : undefined;
-    const status = normalizeToothStatus(rec?.status);
-    const color = STATUS_COLORS_3D[status] || 0xf8fafc;
-
-    const material = new THREE.MeshStandardMaterial({
-      color: color,
-      roughness: 0.3,
-      metalness: status === 'amalgam' ? 0.9 : 0.15,
-    });
-
-    const mesh = new THREE.Mesh(crownGeo, material);
-    const rootMesh = new THREE.Mesh(rootGeo, material);
-    mesh.add(rootMesh);
-
-    return mesh;
-  };
-
-  // Controles de câmera rápidos (Ângulos Pré-definidos)
-  const setCameraAngle = (angle: 'front' | 'occlusal_upper' | 'occlusal_lower' | 'right' | 'left') => {
-    setViewAngle(angle);
-    if (!cameraRef.current || !sceneRef.current) return;
-
-    const camera = cameraRef.current;
-    const scene = sceneRef.current;
-
-    switch (angle) {
-      case 'front':
-        camera.position.set(0, 10, 220);
-        scene.rotation.set(0.1, 0, 0);
-        break;
-      case 'occlusal_upper':
-        camera.position.set(0, 180, 20);
-        scene.rotation.set(Math.PI / 2.3, 0, 0);
-        break;
-      case 'occlusal_lower':
-        camera.position.set(0, -180, 20);
-        scene.rotation.set(-Math.PI / 2.3, 0, 0);
-        break;
-      case 'right':
-        camera.position.set(220, 10, 0);
-        scene.rotation.set(0, Math.PI / 2, 0);
-        break;
-      case 'left':
-        camera.position.set(-220, 10, 0);
-        scene.rotation.set(0, -Math.PI / 2, 0);
-        break;
-    }
-  };
-
-  // Reset de Visualização
-  const handleResetCamera = () => {
-    if (!cameraRef.current || !sceneRef.current) return;
-    cameraRef.current.position.set(0, 20, 220);
-    sceneRef.current.rotation.set(0.1, 0, 0);
-    setViewAngle('front');
-  };
-
-  // Upload simulado/real de arquivo 3D (STL ou escaneamento intraoral)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImportedFileName(file.name);
-      // Feedback visual elegante de importação 3D
-    }
-  };
+  // Dados do dente ativo selecionado
+  const activeToothNumber = localSelectedTooth ?? selectedToothNumber ?? 16;
+  const activeToothMeta = TOOTH_METADATA[activeToothNumber];
+  const activeToothRecord = odontogramData.teeth ? odontogramData.teeth[activeToothNumber] : undefined;
+  const activeToothStatus = normalizeToothStatus(activeToothRecord?.status);
+  const activeToothConfig = STATUS_CONFIG[activeToothStatus];
 
   return (
-    <div className={cn("bg-slate-950 rounded-3xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col relative", className)}>
-      {/* Barra de Ferramentas Superior do Visualizador 3D */}
-      <div className="bg-slate-900/90 backdrop-blur-md px-4 py-3 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 z-10">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-gradient-to-tr from-sky-600 to-emerald-600 text-white rounded-xl shadow-md shadow-sky-900/40">
-            <Layers size={18} />
+    <div className={cn(
+      "w-full bg-slate-950 text-white rounded-3xl overflow-hidden border border-slate-800 shadow-2xl flex flex-col relative",
+      className
+    )}>
+      {/* HEADER SUPERIOR: SELETOR DE ÂNGULOS CLÍNICOS E CONTROLES DE ZOOM */}
+      <div className="p-3.5 md:p-4 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        {/* Lado Esquerdo: Título e Ângulos de Inspeção */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 font-black">
+            🦷
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-xs sm:text-sm font-extrabold text-white tracking-wide">
-                Visualizador 3D Interativo Voxel & WebGL
-              </h4>
-              <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                60 FPS &bull; REAL-TIME
+              <h3 className="font-bold text-sm md:text-base text-slate-100 flex items-center gap-1.5">
+                Arcada Anatômica Realística HD
+              </h3>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-semibold">
+                Grau Clínico
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Gire a mandíbula em 360°, regule a transparência óssea e clique nos elementos para correlacionar.
+              Fotografia de alta definição e laudo biológico interativo • Clique nos dentes para examinar
             </p>
           </div>
         </div>
 
-        {/* Resumo de Achados na Arcada 3D */}
-        <div className="flex items-center gap-2 text-xs flex-wrap">
+        {/* Centro / Direita: Seletor de Ângulos Clínicos */}
+        <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-2xl border border-slate-800 flex-wrap">
+          {ANGLES_LIST.map((ang) => {
+            const isActive = activeAngle === ang.id;
+            return (
+              <button
+                key={ang.id}
+                type="button"
+                onClick={() => {
+                  setActiveAngle(ang.id);
+                  setZoomLevel(1);
+                  setPanOffset({ x: 0, y: 0 });
+                }}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer",
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/40 ring-1 ring-emerald-400"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                )}
+                title={ang.desc}
+              >
+                <span>{ang.icon}</span>
+                <span>{ang.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Ações: Scanner IA, Lupa, Reset e Upload de STL */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {onScanAiRequest && (
+            <button
+              type="button"
+              onClick={onScanAiRequest}
+              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-700/30 transition-all cursor-pointer active:scale-95"
+              title="Analisar achados biológicos com IA"
+            >
+              <Sparkles size={13} className="text-amber-300" />
+              <span>Scanner IA</span>
+            </button>
+          )}
+
+          {/* Navegação entre ângulos */}
+          <div className="flex items-center bg-slate-800 rounded-xl border border-slate-700 p-0.5">
+            <button
+              type="button"
+              onClick={() => cycleAngle('prev')}
+              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Ângulo anterior"
+            >
+              <ArrowLeft size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => cycleAngle('next')}
+              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Próximo ângulo"
+            >
+              <ArrowRight size={14} />
+            </button>
+          </div>
+
+          {/* Zoom In, Out e Reset */}
+          <div className="flex items-center bg-slate-800 rounded-xl border border-slate-700 p-0.5">
+            <button
+              type="button"
+              onClick={zoomIn}
+              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Aproximar Lupa Zoom (+)"
+            >
+              <ZoomIn size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={zoomOut}
+              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Afastar Zoom (-)"
+            >
+              <ZoomOut size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={resetView}
+              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+              title="Resetar Zoom (1x)"
+            >
+              <RotateCcw size={14} />
+            </button>
+          </div>
+
+          {/* Upload do Arquivo STL do Scanner Intraoral */}
+          <label className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer" title="Importar arquivo 3D real exportado pelo scanner da Dra. Lucy (.STL)">
+            <UploadCloud size={13} className="text-sky-400" />
+            <span className="hidden sm:inline">Importar .STL</span>
+            <input 
+              type="file" 
+              accept=".stl" 
+              className="hidden" 
+              onChange={handleStlUpload} 
+            />
+          </label>
+        </div>
+      </div>
+
+      {/* PALCO PRINCIPAL DE VISUALIZAÇÃO INTERATIVA */}
+      <div 
+        className={cn(
+          "relative w-full h-[460px] md:h-[540px] select-none bg-radial from-slate-900 to-slate-950 overflow-hidden flex items-center justify-center",
+          zoomLevel > 1 ? (isPanning ? "cursor-grabbing" : "cursor-grab") : "cursor-default"
+        )}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        {/* CASO 1: VISUALIZAÇÃO DE SCANNER STL 3D REAL (QUANDO IMPORTADO) */}
+        {activeAngle === 'stl_scanner' ? (
+          <div className="relative w-full h-full flex flex-col items-center justify-center p-4">
+            {stlFile ? (
+              <div className="relative w-full h-full">
+                <div ref={stlContainerRef} className="w-full h-full" />
+                <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-slate-700 text-white text-xs shadow-xl flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping"></span>
+                  <div>
+                    <p className="font-bold text-sky-200">Malha 3D Real do Scanner Intraoral: {stlFile.name}</p>
+                    <p className="text-[10px] text-slate-400">Clique e arraste com o mouse para girar em 360° no espaço tridimensional</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-md p-6 bg-slate-900/90 border border-slate-800 rounded-3xl text-center shadow-2xl flex flex-col items-center">
+                <div className="w-16 h-16 rounded-3xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 mb-4">
+                  <Box size={32} />
+                </div>
+                <h4 className="text-base font-bold text-slate-100 mb-1">
+                  Carregador de Scanner Intraoral 3D (.STL)
+                </h4>
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+                  O scanner odontológico da Dra. Lucy (iTero, Trios, Medit) gera um arquivo <strong>.STL</strong> com a malha 3D real da boca do paciente. Arraste o arquivo aqui para inspecionar com rotação em 360°.
+                </p>
+                <label className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-lg shadow-sky-600/30 cursor-pointer flex items-center gap-2">
+                  <UploadCloud size={16} />
+                  <span>Selecionar Arquivo .STL do Scanner</span>
+                  <input type="file" accept=".stl" className="hidden" onChange={handleStlUpload} />
+                </label>
+                {stlError && (
+                  <p className="text-xs text-rose-400 mt-3 font-semibold bg-rose-950/50 p-2 rounded-xl border border-rose-900">
+                    {stlError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* CASO 2: VISUALIZAÇÃO FOTOGRÁFICA REALÍSTICA HD COM PINOS E ZONAS INTERATIVAS */
+          <div 
+            className="relative max-w-full max-h-full flex items-center justify-center transition-transform duration-100"
+            style={{
+              transform: `scale(${zoomLevel}) translate(${panOffset.x / zoomLevel}px, ${panOffset.y / zoomLevel}px)`
+            }}
+          >
+            {/* Imagem Fotográfica de Altíssima Definição */}
+            <img 
+              src={activeImagePath} 
+              alt={`Arcada Dentária Realística - ${activeAngle}`}
+              className="max-h-[460px] md:max-h-[520px] w-auto object-contain rounded-2xl shadow-2xl border border-slate-800/80 pointer-events-none transition-all duration-300"
+            />
+
+            {/* Pinos e Zonas de Clique Interativas nos Dentes */}
+            <div className="absolute inset-0 pointer-events-auto">
+              {Object.entries(activeCoordinates).map(([numStr, coords]) => {
+                const toothNum = parseInt(numStr, 10);
+                const meta = TOOTH_METADATA[toothNum];
+                const rec = odontogramData.teeth ? odontogramData.teeth[toothNum] : undefined;
+                const status = normalizeToothStatus(rec?.status);
+                const isSelected = activeToothNumber === toothNum;
+                const isHovered = hoveredTooth === toothNum;
+                const hasFinding = status !== 'healthy';
+
+                // Cor do anel indicador biológico
+                let badgeBg = 'bg-slate-900/90 text-white border-slate-600 shadow-slate-900/50';
+                let glowColor = 'ring-emerald-400 shadow-emerald-500/50';
+                
+                if (status === 'amalgam') {
+                  badgeBg = 'bg-slate-800 text-slate-100 border-slate-400';
+                  glowColor = 'ring-slate-400 shadow-slate-400/50';
+                } else if (status === 'zirconia_implant') {
+                  badgeBg = 'bg-sky-600 text-white border-sky-300';
+                  glowColor = 'ring-sky-400 shadow-sky-500/50';
+                } else if (status === 'cavitation_nico') {
+                  badgeBg = 'bg-rose-600 text-white border-rose-300';
+                  glowColor = 'ring-rose-400 shadow-rose-500/50';
+                } else if (status === 'endodontic') {
+                  badgeBg = 'bg-amber-600 text-white border-amber-300';
+                  glowColor = 'ring-amber-400 shadow-amber-500/50';
+                } else if (status === 'caries') {
+                  badgeBg = 'bg-yellow-600 text-white border-yellow-300';
+                  glowColor = 'ring-yellow-400 shadow-yellow-500/50';
+                } else if (status === 'ceramic_crown') {
+                  badgeBg = 'bg-teal-600 text-white border-teal-300';
+                  glowColor = 'ring-teal-400 shadow-teal-500/50';
+                }
+
+                return (
+                  <button
+                    key={toothNum}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectToothInternal(toothNum);
+                    }}
+                    onMouseEnter={() => setHoveredTooth(toothNum)}
+                    onMouseLeave={() => setHoveredTooth(null)}
+                    style={{
+                      left: `${coords.left}%`,
+                      top: `${coords.top}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    className={cn(
+                      "absolute transition-all duration-150 flex flex-col items-center group cursor-pointer z-20",
+                      isSelected && "scale-125 z-30",
+                      isHovered && !isSelected && "scale-115 z-25"
+                    )}
+                    title={`#${toothNum} - ${meta?.name} (${STATUS_CONFIG[status].label})`}
+                  >
+                    {/* Botão de Notação FDI do Dente */}
+                    <div className={cn(
+                      "w-6 h-6 rounded-full flex items-center justify-center font-mono font-black text-[10px] border shadow-xl transition-all",
+                      badgeBg,
+                      isSelected ? `ring-4 ${glowColor} scale-115 shadow-2xl` : "opacity-85 group-hover:opacity-100",
+                      !hasFinding && !isSelected && "bg-slate-950/80 border-slate-700 text-slate-300"
+                    )}>
+                      {toothNum}
+                    </div>
+
+                    {/* Ponto indicador de alerta para dentes com achados clínicos */}
+                    {hasFinding && (
+                      <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping absolute -top-1 -right-1" />
+                    )}
+
+                    {/* Tooltip anatômico ao passar o mouse */}
+                    {isHovered && !isSelected && (
+                      <div className="absolute -bottom-8 bg-slate-950/95 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-700 text-[10px] text-white whitespace-nowrap shadow-2xl z-40 pointer-events-none">
+                        <strong className="text-emerald-300">#{toothNum}</strong>: {STATUS_CONFIG[status].label}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* BADGE DE CONTROLE E DICAS (CANTO SUPERIOR ESQUERDO) */}
+        <div className="absolute top-3 left-3 bg-slate-950/90 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-800 text-white text-[11px] shadow-2xl flex items-center gap-2.5 pointer-events-auto">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+          <div>
+            <p className="font-bold text-slate-100 leading-tight">
+              {activeAngle === 'maxilla' && 'Arcada Superior Oclusal (Maxila)'}
+              {activeAngle === 'mandible' && 'Arcada Inferior Oclusal (Mandíbula)'}
+              {activeAngle === 'frontal' && 'Visão Frontal Oclusal (Sorriso)'}
+              {activeAngle === 'typodont' && 'Manequim Articulado Completo'}
+              {activeAngle === 'cbct' && 'Tomografia Computadorizada 3D'}
+              {activeAngle === 'stl_scanner' && 'Scanner Intraoral (.STL)'}
+            </p>
+            <p className="text-[10px] text-slate-400 leading-tight">
+              {zoomLevel > 1 
+                ? `Zoom: ${zoomLevel.toFixed(1)}x • Arraste com o mouse para mover` 
+                : 'Clique diretamente em qualquer dente para abrir o laudo'}
+            </p>
+          </div>
+        </div>
+
+        {/* RESUMO DOS ACHADOS BIOLÓGICOS (CANTO SUPERIOR DIREITO) */}
+        <div className="absolute top-3 right-3 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-800 text-white text-xs shadow-2xl flex items-center gap-2">
           {stats.amalgams > 0 && (
             <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 font-mono text-[10px] flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-slate-400"></span> {stats.amalgams} Amálgamas
@@ -641,261 +757,118 @@ export default function Dental3DViewer({
           )}
           {stats.nicos > 0 && (
             <span className="px-2 py-0.5 rounded-lg bg-rose-950/80 text-rose-300 border border-rose-800 font-mono text-[10px] flex items-center gap-1 animate-pulse">
-              <span className="w-2 h-2 rounded-full bg-rose-500"></span> {stats.nicos} NICO/Focos
+              <span className="w-2 h-2 rounded-full bg-rose-500"></span> {stats.nicos} NICO
             </span>
           )}
-        </div>
-
-        {/* Controles de Câmera e Scanner IA */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {onScanAiRequest && (
-            <button
-              type="button"
-              onClick={onScanAiRequest}
-              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-emerald-700/30 transition-all cursor-pointer active:scale-95"
-              title="Analisar este ângulo tridimensional com a Inteligência Artificial Odontológica"
-            >
-              <Sparkles size={13} className="text-amber-300" />
-              <span>Scanner IA neste Ângulo</span>
-            </button>
-          )}
-
-          {/* Botão de Auto-Rotação */}
-          <button
-            type="button"
-            onClick={() => setAutoRotate(!autoRotate)}
-            className={cn(
-              "px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1 cursor-pointer",
-              autoRotate 
-                ? "bg-sky-600 text-white border-sky-500 shadow-md shadow-sky-600/30" 
-                : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-750"
-            )}
-            title="Ativar/desativar rotação contínua automática para demonstração ao paciente"
-          >
-            <RefreshCw size={13} className={autoRotate ? "animate-spin" : ""} />
-            <span className="hidden sm:inline">Girar 360°</span>
-          </button>
-
-          {/* Reset da Câmera */}
-          <button
-            type="button"
-            onClick={handleResetCamera}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-all cursor-pointer"
-            title="Restaurar posição original da câmera frontal"
-          >
-            <RotateCcw size={14} />
-          </button>
-
-          {/* Zoom In / Out */}
-          <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-xl border border-slate-700">
-            <button
-              type="button"
-              onClick={() => {
-                if (!cameraRef.current) return;
-                cameraRef.current.position.z = Math.max(80, cameraRef.current.position.z - 25);
-              }}
-              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-              title="Aproximar Zoom (+)"
-            >
-              <ZoomIn size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!cameraRef.current) return;
-                cameraRef.current.position.z = Math.min(380, cameraRef.current.position.z + 25);
-              }}
-              className="p-1 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-              title="Afastar Zoom (-)"
-            >
-              <ZoomOut size={14} />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Palco Principal do WebGL */}
-      <div className="relative w-full h-[460px] md:h-[520px] select-none">
-        <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      {/* BARRA DE SELEÇÃO RÁPIDA DE DENTES (FDI 11 a 48) */}
+      <div className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
+        <span className="text-[11px] font-bold text-slate-400 shrink-0 ml-1">
+          Dentes FDI:
+        </span>
+        <div className="flex items-center gap-1 overflow-x-auto py-1">
+          {ALL_TEETH_ORDER.map((num) => {
+            const isSelected = activeToothNumber === num;
+            const rec = odontogramData.teeth ? odontogramData.teeth[num] : undefined;
+            const status = normalizeToothStatus(rec?.status);
+            const hasFinding = status !== 'healthy';
 
-        {/* Overlay Lateral: Ângulos Rápidos de Visão Cirúrgica */}
-        <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
-          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider px-1">
-            Vistas Anatômicas:
-          </span>
-          <button
-            type="button"
-            onClick={() => setCameraAngle('front')}
-            className={cn(
-              "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-left border cursor-pointer",
-              viewAngle === 'front' 
-                ? "bg-sky-600 text-white border-sky-400 shadow-sm" 
-                : "bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 backdrop-blur-sm"
-            )}
-          >
-            Frontal (Sorriso)
-          </button>
-          <button
-            type="button"
-            onClick={() => setCameraAngle('occlusal_upper')}
-            className={cn(
-              "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-left border cursor-pointer",
-              viewAngle === 'occlusal_upper' 
-                ? "bg-sky-600 text-white border-sky-400 shadow-sm" 
-                : "bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 backdrop-blur-sm"
-            )}
-          >
-            Oclusal Superior (Palato)
-          </button>
-          <button
-            type="button"
-            onClick={() => setCameraAngle('occlusal_lower')}
-            className={cn(
-              "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-left border cursor-pointer",
-              viewAngle === 'occlusal_lower' 
-                ? "bg-sky-600 text-white border-sky-400 shadow-sm" 
-                : "bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 backdrop-blur-sm"
-            )}
-          >
-            Oclusal Inferior (Língua)
-          </button>
-          <button
-            type="button"
-            onClick={() => setCameraAngle('right')}
-            className={cn(
-              "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-left border cursor-pointer",
-              viewAngle === 'right' 
-                ? "bg-sky-600 text-white border-sky-400 shadow-sm" 
-                : "bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 backdrop-blur-sm"
-            )}
-          >
-            Lateral Direita
-          </button>
-          <button
-            type="button"
-            onClick={() => setCameraAngle('left')}
-            className={cn(
-              "px-2.5 py-1 rounded-lg text-xs font-semibold transition-all text-left border cursor-pointer",
-              viewAngle === 'left' 
-                ? "bg-sky-600 text-white border-sky-400 shadow-sm" 
-                : "bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 backdrop-blur-sm"
-            )}
-          >
-            Lateral Esquerda
-          </button>
+            let btnColor = "bg-slate-800 text-slate-300 hover:bg-slate-700";
+            if (status === 'amalgam') btnColor = "bg-slate-700 text-slate-100 border border-slate-500";
+            if (status === 'zirconia_implant') btnColor = "bg-sky-600 text-white";
+            if (status === 'cavitation_nico') btnColor = "bg-rose-600 text-white animate-pulse";
+            if (status === 'endodontic') btnColor = "bg-amber-600 text-white";
+
+            return (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handleSelectToothInternal(num)}
+                className={cn(
+                  "w-7 h-7 rounded-xl font-mono text-[11px] font-black transition-all flex items-center justify-center shrink-0 cursor-pointer relative",
+                  btnColor,
+                  isSelected && "ring-2 ring-emerald-400 scale-110 shadow-lg shadow-emerald-500/40 z-10"
+                )}
+                title={`Selecionar Dente #${num}`}
+              >
+                {num}
+                {hasFinding && !isSelected && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 absolute top-0.5 right-0.5"></span>
+                )}
+              </button>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Overlay Inferior Esquerdo: Controle Cirúrgico de Transparência Óssea */}
-        <div className="absolute bottom-4 left-4 bg-slate-900/85 backdrop-blur-md p-3 rounded-2xl border border-slate-800 text-white text-xs space-y-2 z-10 max-w-xs shadow-xl">
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-bold flex items-center gap-1.5 text-slate-200">
-              <Eye size={14} className="text-sky-400" />
-              Transparência Óssea:
-            </span>
-            <span className="font-mono text-[11px] text-sky-400 font-bold">
-              {Math.round((1 - boneTransparency) * 100)}% Raio-X
-            </span>
-          </div>
+      {/* CARD CLÍNICO DO DENTE SELECIONADO: LAUDO INTEGRATIVO E DENTE-ÓRGÃO */}
+      {activeToothMeta && (
+        <div className="p-4 bg-slate-950 border-t border-slate-800/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className={cn(
+              "w-12 h-12 rounded-2xl flex items-center justify-center font-mono font-black text-lg border shadow-xl shrink-0",
+              activeToothStatus === 'amalgam' && "bg-slate-800 text-slate-200 border-slate-600",
+              activeToothStatus === 'zirconia_implant' && "bg-sky-600 text-white border-sky-400 shadow-sky-600/30",
+              activeToothStatus === 'cavitation_nico' && "bg-rose-600 text-white border-rose-400 shadow-rose-600/30",
+              activeToothStatus === 'endodontic' && "bg-amber-600 text-white border-amber-400 shadow-amber-600/30",
+              activeToothStatus === 'healthy' && "bg-slate-900 text-emerald-400 border-emerald-500/40"
+            )}>
+              #{activeToothNumber}
+            </div>
 
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={boneTransparency}
-            onChange={(e) => setBoneTransparency(parseFloat(e.target.value))}
-            className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-400"
-          />
-
-          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-0.5">
-            <span>Osso Total (Opaco)</span>
-            <span>Ver Raízes & Nervos</span>
-          </div>
-        </div>
-
-        {/* Overlay do Dente Selecionado com Correlação Sistêmica Biológica */}
-        {activeTooth && (
-          <div className="absolute top-4 right-4 bg-slate-900/90 backdrop-blur-md p-3.5 rounded-2xl border border-emerald-500/40 text-white text-xs max-w-xs z-10 shadow-2xl space-y-2 animate-in fade-in slide-in-from-right-4 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-xl bg-emerald-600 text-white font-black font-mono flex items-center justify-center text-sm shadow-md">
-                  {activeTooth.number}
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-bold text-slate-100 text-sm md:text-base">
+                  {activeToothMeta.name}
+                </h4>
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1",
+                  activeToothConfig.badgeColor,
+                  activeToothConfig.badgeBorder,
+                  activeToothConfig.badgeText
+                )}>
+                  {activeToothConfig.label}
                 </span>
-                <div>
-                  <h5 className="font-extrabold text-xs text-white leading-tight">
-                    {activeTooth.name}
-                  </h5>
-                  <span className="text-[10px] text-emerald-400 font-semibold">
-                    {STATUS_CONFIG[normalizeToothStatus(activeRecord?.status)].label}
+                {activeToothRecord?.neuralTherapy && (
+                  <span className="px-2 py-0.5 rounded-full bg-teal-900/70 text-teal-300 border border-teal-700 text-xs font-semibold">
+                    Terapia Neural
                   </span>
-                </div>
+                )}
               </div>
+
+              <p className="text-xs text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
+                <span>Meridiano: <strong className="text-sky-300">{activeToothMeta.meridian}</strong></span>
+                <span>•</span>
+                <span>Órgão: <strong className="text-emerald-300">{activeToothMeta.organ}</strong></span>
+                <span>•</span>
+                <span>Vértebras: <span className="text-slate-300">{activeToothMeta.vertebrae}</span></span>
+              </p>
             </div>
-
-            <div className="space-y-1 text-[11px] text-slate-300">
-              <div className="flex items-start gap-1">
-                <strong className="text-slate-400 shrink-0">Meridiano:</strong>
-                <span className="text-amber-300 font-semibold">{activeTooth.meridian}</span>
-              </div>
-              <div className="flex items-start gap-1">
-                <strong className="text-slate-400 shrink-0">Órgão Alvo:</strong>
-                <span>{activeTooth.organ}</span>
-              </div>
-              <div className="flex items-start gap-1">
-                <strong className="text-slate-400 shrink-0">Vértebras:</strong>
-                <span className="font-mono text-slate-400">{activeTooth.vertebrae}</span>
-              </div>
-              {activeRecord?.galvanismo_mv !== undefined && (
-                <div className="flex items-center gap-1.5 pt-1 text-sky-300 font-mono">
-                  <Zap size={12} className="text-amber-400" />
-                  <span>Galvanismo: <strong>{activeRecord.galvanismo_mv} mV</strong></span>
-                </div>
-              )}
-            </div>
-
-            <p className="text-[10px] text-slate-400 italic pt-1 border-t border-slate-800/80">
-              Clique em outro elemento 3D na arcada para inspecionar.
-            </p>
           </div>
-        )}
 
-        {/* Tooltip Dinâmico do Hover sobre o dente */}
-        {hoveredTooth && !activeTooth && (
-          <div className="absolute bottom-16 right-4 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-sky-500/50 text-white text-xs font-mono z-10 pointer-events-none shadow-lg">
-            Dente #{hoveredTooth} - {TOOTH_METADATA[hoveredTooth]?.name}
+          {/* Plano Biológico e Ações */}
+          <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
+            {activeToothRecord?.biologicalPlan && (
+              <div className="text-right hidden sm:block max-w-xs">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Conduta Planejada:</p>
+                <p className="text-xs text-slate-200 truncate">{activeToothRecord.biologicalPlan}</p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (onSelectTooth) onSelectTooth(activeToothNumber);
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-700/30 cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Editar Dente no Odontograma</span>
+              <ChevronRight size={14} />
+            </button>
           </div>
-        )}
-
-        {/* Guia de Navegação Interativa no Canto Inferior Direito */}
-        <div className="absolute bottom-4 right-4 hidden sm:flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-800/80 text-[11px] text-slate-300 shadow-md">
-          <span>🖱️ Arraste para girar</span>
-          <span>&bull;</span>
-          <span>📜 Rolar a página livremente</span>
-          <span>&bull;</span>
-          <span>🔍 <kbd className="px-1 py-0.5 bg-slate-800 text-sky-400 font-mono text-[9px] rounded border border-slate-700">Ctrl</kbd> + Scroll ou Botões Zoom</span>
-          <span>&bull;</span>
-          <span>🎯 Clique no dente</span>
         </div>
-      </div>
-
-      {/* Rodapé Informativo e Importador Opcional de Arquivos 3D (STL/OBJ/DICOM) */}
-      <div className="bg-slate-900 px-4 py-2.5 border-t border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
-        <div className="flex items-center gap-2">
-          <ShieldCheck size={14} className="text-emerald-400" />
-          <span>Renderização nativa WebGL sem envio de imagens para servidores terceiros (Sigilo Total LGPD).</span>
-        </div>
-
-        <label className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 cursor-pointer bg-slate-800 hover:bg-slate-750 px-2.5 py-1 rounded-lg border border-slate-700 transition-colors">
-          <UploadCloud size={13} />
-          <span>{importedFileName ? `Malha: ${importedFileName}` : 'Carregar STL / Escaneamento Intraoral'}</span>
-          <input 
-            type="file" 
-            accept=".stl,.obj,.ply,.dcm" 
-            className="hidden" 
-            onChange={handleFileUpload} 
-          />
-        </label>
-      </div>
+      )}
     </div>
   );
 }

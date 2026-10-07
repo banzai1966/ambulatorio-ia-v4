@@ -1072,12 +1072,15 @@ app.post("/api/process-clinical", async (req, res) => {
                         errText.includes('API_KEY_INVALID') || 
                         errText.includes('UNAUTHENTICATED') || 
                         errText.includes('INVALID_ARGUMENT') ||
-                        err?.status === 401;
+                        errText.includes('leaked') ||
+                        errText.includes('PERMISSION_DENIED') ||
+                        err?.status === 401 ||
+                        err?.status === 403;
 
     if (isAuthError) {
       return res.status(401).json({ 
         error: "API_KEY_INVALID",
-        message: "Chave do Google Gemini (GEMINI_API_KEY) inválida, ausente ou expirada. Verifique se a variável GEMINI_API_KEY no arquivo .env ou no Portainer do seu servidor possui uma chave ativa gerada no Google AI Studio (iniciando com AIzaSy... e sem aspas)."
+        message: "Chave do Google Gemini (GEMINI_API_KEY) inválida, ausente, revogada ou expirada. Verifique se a variável GEMINI_API_KEY no arquivo .env ou no Portainer do seu servidor possui uma chave ativa gerada no Google AI Studio (formato AQ... ou AIzaSy... e sem aspas)."
       });
     }
 
@@ -2266,19 +2269,21 @@ app.get("/api/public/anamnese-data", async (req, res) => {
       }
     }
 
-    // 2. PRIORIDADE 2: Tentar buscar na tabela oficial anamnese_pre_consulta do Supabase
+    // 2. PRIORIDADE 2: Tentar buscar na tabela prontuarios ou anamnese_pre_consulta do Supabase
     try {
-      let query = supabase.from('anamnese_pre_consulta').select('*');
-      if (id && id !== '1' && id !== 'undefined' && id !== 'null') {
-        query = query.eq('agendamento_id', id);
-      } else if (cleanPhone) {
-        query = query.or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
+      let prontQuery = supabase.from('prontuarios').select('*');
+      if (cleanPhone) {
+        prontQuery = prontQuery.or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
       } else if (cleanName) {
-        query = query.ilike('paciente_nome', `%${cleanName}%`);
+        prontQuery = prontQuery.ilike('paciente_nome_completo', `%${cleanName}%`);
       }
-      const { data } = await query.order('created_at', { ascending: false }).limit(1);
-      if (data && data.length > 0) {
-        return res.json({ success: true, data: data[0], source: 'anamnese_pre_consulta' });
+      const { data: prontData } = await prontQuery.order('created_at', { ascending: false }).limit(1);
+      if (prontData && prontData.length > 0 && prontData[0].dados_clinicos) {
+        const item = prontData[0];
+        const dc = typeof item.dados_clinicos === 'object' ? item.dados_clinicos : {};
+        if (dc.tipo === 'pre_anamnese' || item.paciente_status === 'pre_anamnese') {
+          return res.json({ success: true, data: { ...dc, paciente_nome: item.paciente_nome_completo, paciente_telefone: item.paciente_telefone, paciente_cpf: item.paciente_cpf, data_nascimento: item.paciente_data_nascimento }, source: 'prontuarios' });
+        }
       }
     } catch (_) {}
 
@@ -2503,43 +2508,43 @@ app.post("/api/public/submit-anamnese", async (req, res) => {
       }
     }
 
-    // 1. Atualiza status para 'Confirmado' e salva data de nascimento e demais dados no agendamento
+    // 1. Atualiza status para 'Confirmado' no agendamento no Supabase
     try {
-      const updateData: any = {
-        status: 'Confirmado',
-        paciente_cpf: paciente_cpf || undefined,
-        data_nascimento: data_nascimento || undefined,
-        paciente_data_nascimento: data_nascimento || undefined,
-        foto_url: foto_url || undefined,
-        cep: endereco?.cep || undefined,
-        logradouro: endereco?.logradouro || undefined,
-        bairro: endereco?.bairro || undefined,
-        cidade: endereco?.cidade || undefined,
-        estado: endereco?.estado || undefined,
-        numero: endereco?.numero || undefined,
-        complemento: endereco?.complemento || undefined
-      };
+      const statusUpdate = { status: 'Confirmado' };
 
       if (aptId && aptId !== '1') {
         const numAptId = Number(aptId);
         if (!isNaN(numAptId)) {
-          await supabase.from('agendamentos').update(updateData).eq('id', numAptId);
+          await supabase.from('agendamentos').update(statusUpdate).eq('id', numAptId);
         }
-        await supabase.from('agendamentos').update(updateData).eq('id', String(aptId));
+        await supabase.from('agendamentos').update(statusUpdate).eq('id', String(aptId));
       }
 
       if (cleanPhone) {
-        await supabase.from('agendamentos').update(updateData).or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
+        await supabase.from('agendamentos').update(statusUpdate).or(`paciente_telefone.ilike.%${cleanPhone}%,paciente_telefone.ilike.%${cleanWithout55}%`);
       }
     } catch (err) {
       console.warn("Erro ao atualizar agendamento em Supabase:", err);
     }
 
-    // 2. Salva registro de anamnese pré-consulta no banco
+    // 2. Salva registro de anamnese pré-consulta na tabela 'prontuarios' do Supabase para persistência definitiva na nuvem
     try {
-      await supabase.from('anamnese_pre_consulta').insert([anamneseRecord]);
+      const prontuarioPreAnamnese = {
+        paciente_nome_completo: paciente_nome,
+        paciente_telefone: paciente_telefone || '',
+        paciente_cpf: paciente_cpf || null,
+        paciente_data_nascimento: data_nascimento || null,
+        paciente_status: 'pre_anamnese',
+        data_consulta: new Date().toISOString().split('T')[0],
+        queixa_principal: obs || 'Pré-cadastro digital respondido pelo paciente',
+        resumo_formatado: `Pré-Anamnese respondida digitalmente pelo paciente via link oficial WhatsApp. Medicamentos atuais: ${meds || 'Nenhum'}. Alertas: ${(alertas_clinicos || []).join(', ') || 'Nenhum'}.`,
+        dados_clinicos: { ...anamneseRecord, tipo: 'pre_anamnese' },
+        url_midia: foto_url || null,
+        tipo_midia: foto_url ? 'foto_perfil' : null
+      };
+      await supabase.from('prontuarios').insert([prontuarioPreAnamnese]);
     } catch (error: any) {
-      console.warn("Aviso ao salvar em anamnese_pre_consulta:", error.message);
+      console.warn("Aviso ao salvar pré-anamnese em prontuarios:", error.message);
     }
 
     // 3. Notificar o n8n sobre a conclusão do formulário de anamnese

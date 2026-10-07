@@ -396,13 +396,14 @@ function getPatientCumulativeTimeline(historyList: any[], targetPatientName?: st
       });
     }
 
+    const detected = detectRecordSpecialtyAndDoctor(rec);
     timelineWithEvolution.push({
       record: rec,
       index: idx + 1,
       id: rec.id || `rec-${idx}`,
       dateFormatted: rec.data_consulta ? (rec.data_consulta.includes('-') ? new Date(rec.data_consulta + 'T12:00:00').toLocaleDateString('pt-BR') : rec.data_consulta) : (rec.created_at ? new Date(rec.created_at).toLocaleDateString('pt-BR') : `Consulta ${idx + 1}`),
-      doctor: rec.profissional_responsavel || 'Profissional',
-      specialty: rec.especialidade || 'Consulta',
+      doctor: rec.profissional_responsavel || detected.doctorName,
+      specialty: rec.especialidade || detected.specialtyLabel,
       items: itemsWithStatus,
       suspendedItems,
       isLatest: idx === filtered.length - 1
@@ -3024,7 +3025,7 @@ export default function PatientDossierView({
                   {selectedHistoryRecord.paciente_nome_completo || patientName || 'Paciente'}
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Profissional Responsável: {selectedHistoryRecord.profissional_responsavel || activeDoctor.full_name}
+                  Profissional Responsável: {selectedHistoryRecord.profissional_responsavel || detectRecordSpecialtyAndDoctor(selectedHistoryRecord).doctorName}
                 </p>
               </div>
               <button 
