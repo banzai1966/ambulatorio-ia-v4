@@ -193,6 +193,21 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
     },
     {
       number: '7',
+      title: 'Prescrições Biológicas, Suplementação Cirúrgica & Teleodontologia (CFO-226/2020)',
+      category: 'Prescrição & Teleatendimento',
+      summary: 'Documentação oficial CRO/SP 98.412, fórmulas ortomoleculares cirúrgicas (D3, K2, Vit C, PRF, SMART) e teleorientação biológica remota.',
+      highlights: [
+        { title: 'Emissor Exclusivo Dra. Lucy', desc: 'Emissão com CRO/SP 98.412 timbrado, carimbo digital e conformidade odontológica plena.' },
+        { title: 'Fórmulas Cirúrgicas Integrativas', desc: 'Vitamina D3+K2 para osseointegração da zircônia, Vit C lipossomal para colágeno, Zinco/Magnésio para PRF e Arnica CH6 para contenção de edema.' },
+        { title: 'Teleodontologia & Teleorientação (CFO-226/2020)', desc: 'Triagem sistêmica remota de pacientes antes de viagens, apresentação conjunta ao vivo de cortes CBCT e fotos DSD, prescrição de preparo biológico e acompanhamento pós-operatório sem deslocamento.' },
+        { title: 'Assinatura Digital ICP-Brasil & WhatsApp', desc: 'Assinatura digitalizada ou e-CPF A1/nuvem com envio instantâneo do PDF oficial no WhatsApp do paciente.' }
+      ],
+      details: [
+        'A teleodontologia biológica permite à Dra. Lucy acolher e orientar pacientes de todo o Brasil antes do deslocamento à clínica e garantir acompanhamento seguro da cicatrização.'
+      ]
+    },
+    {
+      number: '8',
       title: 'Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp',
       category: 'Fluxo Operacional & Automação de Recepção',
       summary: 'Sistema automatizado que conecta o agendamento de consultas cirúrgicas/clínicas, envio imediato do formulário de pré-anamnese biológica no WhatsApp e triagem em tempo real.',
@@ -205,21 +220,6 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
       details: [
         'A Dra. Lucy ganha de 15 a 20 minutos por consulta, não precisando preencher dados básicos de cadastro ou históricos repetitivos manualmente.',
         'O paciente vivencia uma experiência de atendimento de altíssimo padrão tecnológico e acolhimento humano desde o primeiro contato.'
-      ]
-    },
-    {
-      number: '8',
-      title: 'Prescrição, Suporte Nutricional & Atestados Odontológicos (Lei 5.081/66)',
-      category: 'Documentação Legal, Atestados & Suplementação',
-      summary: 'Protocolo ortomolecular pós-operatório e emissão oficial de atestados odontológicos e declarações cirúrgicas com respaldo do CFO.',
-      highlights: [
-        { title: 'Atestados Odontológicos Rápidos (Lei Federal 5.081/66, Art. 6º, III)', desc: 'Emissão em 1 clique de atestado de repouso pós-operatório (extrações, zircônia, PRF e SMART), declaração de comparecimento e atestado de acompanhante com CRO-SP.' },
-        { title: 'Vitamina D3 (10.000 UI) + Vitamina K2 (MK-7 120mcg)', desc: 'Fixação adequada do cálcio no tecido ósseo e imunomodulação.' },
-        { title: 'Vitamina C Tamponada / Lipossomal (1.000mg a 2.000mg)', desc: 'Síntese de colágeno e ação antioxidante quelante.' },
-        { title: 'Homeopatia Arnica 6CH & Minerais Quelatos', desc: 'Prevenção de edema, cicatrização e regeneração tecidual acelerada.' }
-      ],
-      details: [
-        'Gera atestados e receitas oficiais prontos para impressão timbrada ou envio direto para o WhatsApp do paciente com assinatura digital.'
       ]
     },
     {
@@ -349,6 +349,36 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
     },
     {
       number: '7',
+      title: 'Prescrição Oficial ANVISA, Psicotrópicos (Rivotril) & Assinatura ICP-Brasil',
+      category: 'Prescrição & Legislação Sanitária',
+      summary: 'Emissão sob medida para Dr. Carlos (CRM/SP 145.892), regras da Portaria 344/98, distinção C1 vs Notificação Azul B e assinatura digital gratuita.',
+      highlights: [
+        { title: 'Receita C1 de Controle Especial (Branca em 2 Vias)', desc: 'Antidepressivos e antibióticos emitidos 100% digitais em PDF com assinatura ICP-Brasil aceitos em qualquer farmácia do Brasil via validador.iti.gov.br.' },
+        { title: 'Notificação Azul B (Rivotril, Clonazepam, Zolpidem)', desc: 'Esclarecimento da retenção oficial da Anvisa. Opção 1: Espelho para preenchimento no talão físico azul oficial da Vigilância; Opção 2: Prescrição Digital gratuita oficial (Memed/CFM) integrada ao SNCR com envio de Token SMS de 6 dígitos para o paciente comprar online ou presencial.' },
+        { title: 'Assinatura Digital ICP-Brasil sem Mensalidade', desc: 'Uso do certificado digital e-CPF A1/A3/Nuvem do médico sem intermediários pagos, com Hash SHA-256 e validação governamental.' },
+        { title: 'Atestados Médicos Rápidos (CFM 1.658/02)', desc: 'Repouso de 1 a 14 dias com CID facultativo, comparecimento e acompanhante com disparo imediato no WhatsApp.' }
+      ],
+      details: [
+        'O Dr. Carlos dispõe de todas as vias legais para prescrição com segurança jurídica e zero atrito com farmácias e conselhos.'
+      ]
+    },
+    {
+      number: '8',
+      title: 'Telemedicina Médica Integrada (Resolução CFM nº 2.314/2022)',
+      category: 'Atendimento Remoto & Criptografia',
+      summary: 'Consultas à distância em sala WebRTC segura, compartilhamento de neuroimagem, prescrição simultânea e registro em prontuário.',
+      highlights: [
+        { title: 'Vídeo Criptografado Ponto-a-Ponto', desc: 'Atendimento seguro que não exige download de aplicativos pelo paciente, rodando direto no navegador do celular ou PC.' },
+        { title: 'Convite WhatsApp com 1 Clique', desc: 'Disparo imediato de link da sala com orientações de privacidade e conexão para o paciente.' },
+        { title: 'Apresentação de Neuroimagem', desc: 'Compartilhamento de ressonâncias, tomografias, eletroneuromiografia e exames laboratoriais na tela ao vivo.' },
+        { title: 'Prescrição & SOAP Simultâneos', desc: 'Evolução clínica e receitas digitais assinadas emitidas em tempo real durante a chamada.' }
+      ],
+      details: [
+        'Atendimento humanizado de alta tecnologia para pacientes com limitações motoras ou residentes em outras localidades.'
+      ]
+    },
+    {
+      number: '9',
       title: 'Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp',
       category: 'Fluxo Operacional & Automação de Recepção',
       summary: 'Ecossistema automatizado que integra a marcação de consultas neurológicas e integrativas com envio automático do formulário de pré-anamnese clínica no WhatsApp do paciente.',
@@ -364,21 +394,7 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
       ]
     },
     {
-      number: '8',
-      title: 'Prescrição Inteligente, Atestados Médicos & CFM 1.658/02',
-      category: 'Prescrição & Documentação Legal',
-      summary: 'Emissão de receituários médicos e atestados oficiais em total conformidade com a Anvisa e Conselho Federal de Medicina.',
-      highlights: [
-        { title: 'Atestados Médicos Rápidos (1 a 14 dias)', desc: 'Botões minimalistas para gerar atestado de repouso com cálculo automático de dias e CID-10 facultativo, declaração de comparecimento e declaração de acompanhante.' },
-        { title: 'Tipos de Receituário Anvisa', desc: 'Receita Branca Simples, Controle Especial C1/C5 (Duas Vias) e Notificações de Receita A/B.' },
-        { title: 'Assinatura & Validação Oficial', desc: 'Inclusão de assinatura digitalizada, carimbo com CRM/SP 145.892, cidade/data por extenso e hash SHA-256 de validação.' }
-      ],
-      details: [
-        'Disponibiliza emissão em folha única timbrada e integração direta para disparo imediato do atestado no WhatsApp do paciente.'
-      ]
-    },
-    {
-      number: '9',
+      number: '10',
       title: 'Inteligência Artificial & Escuta Ambiental de Longa Duração (30 a 40 Minutos)',
       category: 'Inteligência Artificial & Escuta Contínua',
       summary: 'Gravação ambiental passiva e estruturação clínica de consultas completas de até 40 minutos com diarização e supressão de ruídos.',

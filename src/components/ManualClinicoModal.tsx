@@ -40,7 +40,12 @@ import {
   Cpu,
   Gauge,
   AlertTriangle,
-  FileCheck
+  FileCheck,
+  Video,
+  Smartphone,
+  Key,
+  QrCode,
+  Lock
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { generateManualClinicoPDF } from '../lib/manualPdfGenerator';
@@ -288,7 +293,23 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <FileText size={15} className="text-emerald-600 shrink-0" />
-                        6. Receituário Anvisa & PDF
+                        6. Receituário, Psicotrópicos & ICP
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('carlos_telemedicina')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'carlos_telemedicina'
+                          ? "bg-blue-50 text-blue-900 border border-blue-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Video size={15} className="text-indigo-600 shrink-0" />
+                        7. Telemedicina Médica (CFM)
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -304,7 +325,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Calendar size={15} className="text-blue-600 shrink-0" />
-                        7. Agenda, Pré-Anamnese & WhatsApp
+                        8. Agenda, Pré-Anamnese & WhatsApp
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -320,7 +341,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Radio size={15} className="text-purple-600 shrink-0" />
-                        8. Escuta Ambiental (30-40 min)
+                        9. Escuta Ambiental (30-40 min)
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -421,7 +442,23 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Flame size={15} className="text-rose-600 shrink-0" />
-                        6. Presets Clínicos Rápidos
+                        6. Presets Clínicos & Atestados (CFO)
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+
+                    <button
+                      onClick={() => setActiveSection('lucy_receituario_teleodonto')}
+                      className={cn(
+                        "w-full text-left p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer",
+                        activeSection === 'lucy_receituario_teleodonto'
+                          ? "bg-emerald-50 text-emerald-900 border border-emerald-200 shadow-2xs font-extrabold"
+                          : "text-slate-600 hover:bg-slate-100"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Video size={15} className="text-teal-600 shrink-0" />
+                        7. Prescrições & Teleodontologia
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -437,7 +474,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Calendar size={15} className="text-emerald-600 shrink-0" />
-                        7. Agenda, Pré-Anamnese & WhatsApp
+                        8. Agenda, Pré-Anamnese & WhatsApp
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -453,7 +490,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Camera size={15} className="text-indigo-600 shrink-0" />
-                        8. DSD, Sorriso 3D & Galeria CBCT
+                        9. DSD, Sorriso 3D & Galeria CBCT
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -469,7 +506,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Cpu size={15} className="text-emerald-600 shrink-0" />
-                        9. Scanner IA (CBCT) & Galvanismo por Voz
+                        10. Scanner IA (CBCT) & Galvanismo por Voz
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -485,7 +522,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                     >
                       <span className="flex items-center gap-2">
                         <Radio size={15} className="text-teal-600 shrink-0" />
-                        10. Escuta Ambiental Odonto (30-40 min)
+                        11. Escuta Ambiental Odonto (30-40 min)
                       </span>
                       <ChevronRight size={14} className="text-slate-400 shrink-0" />
                     </button>
@@ -761,72 +798,166 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                           <FileText size={24} />
                         </div>
                         <div>
-                          <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">Prescrição, Atestados & Exportação</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">6. Receituário Anvisa, Atestados Médicos & Exportação PDF</h3>
-                          <p className="text-xs text-slate-500">Documentos clínicos oficiais timbrados, padrão CFM Res. 1.658/02 e envio direto via WhatsApp.</p>
+                          <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">Prescrição Oficial, Legislação & ICP-Brasil</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">6. Receituário Oficial ANVISA, Psicotrópicos (Rivotril) & Assinatura ICP-Brasil</h3>
+                          <p className="text-xs text-slate-500">Emissão sob medida para Dr. Carlos (CRM/SP 145.892), regras da Portaria 344/98 e validação nacional.</p>
                         </div>
                       </div>
 
                       <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
                         <p>
-                          O módulo de prescrição e documentos clínicos foi projetado para emitir receitas e atestados em segundos, mantendo conformidade ética com o CFM e validação nacional:
+                          O módulo de prescrição foi desenvolvido sob estrita observância da legislação sanitária brasileira (Portaria SVS/MS nº 344/1998, RDC Anvisa e Resoluções do CFM), garantindo emissão ágil e aceitação garantida nas farmácias:
                         </p>
                         
+                        {/* Emissor Exclusivo */}
+                        <div className="p-3.5 bg-blue-50/80 rounded-2xl border border-blue-200 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 text-blue-950 font-bold">
+                            <ShieldCheck size={16} className="text-blue-600 shrink-0" />
+                            Emissor Clínico Exclusivo:
+                          </div>
+                          <div className="text-slate-700 font-medium">
+                            Quando conectado como <strong>Dr. Carlos Morato</strong>, o cabeçalho e rodapé emitem automaticamente com <strong>CRM/SP 145.892</strong>.
+                          </div>
+                        </div>
+
+                        {/* Comparativo Prático: Antidepressivos vs Rivotril */}
                         <div className="grid sm:grid-cols-2 gap-3.5 pt-1">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
-                              <ShieldCheck size={16} className="text-emerald-600" /> Receituário Digital & ANVISA
+                          <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-2">
+                            <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                              <FileCheck size={16} className="text-emerald-600" /> Receita de Controle Especial C1 (Branca em 2 Vias)
                             </strong>
-                            <p className="text-xs text-slate-600 leading-relaxed">
-                              Emissão de receitas simples, controle especial (Portaria 344/98) e fórmulas integrativas com cálculo posológico automático e importação do checklist em 1 clique.
+                            <p className="text-xs text-slate-700 leading-relaxed">
+                              <strong>Para:</strong> Antidepressivos (Sertralina, Fluoxetina, Escitalopram, Venlafaxina), Anticonvulsivantes e Antibióticos.<br />
+                              <strong>Como funciona:</strong> 100% digital em PDF com assinatura ICP-Brasil e QR Code do <code>validador.iti.gov.br</code>. O paciente apresenta no celular ou imprime e a farmácia aceita sem restrição em qualquer lugar do Brasil.
                             </p>
                           </div>
 
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
-                              <FileCheck size={16} className="text-blue-600" /> Atestados & Declarações Rápidas (CFM)
+                          <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-2">
+                            <strong className="text-blue-950 font-bold text-xs flex items-center gap-1.5">
+                              <Pill size={16} className="text-blue-600" /> Notificação Azul B1/B2 (Rivotril, Clonazepam, Zolpidem)
                             </strong>
-                            <p className="text-xs text-slate-600 leading-relaxed">
-                              Botões minimalistas para: <strong>Atestado de Repouso</strong> (com seleção rápida de 1 a 14 dias e CID-10 facultativo), <strong>Comparecimento</strong> (horários da consulta), <strong>Acompanhante</strong> e <strong>Parecer Neurológico</strong>.
+                            <p className="text-xs text-slate-700 leading-relaxed">
+                              <strong>Por que a farmácia rejeita papel A4 simples?</strong> A Anvisa exige retenção da Notificação numerada oficial pela Vigilância Sanitária.<br />
+                              <strong>As 2 opções oficiais disponíveis:</strong>
+                            </p>
+                            <ul className="list-disc list-inside space-y-1 text-slate-700 text-[11px] pl-1">
+                              <li><strong>1. Talão Físico Azul:</strong> O sistema gera a prévia clínica exata para o Dr. Carlos preencher no bloquinho oficial com carimbo.</li>
+                              <li><strong>2. Prescrição Digital com Token SMS (Memed / CFM):</strong> 100% gratuita para o médico prescrever! Integrada ao SNCR da Anvisa, gera o Token de 6 dígitos via SMS para o paciente comprar online ou presencialmente.</li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        {/* Notificação Amarela A & Simples */}
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200 space-y-1">
+                            <strong className="text-amber-950 text-xs font-bold block">Notificação Amarela (Lista A - Ritalina, Venvanse):</strong>
+                            <p className="text-[11px] text-slate-600">
+                              Entorpecentes e psicotrópicos estimulantes exigem o talão amarelo oficial numerado retirado na Vigilância Sanitária ou sistema digital governamental específico.
+                            </p>
+                          </div>
+
+                          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                            <strong className="text-slate-900 text-xs font-bold block">Receita Simples & Suplementos Integrativos:</strong>
+                            <p className="text-[11px] text-slate-600">
+                              Fórmulas ortomoleculares do Checklist Integrativo (CoQ10, Ácido Alfa-Lipóico, Melatonina, Nootrópicos) importadas com 1 clique para emissão timbrada imediata.
                             </p>
                           </div>
                         </div>
 
-                        <div className="p-4 bg-blue-50/80 rounded-2xl border border-blue-200 space-y-2 text-xs">
-                          <strong className="text-blue-950 font-bold flex items-center gap-1.5">
-                            ⚡ Fluxo de 1 Clique:
-                          </strong>
-                          <ul className="list-disc list-inside space-y-1 text-slate-700">
-                            <li><strong>Botão "Atestados":</strong> localizado na barra de comando do prontuário e na aba de prescrições.</li>
-                            <li><strong>PDF Oficial Timbrado:</strong> gera folha única elegante com cabeçalho da clínica, CRM/SP 145.892, cidade/data por extenso e hash de autenticação digital ICP-Brasil.</li>
-                            <li><strong>Envio WhatsApp Instantâneo:</strong> dispara a mensagem com o texto oficial diretamente no WhatsApp do paciente.</li>
+                        {/* Assinatura Digital ICP-Brasil & Custos Zero */}
+                        <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-2.5 text-xs">
+                          <div className="flex items-center justify-between">
+                            <strong className="text-emerald-400 font-bold flex items-center gap-1.5 text-sm">
+                              <Lock size={16} /> Certificado Digital ICP-Brasil (A1 / A3 / Nuvem) Sem Mensalidade
+                            </strong>
+                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full text-[10px] font-extrabold border border-emerald-500/30">
+                              Custo Zero de Intermediários
+                            </span>
+                          </div>
+                          <p className="text-slate-300 leading-relaxed text-[11px]">
+                            O médico <strong>não precisa pagar mensalidades de terceiros</strong> para assinar receitas. Basta usar o certificado digital que ele já possui (Certisign, Serasa, Soluti, VIDaaS, BirdID):
+                          </p>
+                          <ul className="list-disc list-inside space-y-1 text-slate-300 text-[11px]">
+                            <li><strong>Configuração:</strong> Botão <em>"Assinatura"</em> no prontuário &rarr; carregar o arquivo <code>.pfx</code> (A1) e senha criptografada em memória local segura.</li>
+                            <li><strong>Autenticidade Oficial:</strong> O sistema insere no rodapé do documento o Hash SHA-256 e QR Code com link direto para o <code>validador.iti.gov.br</code> (site oficial do Governo Federal).</li>
                           </ul>
                         </div>
 
-                        {/* Telemedicina & Teleodontologia Integradas */}
-                        <div className="p-4 bg-indigo-50/80 rounded-2xl border border-indigo-200 space-y-2 text-xs">
-                          <strong className="text-indigo-950 font-bold flex items-center gap-1.5">
-                            📹 Telemedicina (CFM nº 2.314/2022) & Teleodontologia (CFO-226/2020):
+                        {/* Atestados Rápidos CFM */}
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                          <strong className="text-slate-900 font-bold flex items-center gap-1.5">
+                            <FileCheck size={16} className="text-blue-600" /> Atestados Médicos Oficiais Rápidos (Resolução CFM nº 1.658/2002)
                           </strong>
-                          <ul className="list-disc list-inside space-y-1 text-slate-700">
-                            <li><strong>Adaptação por Especialidade:</strong> Para o Dr. Carlos exibe <em>"Telemedicina"</em> (CFM); para a Dra. Lucy exibe <em>"Teleodontologia"</em> (CFO-226/2020 para pré-consulta, análise de tomografia cone beam CBCT e planejamento cirúrgico biológico).</li>
-                            <li><strong>Vídeo & Apresentação de Exames:</strong> Conexão criptografada ponto-a-ponto com botão rápido de <em>Apresentar Imagem / Tomografia</em> para explicar laudos e planejamentos diretamente ao paciente.</li>
-                            <li><strong>Convite WhatsApp com 1 Clique:</strong> Dispara mensagem personalizada com link direto da sala (funciona no PC ou celular do paciente sem instalar nada).</li>
-                            <li><strong>Registro Automático:</strong> Duração da sessão e notas de atendimento anexadas diretamente ao prontuário clínico ou odontológico.</li>
-                          </ul>
+                          <p className="text-slate-600 text-xs">
+                            Modelos prontos com 1 clique para: <strong>Atestado de Repouso</strong> (seleção rápida de 1 a 14 dias, cálculo automático de datas e CID-10 facultativo), <strong>Comparecimento</strong> (horários exatos da consulta), <strong>Acompanhante</strong> e <strong>Parecer Neurológico</strong>, com envio instantâneo no WhatsApp do paciente.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedManual === 'dr_carlos' && activeSection === 'carlos_telemedicina' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
+                          <Video size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Atendimento Remoto Seguro</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">7. Telemedicina Médica Integrada (Resolução CFM nº 2.314/2022)</h3>
+                          <p className="text-xs text-slate-500">Consultas à distância com criptografia ponta a ponta, compartilhamento de exames e envio de receitas.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <p>
+                          A telemedicina no Ambulatório IA foi projetada com conformidade estrita à <strong>Resolução CFM nº 2.314/2022</strong>, permitindo ao Dr. Carlos atender pacientes neurológicos e integrativos em qualquer lugar do Brasil com a mesma profundidade do presencial:
+                        </p>
+
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200 space-y-1.5">
+                            <strong className="text-indigo-950 font-bold text-xs flex items-center gap-1.5">
+                              <Video size={15} className="text-indigo-600" /> Sala Criptografada Ponto-a-Ponto
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Vídeo e áudio de alta definição WebRTC seguros. Não exige que o paciente instale nenhum aplicativo — ele simplesmente clica no link e entra pela câmera do celular ou computador.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200 space-y-1.5">
+                            <strong className="text-emerald-950 font-bold text-xs flex items-center gap-1.5">
+                              <MessageSquare size={15} className="text-emerald-600" /> Convite WhatsApp com 1 Clique
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Ao iniciar o teleatendimento, o médico clica em <em>"Enviar Convite no WhatsApp"</em>. O paciente recebe a mensagem personalizada com o link direto e instruções de conexão segura.
+                            </p>
+                          </div>
                         </div>
 
-                        {/* Gestão do Certificado ICP-Brasil & Regras ANVISA */}
-                        <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 space-y-2 text-xs">
-                          <strong className="text-emerald-950 font-bold flex items-center gap-1.5">
-                            🔐 Certificado Digital ICP-Brasil (e-CPF A1 / Nuvem) & Receitas Controladas (Rivotril):
-                          </strong>
-                          <ul className="list-disc list-inside space-y-1 text-slate-700">
-                            <li><strong>Onde o médico configura:</strong> No botão <strong>"Assinatura"</strong> do prontuário, aba <em>"Certificado ICP-Brasil"</em>.</li>
-                            <li><strong>Upload do Arquivo A1 (.pfx):</strong> o médico carrega seu arquivo <code>.pfx</code> (comprado em qualquer certificadora oficial) e senha. Fica salvo com segurança no navegador sem mensalidades adicionais.</li>
-                            <li><strong>Nuvem Móvel:</strong> suporta integração com VIDaaS, BirdID e NeoID para autorização no celular.</li>
-                            <li><strong>Rivotril (Clonazepam) & Psicotrópicos:</strong> medicamentos de controle especial exigem validação oficial no site do governo (<code>validador.iti.gov.br</code>). Com o certificado ICP-Brasil do Dr. Carlos, as farmácias aceitam a receita digital diretamente.</li>
-                          </ul>
+                        <div className="grid sm:grid-cols-2 gap-3.5">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <ImageIcon size={15} className="text-blue-600" /> Apresentação de Neuroimagem & Exames
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Ferramenta integrada de compartilhamento de exames: o Dr. Carlos pode projetar na tela do paciente ressonâncias magnéticas de crânio, tomografias, laudos de eletroneuromiografia e exames de sangue laboratoriais.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <FileText size={15} className="text-emerald-600" /> Prescrição & Prontuário Simultâneos
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Durante a telechamada, o Dr. Carlos pode preencher o prontuário, ativar a escuta ambiental por voz, emitir receitas digitais com assinatura ICP-Brasil e disparar o PDF diretamente para o paciente.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200 text-xs text-slate-700">
+                          <strong>Registro Automático no Prontuário:</strong> A duração da teleconsulta e o termo de consentimento livre e esclarecido (TCLE) de atendimento à distância são vinculados automaticamente ao histórico clínico do paciente.
                         </div>
                       </div>
                     </div>
@@ -842,7 +973,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">Recepção Inteligente & Automação Completa</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">7. Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">8. Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp</h3>
                           <p className="text-xs text-slate-500">Agendamento de consultas com disparo automático de pré-anamnese no WhatsApp, triagem e controle de faltas.</p>
                         </div>
                       </div>
@@ -901,7 +1032,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-purple-700 tracking-wider">Inteligência Artificial de Escuta Contínua</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">8. Escuta Ambiental de Longa Duração (30 a 40 Minutos)</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">9. Escuta Ambiental de Longa Duração (30 a 40 Minutos)</h3>
                           <p className="text-xs text-slate-500">Tecnologia exclusiva de escuta passiva, diarização clínica e filtragem acústica profunda.</p>
                         </div>
                       </div>
@@ -1285,6 +1416,123 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                   </div>
                 )}
 
+                {selectedManual === 'dra_lucy' && activeSection === 'lucy_receituario_teleodonto' && (
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-3 bg-teal-100 text-teal-700 rounded-2xl">
+                          <FileText size={24} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase text-teal-700 tracking-wider">Prescrição Oficial, Suplementação & Teleatendimento</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">7. Prescrições Biológicas, Suplementação Cirúrgica & Teleodontologia (CFO-226/2020)</h3>
+                          <p className="text-xs text-slate-500">Documentação odontológica oficial CRO/SP 98.412, fórmulas ortomoleculares cirúrgicas e teleorientação biológica.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                        <p>
+                          A odontologia biológica atua na raiz sistêmica das patologias orais. Por isso, a prescrição da <strong>Dra. Lucy Morata</strong> combina medicamentos odontológicos tradicionais com preparo metabólico celular de alta potência:
+                        </p>
+
+                        {/* Emissor Odontológico Oficial */}
+                        <div className="p-3.5 bg-emerald-50/80 rounded-2xl border border-emerald-200 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 text-emerald-950 font-bold">
+                            <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
+                            Emissor Clínico Exclusivo:
+                          </div>
+                          <div className="text-slate-700 font-medium">
+                            Quando conectado como <strong>Dra. Lucy Morata</strong>, todas as receitas, atestados e laudos saem timbrados com seu <strong>CRO/SP 98.412</strong>.
+                          </div>
+                        </div>
+
+                        {/* Fórmulas de Suplementação Ortomolecular */}
+                        <div className="space-y-2">
+                          <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                            <Pill size={16} className="text-teal-600" /> Fórmulas Pré e Pós-Operatórias Integrativas (1 Clique para Prescrever)
+                          </strong>
+                          <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                            <div className="p-3.5 bg-teal-50/70 rounded-xl border border-teal-200 space-y-1">
+                              <strong className="text-teal-950 text-xs font-bold block">💎 Pré/Pós Implante Zircônia & PRF:</strong>
+                              <p className="text-[11px] text-slate-600 leading-relaxed">
+                                <strong>Vitamina D3 (10.000 UI) + K2 (MK-7 120mcg):</strong> ativa osteoblastos e promove osseointegração acelerada.<br />
+                                <strong>Zinco Quelato (30mg) + Magnésio:</strong> síntese proteica celular e ativação de leucócitos do PRF.<br />
+                                <strong>Arnica 6CH:</strong> prevenção homeopática de edemas e hematomas pós-cirúrgicos.
+                              </p>
+                            </div>
+
+                            <div className="p-3.5 bg-amber-50/70 rounded-xl border border-amber-200 space-y-1">
+                              <strong className="text-amber-950 text-xs font-bold block">🛡️ Preparo & Quelação Protocolo SMART:</strong>
+                              <p className="text-[11px] text-slate-600 leading-relaxed">
+                                <strong>Carvão Vegetal Ativado & Chlorella Orgânica:</strong> adsorventes gastrintestinais para ligar partículas e vapores de mercúrio.<br />
+                                <strong>Vitamina C Lipossomal (1.000 a 2.000mg):</strong> ação antioxidante de choque e suporte às enzimas hepáticas de desintoxicação.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Teleodontologia & Teleorientação Biológica (CFO) */}
+                        <div className="p-4 bg-indigo-50/80 rounded-2xl border border-indigo-200 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <strong className="text-indigo-950 font-bold text-xs sm:text-sm flex items-center gap-2">
+                              <Video size={17} className="text-indigo-600 shrink-0" />
+                              Teleodontologia & Teleorientação Biológica (Resolução CFO-226/2020)
+                            </strong>
+                            <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-full text-[10px] font-extrabold">
+                              Regulamentado CFO
+                            </span>
+                          </div>
+                          
+                          <p className="text-xs text-slate-700 leading-relaxed">
+                            Muitos pacientes de odontologia biológica viajam de outros estados ou cidades para operar com a <strong>Dra. Lucy</strong>. A teleodontologia é o elo estratégico para garantir segurança antes e depois da cirurgia:
+                          </p>
+
+                          <div className="grid sm:grid-cols-2 gap-2.5 text-xs text-slate-700">
+                            <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1">
+                              <strong className="text-indigo-900 block font-bold">1. Triagem & Anamnese Sistêmica Remota:</strong>
+                              <p className="text-[11px] text-slate-600">
+                                Mapeamento prévio de queixas de fadiga, dores crônicas, intolerâncias, amálgamas e campos de interferência antes do paciente se deslocar à clínica.
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1">
+                              <strong className="text-indigo-900 block font-bold">2. Apresentação de Tomografia CBCT & DSD:</strong>
+                              <p className="text-[11px] text-slate-600">
+                                Compartilhamento de tela em tempo real para explicar os cortes tomográficos de cavitações NICO/FDOK e a simulação de sorriso DSD ao paciente ao vivo.
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1">
+                              <strong className="text-indigo-900 block font-bold">3. Prescrição do Preparo Cirúrgico:</strong>
+                              <p className="text-[11px] text-slate-600">
+                                Envio da receita da suplementação pré-operatória e orientações alimentares para que o paciente chegue com o organismo preparado para o procedimento.
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-white rounded-xl border border-indigo-200 space-y-1">
+                              <strong className="text-indigo-900 block font-bold">4. Telemonitoramento Pós-Operatório:</strong>
+                              <p className="text-[11px] text-slate-600">
+                                Acompanhamento remoto de cicatrização após implantes de zircônia, enxertos de PRF e cirurgias cavitacionais, com envio de link de sala segura pelo WhatsApp.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Assinatura Digital ICP-Brasil para Dentistas */}
+                        <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2 text-slate-900 font-bold">
+                            <Lock size={15} className="text-emerald-600 shrink-0" />
+                            Assinatura Digital ICP-Brasil:
+                          </div>
+                          <div className="text-slate-600 text-[11px]">
+                            Atestados e receitas odontológicas são assinados com certificado digital da Dra. Lucy com QR Code e Hash SHA-256 aceitos em farmácias e órgãos oficiais.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {selectedManual === 'dra_lucy' && activeSection === 'lucy_agenda_rotina' && (
                   <div className="space-y-6 animate-in fade-in duration-300">
                     <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
@@ -1294,7 +1542,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Recepção Inteligente & Automação Odontológica</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">7. Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">8. Recepção Inteligente, Agenda Automatizada & Pré-Anamnese via WhatsApp</h3>
                           <p className="text-xs text-slate-500">Agendamento de cirurgias e avaliações com disparo imediato da pré-anamnese biológica no WhatsApp.</p>
                         </div>
                       </div>
@@ -1353,7 +1601,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider">Estética Biológica & Diagnóstico por Imagem</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">8. Simulador de Sorriso Digital (DSD) & Tomografia CBCT</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">9. Simulador de Sorriso Digital (DSD) & Tomografia CBCT</h3>
                           <p className="text-xs text-slate-500">Tecnologia visual integrada que outros softwares cobram à parte em módulos caros e isolados.</p>
                         </div>
                       </div>
@@ -1403,7 +1651,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider">Visão Computacional Multimodal & Bioeletricidade Oral</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">9. Scanner Tomográfico IA (CBCT), Precisão Diagnóstica & Galvanismo por Voz</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">10. Scanner Tomográfico IA (CBCT), Precisão Diagnóstica & Galvanismo por Voz</h3>
                           <p className="text-xs text-slate-500">Leitura multimodal por IA, limites reais da visão computacional, mitos do 100% e protocolo hands-free de microvoltagem oral.</p>
                         </div>
                       </div>
@@ -1565,7 +1813,7 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                         </div>
                         <div>
                           <span className="text-[10px] font-black uppercase text-teal-700 tracking-wider">Inteligência Artificial de Escuta Contínua Odontológica</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">10. Escuta Ambiental Odontológica (30 a 40 Minutos)</h3>
+                          <h3 className="text-xl font-extrabold text-slate-900">11. Escuta Ambiental Odontológica (30 a 40 Minutos)</h3>
                           <p className="text-xs text-slate-500">Captação contínua da consulta odontológica, descarte de ruídos de instrumentos e preenchimento direto no Odontograma 3D.</p>
                         </div>
                       </div>

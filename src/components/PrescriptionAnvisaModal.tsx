@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode, Mic } from 'lucide-react';
+import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode, Mic, Printer, Sparkles, Smartphone } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
@@ -157,35 +157,62 @@ export default function PrescriptionAnvisaModal({
     const clinicConfig = getActiveClinicConfig(doctorName);
     const doc = new jsPDF();
     
-    // Cabeçalho Clínica
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, 210, 38, 'F');
+    const isAzul = recipeType === 'azul';
+    const isAmarela = recipeType === 'amarela';
+
+    // Cabeçalho Clínica - cores personalizadas por tipo regulatório
+    if (isAzul) {
+      doc.setFillColor(30, 58, 138); // Azul ANVISA (Blue 900)
+    } else if (isAmarela) {
+      doc.setFillColor(180, 83, 9); // Âmbar Notificação A
+    } else {
+      doc.setFillColor(15, 23, 42); // slate-900 (Padrão Branca C1/Antimicrobianos)
+    }
+    doc.rect(0, 0, 210, 42, 'F');
     
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    doc.setFontSize(15);
     doc.setFont("helvetica", "bold");
-    doc.text(clinicConfig.name || clinicName, 14, 16);
-    doc.setFontSize(9);
+    doc.text(clinicConfig.name || clinicName, 14, 15);
+    doc.setFontSize(8.5);
     doc.setFont("helvetica", "normal");
-    doc.text(`${clinicConfig.slogan || 'Neurologia Clínica & Medicina Integrativa'} | ${clinicConfig.phone}`, 14, 23);
-    doc.text(clinicConfig.address || 'Av. Paulista, 1000 - São Paulo/SP', 14, 29);
+    doc.text(`${clinicConfig.slogan || 'Neurologia Clínica & Medicina Integrativa'} | ${clinicConfig.phone}`, 14, 21);
+    doc.text(clinicConfig.address || 'Av. Paulista, 1000 - São Paulo/SP', 14, 26);
+    
+    // Título Oficial da Notificação/Receita
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("RECEITUÁRIO DIGITAL OFICIAL - VALIDADO VIA ANVISA & MP 2.200-2/2001", 14, 35);
+    if (isAzul) {
+      doc.text(`NOTIFICAÇÃO DE RECEITA B (AZUL - PSICOTRÓPICOS) | PORTARIA SVS/MS 344/98`, 14, 33);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nº Notificação: ${numeroNotificacao}/${ufNotificacao} • USO HUMANO • RETENÇÃO OBRIGATÓRIA DA VIA FÍSICA`, 14, 38);
+    } else if (isAmarela) {
+      doc.text(`NOTIFICAÇÃO DE RECEITA A (AMARELA - ENTORPECENTES) | PORTARIA SVS/MS 344/98`, 14, 33);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Nº Notificação: ${numeroNotificacao}/${ufNotificacao} • USO HUMANO • RETENÇÃO DA VIA PELA VIGILÂNCIA`, 14, 38);
+    } else {
+      doc.text("RECEITUÁRIO DE CONTROLE ESPECIAL / ANTIMICROBIANOS (2 VIAS)", 14, 33);
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "normal");
+      doc.text("VALIDADO VIA PORTARIA 344/98 & MP 2.200-2/2001 (ACEITAÇÃO EM FARMÁCIAS NACIONAIS)", 14, 38);
+    }
 
     // Dados do Paciente e Médico
     doc.setTextColor(15, 23, 42);
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setFont("helvetica", "bold");
-    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 48);
-    if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 54);
-    doc.text(`PROFISSIONAL RESPONSÁVEL: ${(doctorName || clinicConfig.professional_name).toUpperCase()}`, 14, patientCpf ? 60 : 54);
-    doc.text(`REGISTRO: ${clinicConfig.council_badge} | ${clinicConfig.specialty_label}`, 14, patientCpf ? 66 : 60);
-    doc.text(`DATA: ${new Date().toLocaleDateString('pt-BR')}`, 150, 48);
+    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 50);
+    if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 56);
+    doc.text(`PROFISSIONAL RESPONSÁVEL: ${(doctorName || clinicConfig.professional_name).toUpperCase()}`, 14, patientCpf ? 62 : 56);
+    doc.text(`REGISTRO: ${clinicConfig.council_badge} | ${clinicConfig.specialty_label}`, 14, patientCpf ? 68 : 62);
+    doc.text(`DATA DE EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}`, 140, 50);
 
     doc.setLineWidth(0.5);
     doc.setDrawColor(226, 232, 240);
-    doc.line(14, patientCpf ? 72 : 66, 196, patientCpf ? 72 : 66);
+    const lineY = patientCpf ? 73 : 67;
+    doc.line(14, lineY, 196, lineY);
 
     // Tabela de Medicamentos
     const tableRows = prescriptionItems.map((item, index) => [
@@ -195,33 +222,84 @@ export default function PrescriptionAnvisaModal({
     ]);
 
     autoTable(doc, {
-      startY: patientCpf ? 76 : 70,
-      head: [['MEDICAMENTO / APRESENTAÇÃO', 'QTD', 'POSOLOGIA E ORIENTAÇÕES']],
+      startY: lineY + 4,
+      head: [['MEDICAMENTO / APRESENTAÇÃO', 'QTD', 'POSOLOGIA E ORIENTAÇÕES DE USO']],
       body: tableRows,
-      headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold' },
-      styles: { fontSize: 10, cellPadding: 5 },
+      headStyles: { 
+        fillColor: isAzul ? [30, 58, 138] : isAmarela ? [180, 83, 9] : [30, 41, 59], 
+        textColor: [255, 255, 255], 
+        fontStyle: 'bold',
+        fontSize: 9
+      },
+      styles: { fontSize: 9.5, cellPadding: 4.5 },
       columnStyles: {
         0: { cellWidth: 70 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 80 }
+        1: { cellWidth: 28 },
+        2: { cellWidth: 84 }
       }
     });
 
-    // Nota de Validação e Assinatura
-    const finalY = (doc as any).lastAutoTable.finalY || 150;
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text(clinicConfig.prescription_footer || "Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 18);
-    
-    // Linha de assinatura
-    doc.setDrawColor(148, 163, 184);
-    doc.line(110, finalY + 36, 196, finalY + 36);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(15, 23, 42);
-    doc.text(doctorName || clinicConfig.professional_name, 110, finalY + 42);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, finalY + 47);
+    const finalY = (doc as any).lastAutoTable.finalY || 140;
+
+    // Se for Notificação Azul ou Amarela, adiciona campos de Retenção de Farmácia (Comprador e Fornecedor)
+    if (isAzul || isAmarela) {
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.3);
+      
+      // Bloco Identificação do Comprador
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(14, finalY + 6, 88, 38, 2, 2, 'FD');
+      doc.setFontSize(7.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(30, 41, 59);
+      doc.text("IDENTIFICAÇÃO DO COMPRADOR:", 17, finalY + 12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Nome: ____________________________________", 17, finalY + 19);
+      doc.text("Identidade (RG): ________________ Órgão: ____", 17, finalY + 25);
+      doc.text("Endereço: _________________________________", 17, finalY + 31);
+      doc.text("Telefone: ________________ Cidade/UF: _______", 17, finalY + 37);
+
+      // Bloco Identificação do Fornecedor / Farmácia
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(108, finalY + 6, 88, 38, 2, 2, 'FD');
+      doc.setFont("helvetica", "bold");
+      doc.text("IDENTIFICAÇÃO DO FORNECEDOR (FARMÁCIA):", 111, finalY + 12);
+      doc.setFont("helvetica", "normal");
+      doc.text("Farmacêutico Responsável: __________________", 111, finalY + 19);
+      doc.text("CRF: __________________ Data de Aviamento: ___/___", 111, finalY + 25);
+      doc.text("Lote dispensado: ____________________________", 111, finalY + 31);
+      doc.text("Assinatura do Farmacêutico: __________________", 111, finalY + 37);
+
+      // Assinatura do Médico/Dentista
+      const signY = finalY + 54;
+      doc.setDrawColor(148, 163, 184);
+      doc.line(110, signY + 14, 196, signY + 14);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(15, 23, 42);
+      doc.text(doctorName || clinicConfig.professional_name, 110, signY + 19);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, signY + 24);
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Assinatura do Profissional Emissor (Retenção da 1ª Via pela Farmácia)", 14, signY + 24);
+    } else {
+      // Receita Branca padrão
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(clinicConfig.prescription_footer || "Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 16);
+      
+      doc.setDrawColor(148, 163, 184);
+      doc.line(110, finalY + 32, 196, finalY + 32);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(15, 23, 42);
+      doc.text(doctorName || clinicConfig.professional_name, 110, finalY + 38);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, finalY + 43);
+    }
 
     return doc;
   };
@@ -232,8 +310,27 @@ export default function PrescriptionAnvisaModal({
       return;
     }
     const doc = generatePDF();
-    doc.save(`Receita_${patientName.replace(/\s+/g, '_')}.pdf`);
+    const prefix = recipeType === 'azul' ? 'Notificacao_Azul' : recipeType === 'amarela' ? 'Notificacao_Amarela' : 'Receita';
+    doc.save(`${prefix}_${patientName.replace(/\s+/g, '_')}.pdf`);
     toast.success("Receita baixada em PDF!");
+  };
+
+  const handlePrint = () => {
+    if (prescriptionItems.length === 0) {
+      toast.error("Adicione pelo menos um medicamento para imprimir.");
+      return;
+    }
+    const doc = generatePDF();
+    doc.autoPrint();
+    const pdfBlobUrl = doc.output('bloburl');
+    const printWindow = window.open(pdfBlobUrl, '_blank');
+    if (!printWindow) {
+      // Se pop-up estiver bloqueado pelo navegador, baixa o arquivo
+      doc.save(`Imprimir_Receita_${patientName.replace(/\s+/g, '_')}.pdf`);
+      toast.success("PDF baixado para impressão!");
+    } else {
+      toast.success("Janela de impressão da impressora aberta!");
+    }
   };
 
   const handleSendWhatsApp = async () => {
@@ -412,14 +509,56 @@ export default function PrescriptionAnvisaModal({
           )}
 
           {recipeType === 'azul' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3.5 text-xs text-blue-900 space-y-1">
-              <div className="font-bold flex items-center gap-1.5 text-blue-900">
-                <AlertCircle className="w-4 h-4 text-blue-600" />
-                Notificação de Receita B (Azul - Psicotrópicos)
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-xs text-blue-900 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="font-bold flex items-center gap-1.5 text-blue-950 text-sm">
+                  <AlertCircle className="w-4 h-4 text-blue-600" />
+                  Notificação de Receita B (Azul - Rivotril / Psicotrópicos)
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-200/80 text-blue-900 text-[10px] font-bold">
+                  2 Caminhos Legais
+                </span>
               </div>
-              <p className="text-[11px] text-blue-800">
-                <strong>Exigência ANVISA:</strong> Medicamentos como Clonazepam (Rivotril), Alprazolam e Diazepam exigem a retenção do talão impresso de Notificação Azul com número fornecido pela Vigilância Sanitária local. Imprima a via preenchida e assine a caneta.
-              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                {/* Opção 1: Talão Físico */}
+                <div className="p-3 bg-white/80 rounded-xl border border-blue-100 space-y-1">
+                  <span className="font-bold text-blue-900 flex items-center gap-1 text-[11px]">
+                    🖨️ Opção 1: Talão Físico da Vigilância
+                  </span>
+                  <p className="text-[11px] text-blue-800 leading-relaxed">
+                    Clique em <strong>Imprimir Notificação Física</strong> abaixo. A farmácia física retém a folha assinada à caneta com o número oficial da VISA.
+                  </p>
+                </div>
+
+                {/* Opção 2: Memed / CFM Online */}
+                <div className="p-3 bg-white/90 rounded-xl border border-emerald-300 space-y-1 shadow-xs">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1 text-[11px]">
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-600" /> Opção 2: Online com Token (Memed / CFM)
+                  </span>
+                  <p className="text-[11px] text-slate-700 leading-relaxed">
+                    Para o paciente comprar <strong>online na Drogasil/Panvel</strong>, emita pelo portal integrado da <strong>Memed</strong> ou <strong>CFM</strong>. O paciente recebe o <strong>Token por SMS</strong> gratuitamente!
+                  </p>
+                  <div className="pt-1.5 flex items-center gap-2">
+                    <a
+                      href="https://memed.com.br"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs"
+                    >
+                      Abrir Memed Oficial <ExternalLink className="w-3 h-3" />
+                    </a>
+                    <a
+                      href="https://prescricaoeletronica.cfm.org.br"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[10px] font-bold transition-all"
+                    >
+                      Portal CFM <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -618,14 +757,48 @@ export default function PrescriptionAnvisaModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <QrCode className="w-4 h-4 text-slate-600" />
-            <span>Validação Digital MP 2.200-2/2001</span>
+        <div className="p-4 md:p-5 bg-slate-50 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs">
+            {recipeType === 'azul' ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-blue-100 text-blue-900 font-bold text-[11px] border border-blue-200">
+                <AlertCircle className="w-3.5 h-3.5 text-blue-700" />
+                Farmácia exige a via física impressa retida (Psicotrópicos)
+              </span>
+            ) : recipeType === 'amarela' ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-100 text-amber-900 font-bold text-[11px] border border-amber-200">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-700" />
+                Farmácia exige a via física impressa retida (Entorpecentes)
+              </span>
+            ) : (
+              <div className="flex items-center gap-2 text-slate-600">
+                <QrCode className="w-4 h-4 text-emerald-600" />
+                <span>Receita Digital Aceita Nacionalmente (MP 2.200-2/2001)</span>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+            {/* Botão de Impressão Direta (Essencial para Notificação Azul/Amarela) */}
             <button
+              type="button"
+              onClick={handlePrint}
+              disabled={prescriptionItems.length === 0}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs active:scale-95 disabled:opacity-50 ${
+                recipeType === 'azul'
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white ring-2 ring-blue-500/30'
+                  : recipeType === 'amarela'
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-500/30'
+                  : 'bg-white border border-slate-300 hover:bg-slate-100 text-slate-700'
+              }`}
+              title="Disparar impressão para a impressora do consultório"
+            >
+              <Printer className="w-4 h-4" />
+              <span>{recipeType === 'azul' || recipeType === 'amarela' ? 'Imprimir Notificação Física' : 'Imprimir'}</span>
+            </button>
+
+            {/* Baixar PDF */}
+            <button
+              type="button"
               onClick={handleDownloadPDF}
               disabled={prescriptionItems.length === 0}
               className="px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs transition-all flex items-center gap-2 disabled:opacity-50"
@@ -633,13 +806,24 @@ export default function PrescriptionAnvisaModal({
               <Download className="w-4 h-4" /> Baixar PDF
             </button>
 
+            {/* Enviar WhatsApp */}
             <button
+              type="button"
               onClick={handleSendWhatsApp}
               disabled={prescriptionItems.length === 0 || isSendingWhatsApp}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs transition-all shadow-xs active:scale-95 flex items-center gap-2 disabled:opacity-50"
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-xs active:scale-95 flex items-center gap-2 disabled:opacity-50 ${
+                recipeType === 'azul' || recipeType === 'amarela'
+                  ? 'bg-slate-800 hover:bg-slate-900 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+              title={recipeType === 'azul' || recipeType === 'amarela' ? 'Envia orientações e cópia informativa no WhatsApp' : 'Envia receita médica digital no WhatsApp'}
             >
               <Send className="w-4 h-4" />
-              {isSendingWhatsApp ? "Enviando no WhatsApp..." : "Enviar via WhatsApp sem Papel"}
+              {isSendingWhatsApp 
+                ? "Enviando no WhatsApp..." 
+                : recipeType === 'azul' || recipeType === 'amarela'
+                ? "Enviar Cópia no WhatsApp" 
+                : "Enviar via WhatsApp sem Papel"}
             </button>
           </div>
         </div>
