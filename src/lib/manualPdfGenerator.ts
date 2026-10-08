@@ -209,17 +209,17 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
     },
     {
       number: '8',
-      title: 'Prescrição & Suporte Nutricional Pré e Pós-Operatório',
-      category: 'Suplementação Sistêmica',
-      summary: 'Protocolo ortomolecular desenhado para elevar a imunidade, otimizar a densidade óssea e neutralizar estresse oxidativo cirúrgico.',
+      title: 'Prescrição, Suporte Nutricional & Atestados Odontológicos (Lei 5.081/66)',
+      category: 'Documentação Legal, Atestados & Suplementação',
+      summary: 'Protocolo ortomolecular pós-operatório e emissão oficial de atestados odontológicos e declarações cirúrgicas com respaldo do CFO.',
       highlights: [
+        { title: 'Atestados Odontológicos Rápidos (Lei Federal 5.081/66, Art. 6º, III)', desc: 'Emissão em 1 clique de atestado de repouso pós-operatório (extrações, zircônia, PRF e SMART), declaração de comparecimento e atestado de acompanhante com CRO-SP.' },
         { title: 'Vitamina D3 (10.000 UI) + Vitamina K2 (MK-7 120mcg)', desc: 'Fixação adequada do cálcio no tecido ósseo e imunomodulação.' },
         { title: 'Vitamina C Tamponada / Lipossomal (1.000mg a 2.000mg)', desc: 'Síntese de colágeno e ação antioxidante quelante.' },
-        { title: 'Zinco Quelato (30mg) + Magnésio Dimalato (300mg)', desc: 'Coenzimas essenciais para cicatrização e relaxamento muscular mastigatório.' },
-        { title: 'Homeopatia: Arnica Montana 6CH', desc: 'Prevenção de edema, hematomas e trauma tecidual.' }
+        { title: 'Homeopatia Arnica 6CH & Minerais Quelatos', desc: 'Prevenção de edema, cicatrização e regeneração tecidual acelerada.' }
       ],
       details: [
-        'Gera receitas oficiais prontas para impressão e envio automático com assinatura digital para o WhatsApp do paciente.'
+        'Gera atestados e receitas oficiais prontos para impressão timbrada ou envio direto para o WhatsApp do paciente com assinatura digital.'
       ]
     },
     {
@@ -365,15 +365,16 @@ export function generateManualClinicoPDF(manualType: 'dra_lucy' | 'dr_carlos'): 
     },
     {
       number: '8',
-      title: 'Prescrição Médica Inteligente & Receituário Oficial',
+      title: 'Prescrição Inteligente, Atestados Médicos & CFM 1.658/02',
       category: 'Prescrição & Documentação Legal',
-      summary: 'Emissão de receituários médicos em total conformidade com a Anvisa e Conselho Federal de Medicina.',
+      summary: 'Emissão de receituários médicos e atestados oficiais em total conformidade com a Anvisa e Conselho Federal de Medicina.',
       highlights: [
-        { title: 'Tipos de Receituário', desc: 'Receita Branca Simples, Controle Especial C1/C5 (Duas Vias) e Notificações de Receita.' },
-        { title: 'Assinatura & Validação', desc: 'Inclusão de assinatura digitalizada, carimbo com CRM e QR Code para validação da autenticidade.' }
+        { title: 'Atestados Médicos Rápidos (1 a 14 dias)', desc: 'Botões minimalistas para gerar atestado de repouso com cálculo automático de dias e CID-10 facultativo, declaração de comparecimento e declaração de acompanhante.' },
+        { title: 'Tipos de Receituário Anvisa', desc: 'Receita Branca Simples, Controle Especial C1/C5 (Duas Vias) e Notificações de Receita A/B.' },
+        { title: 'Assinatura & Validação Oficial', desc: 'Inclusão de assinatura digitalizada, carimbo com CRM/SP 145.892, cidade/data por extenso e hash SHA-256 de validação.' }
       ],
       details: [
-        'Disponibiliza modelos de prescrição e integração direta para disparo de PDF no WhatsApp do paciente.'
+        'Disponibiliza emissão em folha única timbrada e integração direta para disparo imediato do atestado no WhatsApp do paciente.'
       ]
     },
     {

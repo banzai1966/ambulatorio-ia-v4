@@ -32,7 +32,9 @@ import {
   Leaf,
   Layers,
   Square,
-  Loader2
+  Loader2,
+  FileCheck,
+  Video
 } from 'lucide-react';
 import PatientMediaGallery from './PatientMediaGallery';
 import NeurologicalExamForm from './NeurologicalExamForm';
@@ -45,7 +47,9 @@ import SmileSimulationModal from './SmileSimulationModal';
 import SpecialtyFields from './SpecialtyFields';
 import VitalMonitor from './VitalMonitor';
 import PrescriptionAnvisaModal from './PrescriptionAnvisaModal';
+import ClinicalCertificatesModal from './ClinicalCertificatesModal';
 import PreConsultationAnamneseModal from './PreConsultationAnamneseModal';
+import TelemedicineModal from './TelemedicineModal';
 import { supabase } from '../lib/supabase';
 import DigitalSignatureModal from './DigitalSignatureModal';
 import NPSAndGoogleReviewModal from './NPSAndGoogleReviewModal';
@@ -54,6 +58,7 @@ import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { processClinicalInput, formatAiErrorMessage } from '../services/clinicalService';
 import { resolveDoctorKey, detectRecordSpecialtyAndDoctor } from '../constants/clinicProfiles';
+import { generateOfficialCertificatePDF } from '../lib/certificatePdfGenerator';
 
 interface ClinicalDoctorProfile {
   id: string;
@@ -873,6 +878,8 @@ export default function PatientDossierView({
   // Jornada do Paciente - Modais & Estados
   const [showSmileSimulationModal, setShowSmileSimulationModal] = useState(false);
   const [isPrescriptionAnvisaOpen, setIsPrescriptionAnvisaOpen] = useState(false);
+  const [isCertificatesModalOpen, setIsCertificatesModalOpen] = useState(false);
+  const [isTelemedicineModalOpen, setIsTelemedicineModalOpen] = useState(false);
   const [isAnamneseModalOpen, setIsAnamneseModalOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [isNpsModalOpen, setIsNpsModalOpen] = useState(false);
@@ -1625,6 +1632,42 @@ export default function PatientDossierView({
               >
                 <HeartHandshake size={14} className="text-slate-500" />
                 <span>NPS</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsCertificatesModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all shadow-2xs active:scale-95"
+                title={activeDoctor.default_mode === 'biological_dentistry' ? "Atestados & Declarações Odontológicas (CFO/Lei 5.081)" : "Atestados & Declarações Médicas (CFM)"}
+              >
+                <FileCheck size={14} className="text-slate-600" />
+                <span>Atestados</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsTelemedicineModalOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition-all shadow-2xs active:scale-95 ${
+                  activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.crm_cro && activeDoctor.crm_cro.toLowerCase().includes('cro'))
+                    ? 'bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200'
+                }`}
+                title={
+                  activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.crm_cro && activeDoctor.crm_cro.toLowerCase().includes('cro'))
+                    ? "Teleodontologia & Pré-Consulta / Planejamento Online (CFO-226/2020)" 
+                    : "Telemedicina & Consulta por Videoconferência com Paciente (CFM)"
+                }
+              >
+                <Video size={14} className={
+                  activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.crm_cro && activeDoctor.crm_cro.toLowerCase().includes('cro'))
+                    ? "text-emerald-600" 
+                    : "text-indigo-600"
+                } />
+                <span>
+                  {activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.crm_cro && activeDoctor.crm_cro.toLowerCase().includes('cro'))
+                    ? "Teleodontologia" 
+                    : "Telemedicina"}
+                </span>
               </button>
 
               {onOpenChat && patientPhone && (
@@ -2644,7 +2687,7 @@ export default function PatientDossierView({
 
                     <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200 text-xs">
                       <span className="text-slate-500 font-medium text-[11px]">Modelos Oficiais:</span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
                           onClick={() => setIsPrescriptionAnvisaOpen(true)}
@@ -2652,6 +2695,15 @@ export default function PatientDossierView({
                           title="Receita Controlada Oficial (Amarela A, Azul B, Branca C)"
                         >
                           <ShieldCheck size={14} className="text-slate-600" /> Notificação Controlada ANVISA
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsCertificatesModalOpen(true)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
+                          title="Atestados Rápidos de Repouso, Comparecimento e Acompanhante"
+                        >
+                          <FileCheck size={14} className="text-slate-600" /> Atestados & Declarações Rápidas
                         </button>
                       </div>
                     </div>
@@ -2781,16 +2833,43 @@ export default function PatientDossierView({
                     />
                   </div>
 
-                  <div className="pt-2">
-                    {onGenerateAtestadoPDF && (
-                      <button
-                        onClick={onGenerateAtestadoPDF}
-                        className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2"
-                      >
-                        <Printer size={16} />
-                        Gerar e Imprimir Atestado em PDF
-                      </button>
-                    )}
+                  <div className="pt-2 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          const doc = generateOfficialCertificatePDF({
+                            tipo: 'repouso',
+                            pacienteNome: patientName || 'Paciente',
+                            pacienteCpf: patientCpf || '',
+                            medicoNome: activeDoctor.full_name,
+                            medicoConselho: activeDoctor.crm_cro,
+                            medicoEspecialidade: activeDoctor.especialidade,
+                            isDental: activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry',
+                            diasAfastamento,
+                            cid: atestadoCid
+                          });
+                          const safeName = (patientName || 'Paciente').replace(/\s+/g, '_');
+                          doc.save(`Atestado_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+                          toast.success('Atestado Oficial baixado em PDF!');
+                        } catch (err) {
+                          if (onGenerateAtestadoPDF) onGenerateAtestadoPDF();
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 active:scale-95"
+                    >
+                      <Download size={16} />
+                      Baixar Atestado Oficial em PDF
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsCertificatesModalOpen(true)}
+                      className="w-full px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-slate-200 active:scale-95"
+                    >
+                      <FileCheck size={14} className="text-slate-600" />
+                      Mais Modelos (Comparecimento, Acompanhante, Cirúrgico)
+                    </button>
                   </div>
                 </div>
 
@@ -3348,6 +3427,19 @@ export default function PatientDossierView({
         doctorName={activeDoctor.full_name}
       />
 
+      <ClinicalCertificatesModal
+        isOpen={isCertificatesModalOpen}
+        onClose={() => setIsCertificatesModalOpen(false)}
+        patientName={patientName}
+        patientCpf={patientCpf}
+        patientPhone={patientPhone}
+        doctorName={activeDoctor.full_name}
+        doctorCouncil={activeDoctor.crm_cro}
+        doctorSpecialty={activeDoctor.especialidade}
+        isDental={activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'}
+        allDoctorProfiles={allDoctorProfiles}
+      />
+
       <PreConsultationAnamneseModal
         isOpen={isAnamneseModalOpen}
         onClose={() => setIsAnamneseModalOpen(false)}
@@ -3385,6 +3477,35 @@ export default function PatientDossierView({
         onClose={() => setIsSignatureModalOpen(false)}
         patientName={patientName}
         patientCpf={patientCpf}
+        doctorName={activeDoctor.full_name}
+        doctorCouncil={activeDoctor.crm_cro}
+      />
+
+      <TelemedicineModal
+        isOpen={isTelemedicineModalOpen}
+        onClose={() => setIsTelemedicineModalOpen(false)}
+        patientName={patientName}
+        patientPhone={patientPhone}
+        doctorName={activeDoctor.full_name}
+        doctorCouncil={activeDoctor.crm_cro}
+        specialty={activeDoctor.especialidade}
+        isDental={activeDoctor.default_mode === 'biological_dentistry' || Boolean(activeDoctor.crm_cro?.toLowerCase().includes('cro'))}
+        appointmentId={currentRecord?.appointment_id || currentRecord?.id || ''}
+        onAppendClinicalNote={(note) => {
+          const isDocDental = activeDoctor.default_mode === 'biological_dentistry' || Boolean(activeDoctor.crm_cro?.toLowerCase().includes('cro'));
+          const tag = isDocDental ? '[Teleodontologia]' : '[Teleconsulta]';
+          // Anexa no texto livre de evolução do prontuário
+          if (setCurrentRecord) {
+            setCurrentRecord((prev: any) => ({
+              ...(prev || {}),
+              resumo_formatado: prev?.resumo_formatado 
+                ? `${prev.resumo_formatado}\n\n${note}` 
+                : note
+            }));
+          }
+          // Também anexa na conduta/plano terapêutico para não se perder caso o médico use o formato SOAP dividido
+          setCondutaPlano((prev: string) => prev ? `${prev}\n\n${tag}: ${note}` : `${tag}: ${note}`);
+        }}
       />
 
       <NPSAndGoogleReviewModal

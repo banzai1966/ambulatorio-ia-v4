@@ -29,7 +29,8 @@ import {
   Wallet,
   Receipt,
   CheckCircle2,
-  MoreVertical
+  MoreVertical,
+  Video
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -436,8 +437,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
     // Link oficial sem '#' para garantir 100% de abertura no WhatsApp de qualquer celular
     const anamneseLink = `${baseUrl}/?anamnese=true&phone=${digitsPhone}&id=${app.id || '1'}&doc=${docKey || ''}`;
 
+    // Link único e criptografado da sala de teleconsulta (quando aplicável)
+    const sanitizedPatient = (app.paciente_nome || 'paciente').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const teleRoomUrl = `https://meet.jit.si/ambulatorio-ia-${sanitizedPatient}-${app.id || 'online'}`;
+    const isTele = String(app.tipo_consulta || '').toLowerCase().includes('teleconsulta') || 
+                   String(app.motivo || '').toLowerCase().includes('teleconsulta');
+
     let msgText = '';
-    if (docKey === 'dra_lucy') {
+    if (isTele) {
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos sua *Teleconsulta Online* com *${docName}*:\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n🔒 *Link da Sala Virtual Segura:*\n${teleRoomUrl}\n(Você pode acessar pelo celular ou computador sem precisar instalar nada, no dia e horário agendados).\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n📝 *Pré-Anamnese Digital:*\nPara que o(a) especialista conheça seu histórico antes da chamada, preencha sua ficha rápida:\n${anamneseLink}`;
+    } else if (docKey === 'dra_lucy') {
       msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento no *Consultório da Dra. Lucy Murata* (Odontologia Biológica & Saúde Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n📍 *Local:* Torre II - Praça Maastricht, 200 - Sl 103 - Bragança Paulista/SP\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🌿 *Pré-Anamnese Odontológica Digital:*\nPara que sua avaliação biológica seja personalizada e sem filas na recepção, preencha sua ficha rápida pelo link oficial abaixo:\n${anamneseLink}`;
     } else if (docKey === 'dr_carlos') {
       msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na *Clínica do Dr. Carlos Morato* (Neurologia & Medicina Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🧠 *Pré-Anamnese Clínica Digital:*\nPara agilizar seu atendimento e preparar seu prontuário, preencha seus dados de saúde pelo link oficial abaixo:\n${anamneseLink}`;
@@ -1309,6 +1318,14 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                           {app.convenio || 'Particular'}
                         </span>
 
+                        {/* Distinção clara se for Teleconsulta Online */}
+                        {(String(app.tipo_consulta || '').toLowerCase().includes('teleconsulta') || String(app.motivo || '').toLowerCase().includes('teleconsulta')) && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1 shadow-2xs">
+                            <Video size={11} className="text-indigo-600 animate-pulse" />
+                            Teleconsulta
+                          </span>
+                        )}
+
                         {/* Status de Pagamento Elegante (Clicável para Baixa no Caixa) */}
                         {isFree ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
@@ -1400,6 +1417,21 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                             >
                               <Send size={14} className="text-blue-600" />
                               Reenviar WhatsApp
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setActiveActionMenuId(null);
+                                const isLucy = isAppointmentLucy(app);
+                                const cleanName = (app.paciente_nome || 'paciente').toLowerCase().replace(/[^a-z0-9]/g, '');
+                                const teleUrl = `https://meet.jit.si/ambulatorio-ia-${cleanName}-${app.id || 'online'}`;
+                                navigator.clipboard.writeText(teleUrl);
+                                toast.success(isLucy ? "Link da Sala de Teleodontologia copiado!" : "Link da Sala de Telemedicina copiado!");
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                            >
+                              <Video size={14} className={isAppointmentLucy(app) ? "text-emerald-600" : "text-indigo-600"} />
+                              {isAppointmentLucy(app) ? "Copiar Link Teleodontologia" : "Copiar Link Telemedicina"}
                             </button>
 
                             <button
@@ -1829,6 +1861,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     {isDentalClinic ? (
                       <>
                         <option value="Avaliação Odontológica Biológica & Laudo">Avaliação Odontológica Biológica & Laudo</option>
+                        <option value="Teleconsulta Odontológica (Orientação Online)">Teleconsulta Odontológica (Orientação Online)</option>
                         <option value="Remoção Segura de Amálgama (Protocolo SMART)">Remoção Segura de Amálgama (SMART)</option>
                         <option value="Implante Cerâmico de Zircônia Metal-Free">Implante Cerâmico de Zircônia Metal-Free</option>
                         <option value="Cirurgia de Cavitação NICO / Foco Ósseo (FDOK)">Cirurgia de Cavitação NICO / Foco Ósseo</option>
@@ -1839,6 +1872,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                     ) : (
                       <>
                         <option value="Primeira Consulta Neurológica">Primeira Consulta Neurológica</option>
+                        <option value="Teleconsulta Médica (Consulta Online)">Teleconsulta Médica (Consulta Online)</option>
                         <option value="Consulta em Medicina Integrativa">Consulta em Medicina Integrativa</option>
                         <option value="Avaliação Cognitiva & MEEM">Avaliação Cognitiva & MEEM</option>
                         <option value="Mapeamento Neurológico & Dermátomos">Mapeamento Neurológico & Dermátomos</option>

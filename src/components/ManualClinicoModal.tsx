@@ -39,7 +39,8 @@ import {
   Loader2,
   Cpu,
   Gauge,
-  AlertTriangle
+  AlertTriangle,
+  FileCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { generateManualClinicoPDF } from '../lib/manualPdfGenerator';
@@ -760,21 +761,73 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                           <FileText size={24} />
                         </div>
                         <div>
-                          <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">Prescrição & Exportação</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">6. Receituário Médico Anvisa & Exportação PDF</h3>
-                          <p className="text-xs text-slate-500">Geração de documentos em formato A4 timbrado e envio direto via WhatsApp.</p>
+                          <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">Prescrição, Atestados & Exportação</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">6. Receituário Anvisa, Atestados Médicos & Exportação PDF</h3>
+                          <p className="text-xs text-slate-500">Documentos clínicos oficiais timbrados, padrão CFM Res. 1.658/02 e envio direto via WhatsApp.</p>
                         </div>
                       </div>
 
-                      <div className="space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+                      <div className="space-y-4 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
                         <p>
-                          Ao clicar em <strong>"Gerar Receituário Anvisa"</strong> ou <strong>"Baixar PDF"</strong> no prontuário do paciente:
+                          O módulo de prescrição e documentos clínicos foi projetado para emitir receitas e atestados em segundos, mantendo conformidade ética com o CFM e validação nacional:
                         </p>
-                        <ul className="list-disc list-inside space-y-2 text-slate-700 font-medium">
-                          <li>O documento sai com o cabeçalho timbrado da clínica e dados do médico (CRM, especialidade e assinatura digital).</li>
-                          <li>A prescrição separa com clareza a posologia de medicamentos convencionais, fórmulas manipuladas e nutracêuticos integrativos.</li>
-                          <li>Com 1 clique, você pode enviar o arquivo PDF gerado diretamente para o WhatsApp do paciente, sem necessidade de baixar manualmente no computador.</li>
-                        </ul>
+                        
+                        <div className="grid sm:grid-cols-2 gap-3.5 pt-1">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <ShieldCheck size={16} className="text-emerald-600" /> Receituário Digital & ANVISA
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Emissão de receitas simples, controle especial (Portaria 344/98) e fórmulas integrativas com cálculo posológico automático e importação do checklist em 1 clique.
+                            </p>
+                          </div>
+
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                            <strong className="text-slate-900 font-bold text-xs flex items-center gap-1.5">
+                              <FileCheck size={16} className="text-blue-600" /> Atestados & Declarações Rápidas (CFM)
+                            </strong>
+                            <p className="text-xs text-slate-600 leading-relaxed">
+                              Botões minimalistas para: <strong>Atestado de Repouso</strong> (com seleção rápida de 1 a 14 dias e CID-10 facultativo), <strong>Comparecimento</strong> (horários da consulta), <strong>Acompanhante</strong> e <strong>Parecer Neurológico</strong>.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 bg-blue-50/80 rounded-2xl border border-blue-200 space-y-2 text-xs">
+                          <strong className="text-blue-950 font-bold flex items-center gap-1.5">
+                            ⚡ Fluxo de 1 Clique:
+                          </strong>
+                          <ul className="list-disc list-inside space-y-1 text-slate-700">
+                            <li><strong>Botão "Atestados":</strong> localizado na barra de comando do prontuário e na aba de prescrições.</li>
+                            <li><strong>PDF Oficial Timbrado:</strong> gera folha única elegante com cabeçalho da clínica, CRM/SP 145.892, cidade/data por extenso e hash de autenticação digital ICP-Brasil.</li>
+                            <li><strong>Envio WhatsApp Instantâneo:</strong> dispara a mensagem com o texto oficial diretamente no WhatsApp do paciente.</li>
+                          </ul>
+                        </div>
+
+                        {/* Telemedicina & Teleodontologia Integradas */}
+                        <div className="p-4 bg-indigo-50/80 rounded-2xl border border-indigo-200 space-y-2 text-xs">
+                          <strong className="text-indigo-950 font-bold flex items-center gap-1.5">
+                            📹 Telemedicina (CFM nº 2.314/2022) & Teleodontologia (CFO-226/2020):
+                          </strong>
+                          <ul className="list-disc list-inside space-y-1 text-slate-700">
+                            <li><strong>Adaptação por Especialidade:</strong> Para o Dr. Carlos exibe <em>"Telemedicina"</em> (CFM); para a Dra. Lucy exibe <em>"Teleodontologia"</em> (CFO-226/2020 para pré-consulta, análise de tomografia cone beam CBCT e planejamento cirúrgico biológico).</li>
+                            <li><strong>Vídeo & Apresentação de Exames:</strong> Conexão criptografada ponto-a-ponto com botão rápido de <em>Apresentar Imagem / Tomografia</em> para explicar laudos e planejamentos diretamente ao paciente.</li>
+                            <li><strong>Convite WhatsApp com 1 Clique:</strong> Dispara mensagem personalizada com link direto da sala (funciona no PC ou celular do paciente sem instalar nada).</li>
+                            <li><strong>Registro Automático:</strong> Duração da sessão e notas de atendimento anexadas diretamente ao prontuário clínico ou odontológico.</li>
+                          </ul>
+                        </div>
+
+                        {/* Gestão do Certificado ICP-Brasil & Regras ANVISA */}
+                        <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-200 space-y-2 text-xs">
+                          <strong className="text-emerald-950 font-bold flex items-center gap-1.5">
+                            🔐 Certificado Digital ICP-Brasil (e-CPF A1 / Nuvem) & Receitas Controladas (Rivotril):
+                          </strong>
+                          <ul className="list-disc list-inside space-y-1 text-slate-700">
+                            <li><strong>Onde o médico configura:</strong> No botão <strong>"Assinatura"</strong> do prontuário, aba <em>"Certificado ICP-Brasil"</em>.</li>
+                            <li><strong>Upload do Arquivo A1 (.pfx):</strong> o médico carrega seu arquivo <code>.pfx</code> (comprado em qualquer certificadora oficial) e senha. Fica salvo com segurança no navegador sem mensalidades adicionais.</li>
+                            <li><strong>Nuvem Móvel:</strong> suporta integração com VIDaaS, BirdID e NeoID para autorização no celular.</li>
+                            <li><strong>Rivotril (Clonazepam) & Psicotrópicos:</strong> medicamentos de controle especial exigem validação oficial no site do governo (<code>validador.iti.gov.br</code>). Com o certificado ICP-Brasil do Dr. Carlos, as farmácias aceitam a receita digital diretamente.</li>
+                          </ul>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1198,6 +1251,34 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
                               </p>
                             </div>
                           </div>
+                        </div>
+
+                        {/* Módulo de Atestados Odontológicos Oficiais */}
+                        <div className="mt-5 pt-4 border-t border-slate-200 space-y-3">
+                          <strong className="text-slate-900 font-extrabold text-sm flex items-center gap-2">
+                            <FileCheck size={18} className="text-emerald-600" /> 
+                            Atestados Odontológicos & Declarações de Cirurgia (Lei 5.081/66, Art. 6º, III e CFO)
+                          </strong>
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            A Dra. Lucy possui prerrogativa legal expressa para atestar repouso e emitir laudos odontológicos oficiais com valor trabalhista e jurídico pleno:
+                          </p>
+                          <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                              <strong className="text-slate-900 text-xs block">Repouso Cirúrgico Pós-Operatório:</strong>
+                              <p className="text-[11px] text-slate-600">
+                                Modelos rápidos com 1 clique para extrações, implantes de zircônia, enxertos de PRF e protocolo SMART, recomendando repouso térmico e mastigatório de 1 a 7 dias.
+                              </p>
+                            </div>
+                            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
+                              <strong className="text-slate-900 text-xs block">Comparecimento & Acompanhante:</strong>
+                              <p className="text-[11px] text-slate-600">
+                                Declaração de comparecimento para sessões clínicas e atestado para acompanhante em procedimentos com anestesia local ou sedação.
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-slate-500 italic">
+                            *Disponível no botão "Atestados" na barra de comando do prontuário, com impressão timbrada CRO-SP e envio instantâneo no WhatsApp.
+                          </p>
                         </div>
                       </div>
                     </div>
