@@ -34,7 +34,9 @@ import {
   Square,
   Loader2,
   FileCheck,
-  Video
+  Video,
+  Smartphone,
+  ExternalLink
 } from 'lucide-react';
 import PatientMediaGallery from './PatientMediaGallery';
 import NeurologicalExamForm from './NeurologicalExamForm';
@@ -2724,19 +2726,21 @@ export default function PatientDossierView({
                         <button
                           type="button"
                           onClick={() => setIsPrescriptionAnvisaOpen(true)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
-                          title="Receita Controlada Oficial (Amarela A, Azul B, Branca C)"
+                          className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-950 border border-blue-200 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-2xs active:scale-95 cursor-pointer"
+                          title="Central Única de Prescrição Oficial: Receita Branca C1, Notificação Azul (Rivotril/Memed), Amarela e Bulário"
                         >
-                          <ShieldCheck size={14} className="text-slate-600" /> Notificação Controlada ANVISA
+                          <ShieldCheck size={15} className="text-blue-600 shrink-0" /> 
+                          <span>Central de Prescrição Oficial (ANVISA & Memed)</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setIsCertificatesModalOpen(true)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200/90 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
                           title="Atestados Rápidos de Repouso, Comparecimento e Acompanhante"
                         >
-                          <FileCheck size={14} className="text-slate-600" /> Atestados & Declarações Rápidas
+                          <FileCheck size={14} className="text-slate-600 shrink-0" /> 
+                          <span>Atestados & Declarações Rápidas</span>
                         </button>
                       </div>
                     </div>
