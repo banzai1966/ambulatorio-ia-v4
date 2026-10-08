@@ -286,8 +286,8 @@ export default function ClinicalCertificatesModal({
 
           {/* Corpo do Modal */}
           <div className="p-5 overflow-y-auto space-y-4 text-xs">
-            {/* Seletor Discreto de Profissional (se houver mais de um) */}
-            {allDoctorProfiles.length > 1 && (
+            {/* Identificação do Profissional Emissor */}
+            {allDoctorProfiles.length > 1 ? (
               <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200/70">
                 <span className="text-[11px] font-semibold text-slate-500">Emissor:</span>
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -315,6 +315,19 @@ export default function ClinicalCertificatesModal({
                     );
                   })}
                 </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 bg-slate-50/90 p-2 px-3 rounded-xl border border-slate-200/70 text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-500">Profissional Emissor:</span>
+                  <span className="font-bold text-slate-800">{selectedDocName || doctorName}</span>
+                  {(selectedDocCouncil || doctorCouncil) && (
+                    <span className="text-slate-500 font-medium">({selectedDocCouncil || doctorCouncil})</span>
+                  )}
+                </div>
+                <span className="font-semibold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[10px]">
+                  {selectedDocSpecialty || doctorSpecialty}
+                </span>
               </div>
             )}
 

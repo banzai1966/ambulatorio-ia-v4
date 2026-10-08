@@ -507,7 +507,13 @@ export default function PatientDossierView({
   const isMasterAdmin = useMemo(() => {
     const email = (currentUser?.email || '').toLowerCase().trim();
     const id = currentUser?.id || '';
-    return email === 'marco.agduarte22@gmail.com' || id === 'master-admin-marco';
+    const name = (currentUser?.full_name || '').toLowerCase().trim();
+    return (
+      email === 'marco.agduarte22@gmail.com' ||
+      id === 'master-admin-marco' ||
+      id === 'marco-duarte-admin' ||
+      (name.includes('marco') && name.includes('duarte'))
+    );
   }, [currentUser]);
 
   // Identificação do profissional responsável ativo
@@ -2626,30 +2632,57 @@ export default function PatientDossierView({
             <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200/90 p-3 rounded-2xl">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold text-slate-700">Profissional Responsável (Emissor):</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {allDoctorProfiles.map((doc) => {
-                    const isSelected = doc.id === selectedDoctorId;
-                    const isDental = doc.default_mode === 'biological_dentistry' || doc.id === 'dra_lucy';
-                    return (
-                      <button
-                        key={doc.id}
-                        type="button"
-                        onClick={() => handleSelectDoctor(doc.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
-                          isSelected
-                            ? (isDental 
-                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
-                                : 'bg-blue-600 text-white border-blue-600 shadow-xs')
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {isDental ? <Sparkles size={13} className={isSelected ? "text-amber-200" : "text-emerald-600"} /> : <Stethoscope size={13} className={isSelected ? "text-white" : "text-blue-600"} />}
-                        <span>{doc.full_name}</span>
-                        <span className={`text-[10px] font-medium ${isSelected ? 'text-white/85' : 'text-slate-500'}`}>({doc.crm_cro})</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                {isMasterAdmin ? (
+                  <>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {allDoctorProfiles.map((doc) => {
+                        const isSelected = doc.id === selectedDoctorId;
+                        const isDental = doc.default_mode === 'biological_dentistry' || doc.id === 'dra_lucy';
+                        return (
+                          <button
+                            key={doc.id}
+                            type="button"
+                            onClick={() => handleSelectDoctor(doc.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                              isSelected
+                                ? (isDental 
+                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
+                                    : 'bg-blue-600 text-white border-blue-600 shadow-xs')
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {isDental ? <Sparkles size={13} className={isSelected ? "text-amber-200" : "text-emerald-600"} /> : <Stethoscope size={13} className={isSelected ? "text-white" : "text-blue-600"} />}
+                            <span>{doc.full_name}</span>
+                            <span className={`text-[10px] font-medium ${isSelected ? 'text-white/85' : 'text-slate-500'}`}>({doc.crm_cro})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] font-semibold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md border border-purple-200">
+                      Modo de Criação & Gestão Master
+                    </span>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border shadow-2xs ${
+                      activeDoctor.default_mode === 'biological_dentistry' || activeDoctor.id === 'dra_lucy'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-blue-600 text-white border-blue-600'
+                    }`}>
+                      {activeDoctor.default_mode === 'biological_dentistry' || activeDoctor.id === 'dra_lucy' ? (
+                        <Sparkles size={13} className="text-amber-200" />
+                      ) : (
+                        <Stethoscope size={13} className="text-white" />
+                      )}
+                      <span>{activeDoctor.full_name}</span>
+                      <span className="text-[10px] font-medium text-white/85">({activeDoctor.crm_cro})</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                      Emissor Oficial Autenticado
+                    </span>
+                  </div>
+                )}
               </div>
               <span className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
                 {activeDoctor.especialidade}
@@ -3437,7 +3470,7 @@ export default function PatientDossierView({
         doctorCouncil={activeDoctor.crm_cro}
         doctorSpecialty={activeDoctor.especialidade}
         isDental={activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry'}
-        allDoctorProfiles={allDoctorProfiles}
+        allDoctorProfiles={isMasterAdmin ? allDoctorProfiles : [activeDoctor]}
       />
 
       <PreConsultationAnamneseModal
