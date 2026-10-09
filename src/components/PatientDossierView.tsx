@@ -3462,6 +3462,12 @@ export default function PatientDossierView({
         patientPhone={patientPhone}
         patientCpf={patientCpf}
         doctorName={activeDoctor.full_name}
+        initialText={prescricaoText}
+        onApplyToPrescription={(text) => {
+          setPrescricaoText(prev => prev ? `${prev}\n\n${text}` : text);
+          toast.success("Medicamentos aplicados na receita do prontuário!");
+          setIsPrescriptionAnvisaOpen(false);
+        }}
       />
 
       <ClinicalCertificatesModal

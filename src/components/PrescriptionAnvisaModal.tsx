@@ -31,6 +31,8 @@ interface PrescriptionAnvisaModalProps {
   patientCpf?: string;
   doctorName: string;
   clinicName?: string;
+  initialText?: string;
+  onApplyToPrescription?: (formattedText: string) => void;
 }
 
 export default function PrescriptionAnvisaModal({
@@ -40,7 +42,9 @@ export default function PrescriptionAnvisaModal({
   patientPhone,
   patientCpf,
   doctorName,
-  clinicName = "Ambulatório IA & Saúde Integrativa"
+  clinicName = "Ambulatório IA & Saúde Integrativa",
+  initialText,
+  onApplyToPrescription
 }: PrescriptionAnvisaModalProps) {
   const [recipeType, setRecipeType] = useState<'branca' | 'azul' | 'amarela' | 'bulario'>('branca');
   const [searchTerm, setSearchTerm] = useState('');
@@ -156,9 +160,29 @@ export default function PrescriptionAnvisaModal({
   };
 
   const handleCopyPatientData = () => {
-    const text = `Paciente: ${patientName}${patientCpf ? ` | CPF: ${patientCpf}` : ''}${patientPhone ? ` | Tel: ${patientPhone}` : ''}`;
+    let text = `Paciente: ${patientName}${patientCpf ? ` | CPF: ${patientCpf}` : ''}${patientPhone ? ` | Tel: ${patientPhone}` : ''}`;
+    if (prescriptionItems.length > 0) {
+      const itemsList = prescriptionItems.map((item, idx) => `${idx + 1}. ${item.medication.nome} (${item.selectedApresentacao}) - ${item.quantidade} | Posologia: ${item.posologiaCustomizada}`).join('\n');
+      text += `\n\nPrescrição:\n${itemsList}`;
+    } else if (initialText) {
+      text += `\n\nPrescrição Atual do Prontuário:\n${initialText}`;
+    }
     navigator.clipboard.writeText(text);
-    toast.success('Dados do paciente copiados com sucesso! Basta colar na Memed.');
+    toast.success('Dados e prescrição copiados com sucesso! Basta colar na Memed.');
+  };
+
+  const handleTransferToDossier = () => {
+    if (prescriptionItems.length === 0) {
+      toast.error('Adicione medicamentos para transferir para o prontuário.');
+      return;
+    }
+    const formatted = prescriptionItems.map(item => 
+      `- ${item.medication.nome} (${item.selectedApresentacao}) - ${item.quantidade}: ${item.posologiaCustomizada}`
+    ).join('\n');
+    
+    if (onApplyToPrescription) {
+      onApplyToPrescription(formatted);
+    }
   };
 
   const generatePDF = () => {
@@ -440,6 +464,30 @@ export default function PrescriptionAnvisaModal({
               <span className="text-slate-900">{patientPhone || "Não informado"}</span>
             </div>
           </div>
+
+          {/* Se já houver prescrição no prontuário */}
+          {initialText && (
+            <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="space-y-0.5 max-w-xl">
+                <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                  Medicamentos já digitados no Prontuário:
+                </span>
+                <p className="text-[11px] text-slate-700 font-mono truncate">
+                  {initialText.split('\n').filter(Boolean).slice(0, 2).join(' • ')}...
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyPatientData}
+                className="px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold rounded-xl text-[11px] transition-all shrink-0 flex items-center gap-1 cursor-pointer active:scale-95"
+                title="Copiar dados do paciente e medicamentos para colar na Memed"
+              >
+                <Copy className="w-3.5 h-3.5 text-amber-700" />
+                Copiar Dados + Remédios
+              </button>
+            </div>
+          )}
 
           {/* Barra de Prescrição Digital Integrada & Janela Flutuante */}
           <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200/90 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
@@ -860,6 +908,19 @@ export default function PrescriptionAnvisaModal({
               <Printer className="w-4 h-4" />
               <span>{recipeType === 'azul' || recipeType === 'amarela' ? 'Imprimir Notificação Física' : 'Imprimir'}</span>
             </button>
+
+            {/* Aplicar na Receita Principal do Prontuário */}
+            {onApplyToPrescription && prescriptionItems.length > 0 && (
+              <button
+                type="button"
+                onClick={handleTransferToDossier}
+                className="px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 font-bold rounded-2xl text-xs transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
+                title="Transfere os medicamentos selecionados para o formulário principal do prontuário"
+              >
+                <Sparkles className="w-4 h-4 text-blue-600" />
+                <span>Aplicar no Prontuário</span>
+              </button>
+            )}
 
             {/* Baixar PDF */}
             <button
