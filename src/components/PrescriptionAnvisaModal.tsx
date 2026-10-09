@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode, Mic, Printer, Sparkles, Smartphone, Copy } from 'lucide-react';
+import { Search, Pill, ExternalLink, Send, Check, AlertCircle, FileText, Download, X, QrCode, Mic, Printer, Sparkles, Smartphone, Copy, ShieldCheck } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'react-hot-toast';
 import { getActiveClinicConfig } from '../constants/clinicProfiles';
+import MemedPrescriptionHubModal from './MemedPrescriptionHubModal';
 
 interface AnvisaMedication {
   id: string;
@@ -52,6 +53,7 @@ export default function PrescriptionAnvisaModal({
   const [prescriptionItems, setPrescriptionItems] = useState<PrescriptionItem[]>([]);
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isVoiceListening, setIsVoiceListening] = useState(false);
+  const [isMemedHubOpen, setIsMemedHubOpen] = useState(false);
 
   // Reconhecimento de Voz para Buscar / Ditar Medicamentos ANVISA
   const handleVoiceSearch = () => {
@@ -376,6 +378,14 @@ export default function PrescriptionAnvisaModal({
     }
   };
 
+  const openFloatingWindow = (url: string, title = 'JanelaPrescricao') => {
+    const width = Math.min(1150, window.innerWidth || 1150);
+    const height = Math.min(800, window.innerHeight || 800);
+    const left = Math.max(0, (window.screen.width - width) / 2);
+    const top = Math.max(0, (window.screen.height - height) / 2);
+    window.open(url, title, `width=${width},height=${height},top=${top},left=${left},status=no,menubar=no,toolbar=no,scrollbars=yes,resizable=yes`);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -431,42 +441,53 @@ export default function PrescriptionAnvisaModal({
             </div>
           </div>
 
-          {/* Barra de Acesso Rápido Memed & CFM */}
+          {/* Barra de Prescrição Digital Integrada & Janela Flutuante */}
           <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border border-emerald-200/90 rounded-2xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-emerald-600 text-white rounded-xl shrink-0 shadow-xs">
                 <Smartphone className="w-4 h-4" />
               </div>
               <div>
-                <span className="font-extrabold text-emerald-950 block">Prescrição Digital com Token SMS (Memed & CFM)</span>
-                <span className="text-[11px] text-slate-600">Para receitar Rivotril e psicotrópicos com compra online no celular do paciente (100% gratuito).</span>
+                <span className="font-extrabold text-emerald-950 block">Prescrição Online & Assinatura Digital</span>
+                <span className="text-[11px] text-slate-600">Prescreva abaixo OU use a janela flutuante da Memed / Assinador Gov.br sem sair do sistema:</span>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
               <button
                 type="button"
                 onClick={handleCopyPatientData}
                 className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-800 border border-emerald-300 font-bold rounded-xl text-xs transition-all shadow-2xs flex items-center gap-1 active:scale-95 cursor-pointer"
-                title="Copiar Nome, CPF e WhatsApp do paciente para colar na Memed"
+                title="Copiar Nome, CPF e WhatsApp do paciente para colar na Memed ou portal"
               >
                 <Copy className="w-3.5 h-3.5 text-emerald-600" /> Copiar Dados
               </button>
-              <a
-                href="https://memed.com.br"
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1 active:scale-95 cursor-pointer"
+
+              <button
+                type="button"
+                onClick={() => openFloatingWindow('https://memed.com.br/accounts', 'MemedPopup')}
+                className="px-2.5 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-xs transition-all shadow-2xs flex items-center gap-1 active:scale-95 cursor-pointer"
+                title="Abrir página oficial da Memed em janela flutuante (Pop-up) sem sair do prontuário"
               >
-                Abrir Memed Oficial <ExternalLink className="w-3 h-3" />
-              </a>
-              <a
-                href="https://prescricaoeletronica.cfm.org.br"
-                target="_blank"
-                rel="noreferrer"
-                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1 active:scale-95 cursor-pointer"
+                <ExternalLink className="w-3.5 h-3.5 text-purple-200" /> Abrir Memed (Pop-up)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openFloatingWindow('https://assinador.iti.br', 'AssinadorGovBr')}
+                className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition-all shadow-2xs flex items-center gap-1 active:scale-95 cursor-pointer"
+                title="Abrir Assinador Digital Oficial Gratuito Gov.br em janela flutuante"
               >
-                Portal CFM <ExternalLink className="w-3 h-3" />
-              </a>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Assinador Gov.br
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsMemedHubOpen(true)}
+                className="px-2.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 font-bold rounded-xl text-xs transition-all border border-emerald-300 flex items-center gap-1 active:scale-95 cursor-pointer"
+                title="Gerenciar chaves e configurações da Memed"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-700" /> Token / Hub
+              </button>
             </div>
           </div>
 
@@ -582,24 +603,23 @@ export default function PrescriptionAnvisaModal({
                     <Smartphone className="w-3.5 h-3.5 text-emerald-600" /> Opção 2: Online com Token (Memed / CFM)
                   </span>
                   <p className="text-[11px] text-slate-700 leading-relaxed">
-                    Para o paciente comprar <strong>online na Drogasil/Panvel</strong>, emita pelo portal integrado da <strong>Memed</strong> ou <strong>CFM</strong>. O paciente recebe o <strong>Token por SMS</strong> gratuitamente!
+                    Para o paciente comprar <strong>online na Drogasil/Panvel</strong>, emita pelo hub integrado da <strong>Memed</strong> ou <strong>CFM</strong>. O paciente recebe o <strong>Token por SMS</strong> gratuitamente!
                   </p>
-                  <div className="pt-1.5 flex items-center gap-2">
+                  <div className="pt-1.5 flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setIsMemedHubOpen(true)}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                    >
+                      <Sparkles className="w-3 h-3" /> Abrir Hub Memed Token
+                    </button>
                     <a
                       href="https://memed.com.br"
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-xs"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 rounded-lg text-[10px] font-bold transition-all"
                     >
-                      Abrir Memed Oficial <ExternalLink className="w-3 h-3" />
-                    </a>
-                    <a
-                      href="https://prescricaoeletronica.cfm.org.br"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-[10px] font-bold transition-all"
-                    >
-                      Portal CFM <ExternalLink className="w-3 h-3" />
+                      Memed Web <ExternalLink className="w-3 h-3 text-slate-500" />
                     </a>
                   </div>
                 </div>
@@ -874,6 +894,16 @@ export default function PrescriptionAnvisaModal({
         </div>
 
       </div>
+
+      {/* Hub Oficial de Prescrição Memed & Token SMS */}
+      <MemedPrescriptionHubModal
+        isOpen={isMemedHubOpen}
+        onClose={() => setIsMemedHubOpen(false)}
+        patientName={patientName}
+        patientPhone={patientPhone}
+        patientCpf={patientCpf}
+        doctorName={doctorName}
+      />
     </div>
   );
 }
