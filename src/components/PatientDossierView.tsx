@@ -36,7 +36,8 @@ import {
   FileCheck,
   Video,
   Smartphone,
-  ExternalLink
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import PatientMediaGallery from './PatientMediaGallery';
 import NeurologicalExamForm from './NeurologicalExamForm';
@@ -175,7 +176,7 @@ interface PatientDossierViewProps {
   onOpenChat?: (phone: string) => void;
   onGeneratePDF?: (record: any) => void;
   onGenerateAtestadoPDF?: () => void;
-  onGenerateReceitaPDF?: () => void;
+  onGenerateReceitaPDF?: (recordOverride?: any) => void;
   onClose: () => void;
   setCurrentRecord: (record: any) => void;
   specialtyData: any;
@@ -1194,6 +1195,23 @@ export default function PatientDossierView({
       (currentRecord as any)?.paciente_nome || 
       "PACIENTE";
 
+    // Garante sincronização bidirecional entre prescrição e conduta/plano
+    const finalPrescricao = (prescricaoText && prescricaoText.trim()) || (condutaPlano && condutaPlano.trim()) || currentRecord?.prescricao || '';
+    const finalConduta = (condutaPlano && condutaPlano.trim()) || (prescricaoText && prescricaoText.trim()) || currentRecord?.conduta_plano_terapeutico || '';
+    const finalQueixa = useDividedSoap 
+      ? (queixaPrincipal || currentRecord?.queixa_principal || '') 
+      : (currentRecord?.resumo_formatado || queixaPrincipal || currentRecord?.queixa_principal || '');
+
+    const finalAntecedentes = currentRecord?.antecedentes || '';
+    const finalAlertas = (clinicalAlerts && clinicalAlerts.length > 0) ? clinicalAlerts : (currentRecord?.alertas_clinicos || []);
+    const finalVitals = currentRecord?.vitals || specialtyData?.vitals || undefined;
+    const finalChecklist = (integrativeData && hasMeaningfulData(integrativeData)) 
+      ? integrativeData 
+      : (currentRecord?.checklist_integrativo || integrativeData);
+    const finalNeuro = isNeuro 
+      ? (specialtyData?.exame_neurologico || currentRecord?.exame_neurologico || specialtyData) 
+      : (currentRecord?.exame_neurologico || specialtyData?.exame_neurologico);
+
     const recordToSave = {
       ...currentRecord,
       paciente_nome_completo: effectiveSaveName,
@@ -1201,22 +1219,41 @@ export default function PatientDossierView({
       paciente_cpf: patientCpf || currentRecord?.paciente_cpf || "",
       paciente_data_nascimento: patientDob || currentRecord?.paciente_data_nascimento || "",
       paciente_telefone: patientPhone || currentRecord?.paciente_telefone || "",
-      queixa_principal: queixaPrincipal,
-      exame_fisico: exameFisico,
-      hipotese_diagnostica: hipoteseDiag,
-      conduta_plano_terapeutico: condutaPlano,
-      prescricao: prescricaoText,
-      checklist_integrativo: isIntegrative ? (integrativeData || currentRecord?.checklist_integrativo) : currentRecord?.checklist_integrativo,
-      exame_neurologico: isNeuro ? (specialtyData?.exame_neurologico || currentRecord?.exame_neurologico || specialtyData) : currentRecord?.exame_neurologico,
+      queixa_principal: finalQueixa,
+      exame_fisico: exameFisico || currentRecord?.exame_fisico || '',
+      hipotese_diagnostica: hipoteseDiag || currentRecord?.hipotese_diagnostica || '',
+      conduta_plano_terapeutico: finalConduta,
+      prescricao: finalPrescricao,
+      antecedentes: finalAntecedentes,
+      alertas_clinicos: finalAlertas,
+      vitals: finalVitals,
+      checklist_integrativo: finalChecklist,
+      exame_neurologico: finalNeuro,
       dados_especialidade: {
+        ...(currentRecord?.dados_especialidade || {}),
         ...specialtyData,
-        mapeamento_corporal: currentRecord?.mapeamento_corporal || specialtyData?.mapeamento_corporal || []
+        antecedentes: finalAntecedentes,
+        alertas_clinicos: finalAlertas,
+        vitals: finalVitals,
+        prescricao: finalPrescricao,
+        mapeamento_corporal: (currentRecord?.mapeamento_corporal && currentRecord.mapeamento_corporal.length > 0)
+          ? currentRecord.mapeamento_corporal
+          : (specialtyData?.mapeamento_corporal || [])
       },
-      mapeamento_corporal: currentRecord?.mapeamento_corporal || specialtyData?.mapeamento_corporal || [],
+      dados_clinicos: {
+        ...(currentRecord?.dados_clinicos || {}),
+        antecedentes: finalAntecedentes,
+        alertas_clinicos: finalAlertas,
+        vitals: finalVitals,
+        prescricao: finalPrescricao
+      },
+      mapeamento_corporal: (currentRecord?.mapeamento_corporal && currentRecord.mapeamento_corporal.length > 0)
+        ? currentRecord.mapeamento_corporal
+        : (specialtyData?.mapeamento_corporal || []),
       especialidade: assignedSpecialty,
       profissional_responsavel: assignedDoctor.full_name,
       medico_id: assignedDoctor.id,
-      resumo_formatado: currentRecord?.resumo_formatado || queixaPrincipal
+      resumo_formatado: currentRecord?.resumo_formatado || finalQueixa
     };
 
     setCurrentRecord(recordToSave);
@@ -2784,15 +2821,50 @@ export default function PatientDossierView({
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       onClick={handleSaveRecord}
+                      title="Grava o prontuário completo e a receita juntos (o mesmo que 'Evoluir Prontuário')"
                       className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2"
                     >
                       <CheckCircle2 size={16} />
-                      Salvar Receita no Prontuário
+                      Salvar Tudo no Prontuário
                     </button>
 
                     {onGenerateReceitaPDF && (
                       <button
-                        onClick={onGenerateReceitaPDF}
+                        type="button"
+                        onClick={() => {
+                          const isDental = examMode === 'biological_dentistry' || activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.especialidade && activeDoctor.especialidade.toLowerCase().includes('odonto'));
+                          const isNeuro = examMode === 'neurological' || activeDoctor.default_mode === 'neurological' || (activeDoctor.especialidade && activeDoctor.especialidade.toLowerCase().includes('neuro'));
+                          const isIntegrative = examMode === 'integrative';
+
+                          const assignedDoctor = isDental 
+                            ? (allDoctorProfiles.find(d => d.id === 'dra_lucy') || activeDoctor)
+                            : (isNeuro || isIntegrative 
+                                ? (allDoctorProfiles.find(d => d.id === 'dr_carlos') || activeDoctor)
+                                : activeDoctor);
+
+                          const effectiveSaveName = (isValidExtractedName(patientName) ? patientName : '') || 
+                            (isValidExtractedName(currentRecord?.paciente_nome_completo) ? currentRecord.paciente_nome_completo : '') || 
+                            (currentRecord as any)?.paciente_nome || 
+                            "PACIENTE";
+
+                          const updatedRecord = {
+                            ...currentRecord,
+                            paciente_nome_completo: effectiveSaveName,
+                            paciente_nome: effectiveSaveName,
+                            paciente_cpf: patientCpf || currentRecord?.paciente_cpf || "",
+                            paciente_data_nascimento: patientDob || currentRecord?.paciente_data_nascimento || "",
+                            paciente_telefone: patientPhone || currentRecord?.paciente_telefone || "",
+                            prescricao: prescricaoText,
+                            checklist_integrativo: isIntegrative ? (integrativeData || currentRecord?.checklist_integrativo) : currentRecord?.checklist_integrativo,
+                            especialidade: assignedDoctor.especialidade || activeDoctor.especialidade,
+                            profissional_responsavel: assignedDoctor.full_name,
+                            medico_id: assignedDoctor.id
+                          };
+
+                          setCurrentRecord(updatedRecord);
+                          onSaveRecord(updatedRecord);
+                          onGenerateReceitaPDF(updatedRecord);
+                        }}
                         className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
                       >
                         <FileSignature size={16} />
@@ -2800,6 +2872,11 @@ export default function PatientDossierView({
                       </button>
                     )}
                   </div>
+
+                  <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 pt-1">
+                    <Info size={13} className="text-blue-500 shrink-0" />
+                    <span>Ao salvar (seja pelo botão <strong>"Evoluir Prontuário"</strong> no topo ou <strong>"Salvar Tudo no Prontuário"</strong> aqui), todos os dados clínicos e a receita são gravados juntos de forma unificada.</span>
+                  </p>
                 </div>
 
                 {/* Official Prescription Preview */}
@@ -2973,10 +3050,11 @@ export default function PatientDossierView({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSaveRecord}
+                  title="Grava o prontuário completo, conduta e receitas juntos (o mesmo que 'Evoluir Prontuário')"
                   className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 active:scale-95"
                 >
                   <CheckCircle2 size={16} />
-                  Salvar Plano no Prontuário
+                  Salvar Tudo no Prontuário
                 </button>
               </div>
             </div>
@@ -3185,6 +3263,33 @@ export default function PatientDossierView({
                   {selectedHistoryRecord.conduta_plano_terapeutico || selectedHistoryRecord.sugestao_conduta || 'Manutenção da conduta habitual.'}
                 </p>
               </div>
+
+              {/* Prescrição Médica & Medicamentos Gravados */}
+              {(selectedHistoryRecord.prescricao || selectedHistoryRecord.dados_clinicos?.prescricao) && (
+                <div className="bg-emerald-50/90 p-4 rounded-2xl border border-emerald-200 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                      💊 Prescrição Médica & Medicamentos Salvos
+                    </span>
+                    <span className="text-[10px] bg-emerald-200/80 text-emerald-900 font-extrabold px-2 py-0.5 rounded-md">
+                      Receituário Gravado
+                    </span>
+                  </div>
+                  <div className="bg-white p-3.5 rounded-xl border border-emerald-200/80 font-mono text-xs text-slate-800 whitespace-pre-line leading-relaxed shadow-2xs">
+                    {selectedHistoryRecord.prescricao || selectedHistoryRecord.dados_clinicos?.prescricao}
+                  </div>
+                </div>
+              )}
+
+              {/* Antecedentes Pessoais e Alergias */}
+              {(selectedHistoryRecord.antecedentes || selectedHistoryRecord.dados_clinicos?.antecedentes || selectedHistoryRecord.dados_especialidade?.antecedentes) && (
+                <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200 space-y-1">
+                  <span className="text-xs font-bold text-amber-900 uppercase tracking-wider block">⚠️ Antecedentes Pessoais, Comorbidades & Alergias</span>
+                  <p className="text-slate-800 font-medium whitespace-pre-line leading-relaxed text-xs">
+                    {selectedHistoryRecord.antecedentes || selectedHistoryRecord.dados_clinicos?.antecedentes || selectedHistoryRecord.dados_especialidade?.antecedentes}
+                  </p>
+                </div>
+              )}
 
               {/* Specialty specific summary if exists */}
               {selectedHistoryRecord.checklist_integrativo && hasMeaningfulData(selectedHistoryRecord.checklist_integrativo) && (

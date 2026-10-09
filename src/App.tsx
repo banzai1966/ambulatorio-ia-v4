@@ -1588,9 +1588,23 @@ export default function App() {
             dados = { observacoes: r.dados_clinicos };
           }
         }
+        let spec = r.dados_especialidade || {};
+        if (typeof r.dados_especialidade === 'string') {
+          try {
+            spec = JSON.parse(r.dados_especialidade);
+          } catch (e) {
+            spec = {};
+          }
+        }
         return {
           ...r,
           dados_clinicos: dados,
+          dados_especialidade: spec,
+          antecedentes: r.antecedentes || dados.antecedentes || spec.antecedentes || '',
+          alertas_clinicos: r.alertas_clinicos || dados.alertas_clinicos || spec.alertas_clinicos || [],
+          vitals: r.vitals || dados.vitals || spec.vitals || undefined,
+          prescricao: r.prescricao || dados.prescricao || r.conduta_plano_terapeutico || '',
+          conduta_plano_terapeutico: r.conduta_plano_terapeutico || dados.conduta || r.prescricao || '',
           resumo_formatado: r.resumo_formatado || dados.resumo_formatado || '',
           sugestao_conduta: r.sugestao_conduta || dados.sugestao_conduta || ''
         };
@@ -2356,11 +2370,11 @@ export default function App() {
     try {
       const cleanCPF = rec.paciente_cpf ? String(rec.paciente_cpf).replace(/\D/g, '') : null;
       
-      // Define o médico responsável: Prioridade para o selecionado na agenda, fallback para o usuário atual
-      const medicoIdToSave = selectedMedicoId || activeUser.id;
+      // Define o médico responsável: Prioridade para o prontuário, fallback para a agenda ou usuário atual
+      const medicoIdToSave = rec.medico_id || selectedMedicoId || activeUser.id;
       
-      // Força a especialidade para 'Integrativa' se o modo for integrativo
-      const especialidadeToSave = examMode === 'integrative' ? 'Integrativa' : (rec.especialidade || 'Geral');
+      // Preserva a especialidade informada no prontuário
+      const especialidadeToSave = rec.especialidade || (examMode === 'integrative' ? 'Integrativa' : 'Geral');
 
       console.log("saveRecord - selectedPatientPhone (state):", selectedPatientPhone);
       console.log("saveRecord - medicoIdToSave:", medicoIdToSave);
@@ -2376,6 +2390,9 @@ export default function App() {
         }
       }
 
+      const finalPresc = (rec.prescricao && rec.prescricao.trim()) || (rec.conduta_plano_terapeutico && rec.conduta_plano_terapeutico.trim()) || '';
+      const finalCond = (rec.conduta_plano_terapeutico && rec.conduta_plano_terapeutico.trim()) || (rec.prescricao && rec.prescricao.trim()) || '';
+
       const recordToSave: any = { 
         medico_id: medicoIdToSave,
         user_id: activeUser.id, // O usuário que está salvando
@@ -2386,14 +2403,21 @@ export default function App() {
         especialidade: especialidadeToSave,
         paciente_status: rec.paciente_status || 'Ativo',
         paciente_telefone: rec.paciente_telefone || selectedPatientPhone,
-        queixa_principal: rec.queixa_principal,
-        exame_fisico: rec.exame_fisico,
-        hipotese_diagnostica: rec.hipotese_diagnostica,
-        conduta_plano_terapeutico: rec.conduta_plano_terapeutico,
-        prescricao: rec.prescricao,
-        resumo_formatado: rec.resumo_formatado || rec.queixa_principal,
-        sugestao_conduta: rec.sugestao_conduta,
-        dados_clinicos: rec.dados_clinicos || {},
+        queixa_principal: rec.queixa_principal || '',
+        exame_fisico: rec.exame_fisico || '',
+        hipotese_diagnostica: rec.hipotese_diagnostica || '',
+        conduta_plano_terapeutico: finalCond,
+        prescricao: finalPresc,
+        resumo_formatado: rec.resumo_formatado || rec.queixa_principal || '',
+        sugestao_conduta: rec.sugestao_conduta || '',
+        dados_clinicos: {
+          ...(rec.dados_clinicos || {}),
+          antecedentes: rec.antecedentes || rec.dados_clinicos?.antecedentes || '',
+          alertas_clinicos: rec.alertas_clinicos || rec.dados_clinicos?.alertas_clinicos || [],
+          vitals: rec.vitals || rec.dados_clinicos?.vitals,
+          prescricao: finalPresc,
+          conduta: finalCond
+        },
         comparativo: rec.comparativo || {},
         data_consulta: rec.data_consulta || getLocalISODate(),
         created_at: new Date().toISOString()
@@ -2440,15 +2464,26 @@ export default function App() {
           }
         });
 
-        // Garantir que mapeamento e vitais sejam salvos DENTRO do JSON dados_especialidade e NÃO na raiz
+        // Garantir que mapeamento, vitais, antecedentes e prescrição sejam salvos DENTRO do JSON dados_especialidade e NÃO na raiz
+        payload.dados_especialidade = payload.dados_especialidade || {};
         if (data.mapeamento_corporal) {
-          payload.dados_especialidade = payload.dados_especialidade || {};
           payload.dados_especialidade.mapeamento_corporal = data.mapeamento_corporal;
         }
         
         if (data.vitals) {
-          payload.dados_especialidade = payload.dados_especialidade || {};
           payload.dados_especialidade.vitals = data.vitals;
+        }
+
+        if (data.antecedentes) {
+          payload.dados_especialidade.antecedentes = data.antecedentes;
+        }
+
+        if (data.alertas_clinicos) {
+          payload.dados_especialidade.alertas_clinicos = data.alertas_clinicos;
+        }
+
+        if (finalPresc) {
+          payload.dados_especialidade.prescricao = finalPresc;
         }
 
         console.log("PAYLOAD_ENVIADO (Chaves):", Object.keys(payload));
@@ -2484,14 +2519,16 @@ export default function App() {
         console.warn("Salvando prontuário no modo offline local:", saveError);
         const localRecord = saveRecordLocally(recordToSave);
         
-        toast.success("💻 Prontuário salvo no seu COMPUTADOR (Modo Offline)! Sincronizará com a nuvem assim que o Wi-Fi retornar.", { duration: 6000 });
+        toast.success("💻 Prontuário, Evolução e Receita salvos no COMPUTADOR (Modo Offline)!", { duration: 6000 });
         setSaveSuccess(true);
+        setCurrentRecord(localRecord as any);
         setOfflinePendingCount(prev => prev + 1);
         setHistory(prev => [localRecord as any, ...prev]);
       } else {
         console.log("saveRecord - Sucesso ao salvar na Nuvem!");
-        toast.success("Prontuário salvo na nuvem com sucesso! Histórico atualizado.");
+        toast.success("✅ Prontuário, Evolução e Receita salvos com sucesso na nuvem!");
         setSaveSuccess(true);
+        setCurrentRecord(recordToSave);
         fetchHistory();
       }
         
@@ -2792,7 +2829,13 @@ export default function App() {
         Object.entries(sections).forEach(([title, data]) => {
           if (data && typeof data === 'object') {
             const lines = Object.entries(data)
-              .filter(([_, v]) => v)
+              .filter(([k, v]) => {
+                if (!v) return false;
+                if (k === 'pentagonos' || k === 'desenho_pentagonos' || k === 'anotacao_diagrama_imagem') return false;
+                if (typeof v === 'string' && (v.startsWith('data:image/') || v.length > 250)) return false;
+                if (typeof v === 'object') return false;
+                return true;
+              })
               .map(([k, v]) => `${k.toUpperCase()}: ${safeText(v)}`)
               .join(' | ');
             
@@ -2808,6 +2851,27 @@ export default function App() {
             }
           }
         });
+
+        // Desenho dos Pentágonos (MEEM) como imagem oficial (se houver)
+        const meemPentagonoImg = ex.desenho_pentagonos || 
+                                 ex.cognitivo?.pentagonos || 
+                                 record.dados_especialidade?.pentagonos || 
+                                 record.dados_especialidade?.desenho_pentagonos;
+
+        if (typeof meemPentagonoImg === 'string' && meemPentagonoImg.startsWith('data:image/')) {
+          try {
+            checkPageBreak(45);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+            doc.setTextColor(0, 50, 100);
+            doc.text("Teste do Desenho (Pentágonos Interseccionados - MEEM):", margin, currentY);
+            currentY += 5;
+            doc.addImage(meemPentagonoImg, 'PNG', margin, currentY, 45, 30);
+            currentY += 36;
+          } catch (e) {
+            console.warn("Imagem dos pentágonos ignorada na renderização:", e);
+          }
+        }
       }
 
       // Mapeamento Corporal
@@ -2863,22 +2927,111 @@ export default function App() {
 
       // Especialidade
       if (record.dados_especialidade && hasMeaningfulData(record.dados_especialidade)) {
-        const specDataStr = Object.entries(record.dados_especialidade)
-          .filter(([k]) => k !== 'mapeamento_corporal' && k !== 'vitals')
-          .map(([k, v]) => `${k.replace(/_/g, ' ').toUpperCase()}: ${safeText(v)}`)
-          .join(' | ');
+        const spec = record.dados_especialidade;
+        const isRecDental = cleanSpecialty.toLowerCase().includes('odonto') || cleanSpecialty.toLowerCase().includes('dental');
+        const isRecNeuro = cleanSpecialty.toLowerCase().includes('neuro') || isNeurological;
 
-        if (specDataStr) {
-          checkPageBreak(20);
+        const DENTAL_SPEC_KEYS = new Set([
+          'odontograma', 'amalgama_ativo', 'amalgama_elementos', 'smart_dique_nitrilo',
+          'smart_oxigenio_nasal', 'smart_exaustor_vapor', 'smart_irrigacao_alta',
+          'smart_carvao_chlorella', 'smart_quelacao_vitc', 'implante_zirconia_ativo',
+          'implante_elementos', 'implante_prf_ienxerto', 'implante_tipo_sistema',
+          'focos_cavitacao_ativo', 'focos_descricao', 'focos_tomografia_cbct',
+          'terapia_neural_ativo', 'terapia_neural_locais', 'ozonioterapia_ativo',
+          'ozonio_modalidades', 'atm_bruxismo_ativo', 'atm_bruxismo',
+          'suplemento_vit_d3_k2', 'suplemento_vit_c', 'suplemento_zinco_mg',
+          'suplemento_arnica_homeo', 'suplemento_coenzima_q10', 'observacoes_odonto_biologica'
+        ]);
+
+        const NEURO_SPEC_KEYS = new Set([
+          'exame_neurologico', 'fascia', 'atitude', 'dominancia', 'marcha', 'forca_muscular',
+          'sensibilidade', 'nervos_cranianos', 'cognitivo', 'pentagonos', 'desenho_pentagonos',
+          'anotacao_diagrama_imagem', 'escala_glasgow'
+        ]);
+
+        const validSpecItems: string[] = [];
+
+        if (isRecDental) {
+          // Renderização elegante e legível da Odontologia Biológica
+          if (spec.odontograma && typeof spec.odontograma === 'object') {
+            const dentesAfetados: string[] = [];
+            Object.entries(spec.odontograma).forEach(([dente, val]: [string, any]) => {
+              if (val && val.status && val.status !== 'healthy') {
+                const labelStatus = val.status === 'amalgam' ? 'Amálgama' :
+                  val.status === 'zirconia_implant' ? 'Implante Zircônia' :
+                  val.status === 'titanium_implant' ? 'Implante Titânio' :
+                  val.status === 'endodontic' ? 'Canal (Endodôntico)' :
+                  val.status === 'cavitation_nico' ? 'Cavitação Óssea (NICO)' :
+                  val.status === 'caries' ? 'Cárie Ativa' :
+                  val.status === 'ceramic_crown' ? 'Coroa Cerâmica' : String(val.status);
+                dentesAfetados.push(`Dente ${dente}: ${labelStatus}${val.notes ? ` (${val.notes})` : ''}`);
+              }
+            });
+            if (dentesAfetados.length > 0) {
+              validSpecItems.push(`ODONTOGRAMA BIOLÓGICO: ${dentesAfetados.join('; ')}`);
+            }
+          }
+
+          if (spec.amalgama_ativo) validSpecItems.push(`PROTOCOLO SMART: Ativo${spec.amalgama_elementos ? ` (Elementos: ${spec.amalgama_elementos})` : ''}`);
+          if (spec.implante_zirconia_ativo) validSpecItems.push(`IMPLANTES METAL-FREE: Zircônia${spec.implante_elementos ? ` (${spec.implante_elementos})` : ''}`);
+          if (spec.focos_cavitacao_ativo) validSpecItems.push(`CAVITAÇÕES ÓSSEAS (NICO): ${spec.focos_descricao || 'Identificado'}`);
+          if (spec.terapia_neural_ativo) validSpecItems.push(`TERAPIA NEURAL: ${spec.terapia_neural_locais || 'Aplicada'}`);
+          if (spec.ozonioterapia_ativo) validSpecItems.push(`OZONIOTERAPIA: ${spec.ozonio_modalidades || 'Indicada'}`);
+          if (spec.atm_bruxismo_ativo || spec.atm_bruxismo) validSpecItems.push(`ATM / BRUXISMO: ${spec.atm_bruxismo || 'Presente'}`);
+          if (spec.observacoes_odonto_biologica) validSpecItems.push(`OBSERVAÇÕES ODONTO: ${spec.observacoes_odonto_biologica}`);
+        } else {
+          // Para Neurologia / Medicina Geral: blindagem estrita contra campos de odontologia e lixo base64
+          Object.entries(spec).forEach(([k, v]) => {
+            if (
+              k === 'mapeamento_corporal' || 
+              k === 'vitals' || 
+              DENTAL_SPEC_KEYS.has(k) || 
+              NEURO_SPEC_KEYS.has(k) ||
+              k === 'pentagonos' ||
+              k === 'desenho_pentagonos' ||
+              k === 'anotacao_diagrama_imagem'
+            ) {
+              return;
+            }
+
+            // Ignora qualquer string base64 ou imagem
+            if (typeof v === 'string' && (v.startsWith('data:image/') || v.length > 250)) {
+              return;
+            }
+
+            // Ignora objetos não tratados para nunca gerar [object Object]
+            if (typeof v === 'object' || Array.isArray(v)) {
+              return;
+            }
+
+            // Ignora vazios ou falsos
+            if (!v || v === '' || v === 'false' || v === false) {
+              return;
+            }
+
+            validSpecItems.push(`${k.replace(/_/g, ' ').toUpperCase()}: ${safeText(v)}`);
+          });
+        }
+
+        if (validSpecItems.length > 0) {
+          checkPageBreak(25);
           doc.setFontSize(12);
           doc.setTextColor(0, 50, 100);
+          doc.setFont('helvetica', 'bold');
           doc.text(`Dados de ${safeText(record.especialidade || 'Especialidade')}`, margin, currentY);
           currentY += 7;
-          doc.setFontSize(10);
+          doc.setFontSize(9.5);
           doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
+          
+          const specDataStr = validSpecItems.join(' | ');
           const specLines = doc.splitTextToSize(specDataStr, contentWidth);
-          doc.text(specLines, margin, currentY);
-          currentY += (specLines.length * 5) + 10;
+          specLines.forEach((line: string) => {
+            checkPageBreak(5.5);
+            doc.text(line, margin, currentY);
+            currentY += 5;
+          });
+          currentY += 6;
         }
       }
 
@@ -2894,17 +3047,23 @@ export default function App() {
           checkPageBreak(20);
           doc.setFontSize(12);
           doc.setTextColor(0, 50, 100);
+          doc.setFont('helvetica', 'bold');
           doc.text("Sinais Vitais", margin, currentY);
           currentY += 7;
           doc.setFontSize(10);
           doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
           const vitalsLines = doc.splitTextToSize(vitalsStr, contentWidth);
-          doc.text(vitalsLines, margin, currentY);
-          currentY += (vitalsLines.length * 5) + 10;
+          vitalsLines.forEach((line: string) => {
+            checkPageBreak(5.5);
+            doc.text(line, margin, currentY);
+            currentY += 5;
+          });
+          currentY += 6;
         }
       }
 
-      // Resumo, Hipótese e Conduta
+      // Resumo, Hipótese e Conduta (paginação segura linha por linha)
       const contentSections = [
         { title: "Resumo do Atendimento", content: record.resumo_formatado },
         { title: "Hipótese Diagnóstica", content: record.hipotese_diagnostica },
@@ -2914,30 +3073,45 @@ export default function App() {
       contentSections.forEach(s => {
         if (s.content) {
           const textLines = doc.splitTextToSize(safeText(s.content), contentWidth);
-          checkPageBreak(textLines.length * 5 + 15);
+          checkPageBreak(15);
           doc.setFontSize(12);
           doc.setTextColor(0, 50, 100);
+          doc.setFont('helvetica', 'bold');
           doc.text(s.title, margin, currentY);
           currentY += 7;
-          doc.setFontSize(10);
+          doc.setFontSize(9.5);
           doc.setTextColor(0, 0, 0);
-          doc.text(textLines, margin, currentY);
-          currentY += (textLines.length * 5) + 10;
+          doc.setFont('helvetica', 'normal');
+          textLines.forEach((line: string) => {
+            checkPageBreak(5.5);
+            doc.text(line, margin, currentY);
+            currentY += 5;
+          });
+          currentY += 6;
         }
       });
 
-      // Prescrição
+      // Prescrição Médica & Receituário Integrado no Prontuário
       if (record.prescricao) {
-        const prescLines = doc.splitTextToSize(formatPrescricaoForPDF(record.prescricao), contentWidth);
-        checkPageBreak(prescLines.length * 5 + 15);
-        doc.setFontSize(12);
-        doc.setTextColor(0, 50, 100);
-        doc.text("Prescrição / Receituário:", margin, currentY);
-        currentY += 7;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        doc.text(prescLines, margin, currentY);
-        currentY += (prescLines.length * 5) + 10;
+        const cleanPresc = formatPrescricaoForPDF(record.prescricao);
+        if (cleanPresc) {
+          const prescLines = doc.splitTextToSize(cleanPresc, contentWidth);
+          checkPageBreak(18);
+          doc.setFontSize(12);
+          doc.setTextColor(0, 50, 100);
+          doc.setFont('helvetica', 'bold');
+          doc.text("Prescrição Médica & Recomendações:", margin, currentY);
+          currentY += 7;
+          doc.setFontSize(9.5);
+          doc.setTextColor(0, 0, 0);
+          doc.setFont('helvetica', 'normal');
+          prescLines.forEach((line: string) => {
+            checkPageBreak(5.5);
+            doc.text(line, margin, currentY);
+            currentY += 5;
+          });
+          currentY += 6;
+        }
       }
       
       const fileName = `prontuario_${(record.paciente_nome_completo || 'paciente').replace(/\s+/g, '_')}.pdf`;
@@ -4620,9 +4794,13 @@ export default function App() {
                     if (currentRecord) generatePDF(currentRecord);
                     else toast.success('Atestado Médico emitido em PDF com sucesso!');
                   }}
-                  onGenerateReceitaPDF={() => {
-                    if (currentRecord) generatePDF(currentRecord);
-                    else toast.success('Receita Médica emitida em PDF com sucesso!');
+                  onGenerateReceitaPDF={(recOverride) => {
+                    const recToUse = recOverride || currentRecord;
+                    if (recToUse) {
+                      generatePrescriptionPDF(recToUse);
+                    } else {
+                      toast.error('Nenhum registro selecionado para emissão do receituário.');
+                    }
                   }}
                   onClose={() => {
                     setSelectedPatient(null);
