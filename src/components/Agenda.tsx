@@ -31,7 +31,6 @@ import {
   CheckCircle2,
   MoreVertical,
   Video,
-  Bell,
   Sparkles
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -1239,27 +1238,6 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={async () => {
-                if (displayedAppointments.length === 0) {
-                  toast.error("Nenhum agendamento encontrado para esta exibição.");
-                  return;
-                }
-                const toastId = toast.loading("Disparando lembretes inteligentes de véspera via WhatsApp...");
-                let count = 0;
-                for (const app of displayedAppointments) {
-                  if (app.paciente_telefone) {
-                    await executeAutoWhatsAppSend(app);
-                    count++;
-                  }
-                }
-                toast.success(`✅ Lembretes de véspera (24h/Feriados) disparados para ${count} paciente(s)!`, { id: toastId });
-              }}
-              className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 font-bold text-xs cursor-pointer"
-              title="Disparar lembrete de confirmação de 24h / Feriado para todos os pacientes da lista via WhatsApp"
-            >
-              <Bell size={16} /> Disparar Lembretes 24h
-            </button>
             <button 
               onClick={() => fetchAppointments(true)}
               className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs cursor-pointer"

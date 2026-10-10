@@ -2342,14 +2342,7 @@ export default function App() {
           setPendingDraft(null);
         } catch (e) {}
 
-        toast.success("✨ IA preencheu a consulta com sucesso!", { id: toastId });
-
-        // Auto-salvamento silencioso e seguro no banco de dados
-        try {
-          await saveRecord(newRecord);
-        } catch (autoSaveErr) {
-          console.warn("[Auto-Save] Erro no auto-salvamento:", autoSaveErr);
-        }
+        toast.success("✨ IA preencheu os campos da consulta! Revise os dados na tela e clique em 'Salvar Consulta' para gravar no prontuário.", { id: toastId, duration: 6000 });
     } catch (err: any) {
       console.error("Erro no processamento clínico:", err);
       const friendlyMsg = formatAiErrorMessage(err);
