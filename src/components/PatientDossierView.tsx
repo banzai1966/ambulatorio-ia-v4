@@ -37,7 +37,8 @@ import {
   Video,
   Smartphone,
   ExternalLink,
-  Info
+  Info,
+  Send
 } from 'lucide-react';
 import PatientMediaGallery from './PatientMediaGallery';
 import NeurologicalExamForm from './NeurologicalExamForm';
@@ -60,7 +61,7 @@ import { initialIntegrativeData } from '../types/integrativeChecklist';
 import { hasMeaningfulData, formatDateMask } from '../lib/utils';
 import { toast } from 'react-hot-toast';
 import { processClinicalInput, formatAiErrorMessage } from '../services/clinicalService';
-import { resolveDoctorKey, detectRecordSpecialtyAndDoctor } from '../constants/clinicProfiles';
+import { resolveDoctorKey, detectRecordSpecialtyAndDoctor, getActiveClinicConfig } from '../constants/clinicProfiles';
 import { generateOfficialCertificatePDF } from '../lib/certificatePdfGenerator';
 
 interface ClinicalDoctorProfile {
@@ -176,7 +177,7 @@ interface PatientDossierViewProps {
   onOpenChat?: (phone: string) => void;
   onGeneratePDF?: (record: any) => void;
   onGenerateAtestadoPDF?: () => void;
-  onGenerateReceitaPDF?: (recordOverride?: any) => void;
+  onGenerateReceitaPDF?: (recordOverride?: any, sendToWhatsApp?: boolean) => void;
   onClose: () => void;
   setCurrentRecord: (record: any) => void;
   specialtyData: any;
@@ -383,11 +384,103 @@ function getPatientCumulativeTimeline(historyList: any[], targetPatientName?: st
       });
     }
 
+    // 3. Check prescricao / medicamentos alopáticos e fórmulas da receita (ex: Rivotril, Sertralina, Losartana)
+    const prescricaoRaw = rec.prescricao || rec.dados_clinicos?.prescricao || rec.dados_especialidade?.prescricao || '';
+    if (prescricaoRaw && typeof prescricaoRaw === 'string') {
+      const lines = prescricaoRaw.split('\n');
+      lines.forEach(rawLine => {
+        let line = rawLine.trim();
+        // Remove traços, marcadores numéricos ou bullets: "1.", "1 -", "•", "-", "*"
+        line = line.replace(/^(\d+[\.\-\)]|\•|\-|\*)\s*/, '').trim();
+        const lower = line.toLowerCase();
+        
+        // Pula linhas que são apenas títulos ou cabeçalhos
+        if (
+          line.length >= 3 &&
+          !lower.startsWith('uso oral') &&
+          !lower.startsWith('uso tópico') &&
+          !lower.startsWith('receita') &&
+          !lower.startsWith('receituário') &&
+          !lower.startsWith('prescrição') &&
+          !lower.startsWith('observação') &&
+          !lower.startsWith('posologia') &&
+          !lower.startsWith('orientações') &&
+          !lower.startsWith('dr.') &&
+          !lower.startsWith('dra.')
+        ) {
+          let medName = line;
+          let medDose = '';
+          if (line.includes(' - ')) {
+            const parts = line.split(' - ');
+            medName = parts[0].trim();
+            medDose = parts.slice(1).join(' - ').trim();
+          } else if (line.includes(' — ')) {
+            const parts = line.split(' — ');
+            medName = parts[0].trim();
+            medDose = parts.slice(1).join(' — ').trim();
+          }
+
+          // Evita duplicar se já foi adicionado pelo checklist
+          const alreadyExists = currentItems.some(ci => 
+            ci.name.toLowerCase() === medName.toLowerCase() ||
+            ci.name.toLowerCase().includes(medName.toLowerCase()) || 
+            medName.toLowerCase().includes(ci.name.toLowerCase())
+          );
+          if (!alreadyExists) {
+            currentItems.push({
+              name: medName,
+              category: 'Medicamento Prescrito',
+              dose: medDose || undefined
+            });
+          }
+        }
+      });
+    }
+
+    // 4. Check rec.medicamentos_em_uso ou array de medicamentos
+    const medEmUso = rec.medicamentos_em_uso || rec.dados_clinicos?.medicamentos_em_uso;
+    if (medEmUso && typeof medEmUso === 'string') {
+      medEmUso.split('\n').forEach(rawLine => {
+        let line = rawLine.trim().replace(/^(\d+[\.\-\)]|\•|\-|\*)\s*/, '').trim();
+        if (line.length >= 3 && !currentItems.some(ci => ci.name.toLowerCase() === line.toLowerCase())) {
+          currentItems.push({
+            name: line,
+            category: 'Medicamento em Uso'
+          });
+        }
+      });
+    }
+
+    // Comparador inteligente por raiz do nome para tolerar variações de posologia
+    const simplifyKey = (str: string) => {
+      return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[\s\-\,\(]/)[0].trim();
+    };
+
+    const isItemInPrevious = (itemName: string) => {
+      const key = simplifyKey(itemName);
+      for (const prev of previousActiveItemNames) {
+        if (prev.toLowerCase() === itemName.toLowerCase() || (key.length >= 3 && simplifyKey(prev) === key)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const isPrevInCurrent = (prevName: string) => {
+      const key = simplifyKey(prevName);
+      for (const cur of currentItems) {
+        if (cur.name.toLowerCase() === prevName.toLowerCase() || (key.length >= 3 && simplifyKey(cur.name) === key)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     const currentNames = new Set(currentItems.map(i => i.name));
-    
+
     // Determine status:
     const itemsWithStatus = currentItems.map(item => {
-      const isMaintained = previousActiveItemNames.has(item.name);
+      const isMaintained = isItemInPrevious(item.name);
       return {
         ...item,
         status: isMaintained ? ('mantido' as const) : ('iniciado' as const)
@@ -398,7 +491,7 @@ function getPatientCumulativeTimeline(historyList: any[], targetPatientName?: st
     const suspendedItems: string[] = [];
     if (idx > 0) {
       previousActiveItemNames.forEach(prevName => {
-        if (!currentNames.has(prevName)) {
+        if (!isPrevInCurrent(prevName)) {
           suspendedItems.push(prevName);
         }
       });
@@ -730,6 +823,22 @@ export default function PatientDossierView({
   const effectivePhoto = currentRecord?.foto_url || currentRecord?.photoPreview || (currentRecord as any)?.foto || '';
   const effectivePaymentStatus = statusPagamento || currentRecord?.status_pagamento || '';
   const effectivePaymentValue = valorConsulta || currentRecord?.valor_consulta || '';
+
+  // Prontuários históricos específicos deste paciente para comparações de evolução e linha do tempo
+  const currentPatientRecords = useMemo(() => {
+    if (!history || !Array.isArray(history)) return [];
+    const target = (effectiveName || patientName || currentRecord?.paciente_nome_completo || currentRecord?.paciente_nome || '').trim().toLowerCase();
+    const cleanCpf = (patientCpf || currentRecord?.paciente_cpf || '').replace(/\D/g, '');
+    return history.filter(rec => {
+      if (!rec) return false;
+      if (cleanCpf && rec.paciente_cpf && rec.paciente_cpf.replace(/\D/g, '') === cleanCpf) return true;
+      if (target) {
+        const recName = (rec.paciente_nome_completo || rec.paciente_nome || '').trim().toLowerCase();
+        if (recName === target || recName.includes(target) || target.includes(recName)) return true;
+      }
+      return false;
+    });
+  }, [history, effectiveName, patientName, patientCpf, currentRecord?.paciente_nome_completo, currentRecord?.paciente_nome, currentRecord?.paciente_cpf]);
 
   // Auto-sync de foto, data de nascimento, CPF e alertas clínicos caso estejam faltando no prontuário ativo
   useEffect(() => {
@@ -1546,13 +1655,13 @@ export default function PatientDossierView({
 
             {/* Clean Action Command Bar */}
             <div className="flex flex-wrap items-center gap-2 self-start lg:self-center">
-              {/* Primary IA Dictation / Ambient Scribe */}
+              {/* Primary IA Voice Recording */}
               <div className="relative flex items-center">
                 {isRecording ? (
                   <div className="flex items-center gap-2 bg-red-600 text-white px-3.5 py-2 rounded-xl border border-red-500 shadow-md animate-pulse">
                     <div className="w-2 h-2 rounded-full bg-white animate-ping" />
                     <span className="text-xs font-bold uppercase tracking-wider text-red-100">
-                      {recordingMode === 'ambient' ? '🎙️ Escuta Ativa' : '⚡ Ditado'} • {formatSeconds(recordingDuration)}
+                      🎙️ Gravando Consulta • {formatSeconds(recordingDuration)}
                     </span>
                     <button
                       type="button"
@@ -1564,74 +1673,33 @@ export default function PatientDossierView({
                     </button>
                   </div>
                 ) : (
-                  <div className="inline-flex rounded-xl shadow-xs border border-blue-200/90 bg-blue-50/90 p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => startRecording(recordingMode)}
-                      disabled={isProcessing}
-                      className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-blue-950 hover:bg-blue-100/80 rounded-l-lg transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      <Mic size={15} className="text-blue-600" />
-                      <span>{recordingMode === 'ambient' ? '🎙️ Escuta Ativa' : '⚡ Atender IA'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAudioModeMenu(!showAudioModeMenu)}
-                      className="px-2 py-2 text-blue-700 hover:bg-blue-100/80 rounded-r-lg border-l border-blue-200 transition-all"
-                      title="Alternar modo de gravação"
-                    >
-                      <ChevronDown size={14} />
-                    </button>
-
-                    {showAudioModeMenu && (
-                      <div className="absolute top-full left-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-1.5 space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (setRecordingMode) setRecordingMode('quick');
-                            setShowAudioModeMenu(false);
-                            startRecording('quick');
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded-xl text-xs flex flex-col gap-0.5 transition-all ${
-                            recordingMode === 'quick' ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200' : 'hover:bg-slate-50 text-slate-700 font-medium'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5 font-bold">⚡ Ditado Rápido (1 a 3 min)</span>
-                          <span className="text-[10px] text-slate-500 font-normal">Grave um resumo direto com achados e conduta.</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (setRecordingMode) setRecordingMode('ambient');
-                            setShowAudioModeMenu(false);
-                            startRecording('ambient');
-                          }}
-                          className={`w-full text-left px-3 py-2 rounded-xl text-xs flex flex-col gap-0.5 transition-all ${
-                            recordingMode === 'ambient' ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200' : 'hover:bg-slate-50 text-slate-700 font-medium'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5 font-bold">🎙️ Escuta Ambiental (30 a 40 min)</span>
-                          <span className="text-[10px] text-slate-500 font-normal">Deixe gravando na mesa durante a consulta.</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startRecording('ambient')}
+                    disabled={isProcessing}
+                    className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs transition-all active:scale-95 disabled:opacity-50"
+                    title="Grave a consulta por voz (resumo rápido ou consulta completa de até 40 min) e a IA preencherá o prontuário automaticamente"
+                  >
+                    <Mic size={15} className="text-white" />
+                    <span>🎙️ Gravar Consulta com IA</span>
+                  </button>
                 )}
               </div>
 
-              {/* Primary Save Evolution */}
+              {/* Primary Save Button */}
               <button
                 type="button"
                 onClick={handleSaveRecord}
                 disabled={isSaving}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 ${
                   saveSuccess 
-                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                    : 'bg-slate-500 hover:bg-slate-600 text-white shadow-xs'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-300' 
+                    : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
                 }`}
+                title="Salvar prontuário, conduta, receitas e exames no banco de dados"
               >
                 <CheckCircle2 size={16} />
-                {isSaving ? 'Salvando...' : saveSuccess ? 'Salvo!' : 'Evoluir Prontuário'}
+                {isSaving ? 'Salvando...' : saveSuccess ? 'Consulta Salva! ✅' : 'Salvar Consulta'}
               </button>
 
               {/* Secondary Tools */}
@@ -1643,27 +1711,27 @@ export default function PatientDossierView({
                     ? 'bg-blue-50 text-blue-900 border-blue-300 ring-1 ring-blue-400'
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
                 }`}
-                title="Monitor de Sinais Vitais em Tempo Real"
+                title="Painel de Sinais Vitais, Triagem e Soroterapia IV em Tempo Real"
               >
                 <Activity size={14} className={showVitalMonitor ? "text-blue-600 animate-pulse" : "text-slate-500"} />
-                <span>Vitais</span>
+                <span>Vitais & Soro</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsAnamneseModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all"
-                title="Cadastro e Anamnese Pré-Consulta"
+                title="Visualizar ou editar as respostas da ficha pré-consulta preenchida pelo paciente (via WhatsApp) ou recepção"
               >
                 <FileText size={14} className="text-slate-500" />
-                <span>Anamnese</span>
+                <span>Ficha Pré-Consulta</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsSignatureModalOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all"
-                title="Assinatura Digital / Termos"
+                title="Assinatura Touchscreen do Paciente / Termos de Consentimento em Tablet"
               >
                 <FileSignature size={14} className="text-slate-500" />
                 <span>Assinatura</span>
@@ -2040,9 +2108,44 @@ export default function PatientDossierView({
               spo2={currentRecord?.vitals?.spo2 || currentRecord?.dados_clinicos?.spo2 || 98}
               resp={currentRecord?.vitals?.resp || currentRecord?.dados_clinicos?.fr || 16}
               pressao={currentRecord?.vitals?.pressao || currentRecord?.dados_clinicos?.pressao || '120/80'}
-              soroName={currentRecord?.vitals?.soroName || 'Soro Fisiológico 0.9% (500ml)'}
+              temp={currentRecord?.vitals?.temp || currentRecord?.dados_clinicos?.temp || 36.5}
+              glicemia={currentRecord?.vitals?.glicemia || currentRecord?.dados_clinicos?.glicemia || 95}
+              soroName={currentRecord?.vitals?.soroName || 'Soro Fisiológico 0.9%'}
               soroRate={currentRecord?.vitals?.soroRate || '21 gotas/min • 63 mL/h'}
+              soroVolume={currentRecord?.vitals?.soroVolume || 500}
               resumo_clinico={currentRecord?.resumo_formatado || 'Sinais vitais e perfusão hemodinâmica monitorados em tempo real'}
+              examMode={examMode}
+              onUpdateVitals={(newVitals) => {
+                if (setCurrentRecord) {
+                  setCurrentRecord((prev: any) => ({
+                    ...prev,
+                    vitals: {
+                      ...(prev?.vitals || {}),
+                      ...newVitals
+                    },
+                    dados_clinicos: {
+                      ...(prev?.dados_clinicos || {}),
+                      fc: newVitals.bpm ?? prev?.dados_clinicos?.fc,
+                      spo2: newVitals.spo2 ?? prev?.dados_clinicos?.spo2,
+                      fr: newVitals.resp ?? prev?.dados_clinicos?.fr,
+                      pressao: newVitals.pressao ?? prev?.dados_clinicos?.pressao,
+                      temp: newVitals.temp ?? prev?.dados_clinicos?.temp,
+                      glicemia: newVitals.glicemia ?? prev?.dados_clinicos?.glicemia,
+                    }
+                  }));
+                }
+              }}
+              onAppendClinicalNote={(note) => {
+                setCondutaPlano((prev: string) => prev ? `${prev}\n\n${note}` : note);
+                if (setCurrentRecord) {
+                  setCurrentRecord((prev: any) => ({
+                    ...prev,
+                    conduta_plano_terapeutico: prev?.conduta_plano_terapeutico ? `${prev.conduta_plano_terapeutico}\n\n${note}` : note
+                  }));
+                }
+                toast.success("Procedimento gravado na conduta e plano terapêutico do prontuário!");
+              }}
+              onClose={() => setShowVitalMonitor(false)}
             />
           </motion.div>
         )}
@@ -2375,6 +2478,9 @@ export default function PatientDossierView({
                     <IntegrativeChecklistForm
                       data={integrativeData}
                       onChange={setIntegrativeData}
+                      historyRecords={currentPatientRecords}
+                      currentDate={currentRecord?.data_consulta || currentRecord?.created_at}
+                      currentRecordId={currentRecord?.id || currentRecord?.offline_id}
                     />
                   </div>
                 )}
@@ -2489,9 +2595,19 @@ export default function PatientDossierView({
                   </div>
                 </div>
 
+                {/* Análise de Evolução dos Marcadores */}
+                <IntegrativeEvolution
+                  currentData={integrativeData}
+                  bodyMapData={currentRecord?.mapeamento_corporal || []}
+                  historyRecords={currentPatientRecords}
+                />
+
                 <IntegrativeChecklistForm
                   data={integrativeData}
                   onChange={setIntegrativeData}
+                  historyRecords={currentPatientRecords}
+                  currentDate={currentRecord?.data_consulta || currentRecord?.created_at}
+                  currentRecordId={currentRecord?.id || currentRecord?.offline_id}
                 />
               </div>
             )}
@@ -2821,7 +2937,7 @@ export default function PatientDossierView({
                   <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
                       onClick={handleSaveRecord}
-                      title="Grava o prontuário completo e a receita juntos (o mesmo que 'Evoluir Prontuário')"
+                      title="Grava o prontuário completo e a receita juntos no banco de dados"
                       className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2"
                     >
                       <CheckCircle2 size={16} />
@@ -2863,19 +2979,71 @@ export default function PatientDossierView({
 
                           setCurrentRecord(updatedRecord);
                           onSaveRecord(updatedRecord);
-                          onGenerateReceitaPDF(updatedRecord);
+                          onGenerateReceitaPDF(updatedRecord, false);
                         }}
-                        className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2"
+                        className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                        title="Baixar receituário oficial timbrado e carimbado em PDF"
                       >
                         <FileSignature size={16} />
                         Gerar PDF Oficial
+                      </button>
+                    )}
+
+                    {onGenerateReceitaPDF && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isDental = examMode === 'biological_dentistry' || activeDoctor.default_mode === 'biological_dentistry' || (activeDoctor.especialidade && activeDoctor.especialidade.toLowerCase().includes('odonto'));
+                          const isNeuro = examMode === 'neurological' || activeDoctor.default_mode === 'neurological' || (activeDoctor.especialidade && activeDoctor.especialidade.toLowerCase().includes('neuro'));
+                          const isIntegrative = examMode === 'integrative';
+
+                          const assignedDoctor = isDental 
+                            ? (allDoctorProfiles.find(d => d.id === 'dra_lucy') || activeDoctor)
+                            : (isNeuro || isIntegrative 
+                                ? (allDoctorProfiles.find(d => d.id === 'dr_carlos') || activeDoctor)
+                                : activeDoctor);
+
+                          const targetPhone = patientPhone || currentRecord?.paciente_telefone;
+                          if (!targetPhone) {
+                            toast.error("O paciente precisa ter um número de telefone cadastrado para envio pelo WhatsApp.");
+                            return;
+                          }
+
+                          const effectiveSaveName = (isValidExtractedName(patientName) ? patientName : '') || 
+                            (isValidExtractedName(currentRecord?.paciente_nome_completo) ? currentRecord.paciente_nome_completo : '') || 
+                            (currentRecord as any)?.paciente_nome || 
+                            "PACIENTE";
+
+                          const updatedRecord = {
+                            ...currentRecord,
+                            paciente_nome_completo: effectiveSaveName,
+                            paciente_nome: effectiveSaveName,
+                            paciente_cpf: patientCpf || currentRecord?.paciente_cpf || "",
+                            paciente_data_nascimento: patientDob || currentRecord?.paciente_data_nascimento || "",
+                            paciente_telefone: targetPhone,
+                            prescricao: prescricaoText,
+                            checklist_integrativo: isIntegrative ? (integrativeData || currentRecord?.checklist_integrativo) : currentRecord?.checklist_integrativo,
+                            especialidade: assignedDoctor.especialidade || activeDoctor.especialidade,
+                            profissional_responsavel: assignedDoctor.full_name,
+                            medico_id: assignedDoctor.id
+                          };
+
+                          setCurrentRecord(updatedRecord);
+                          onSaveRecord(updatedRecord);
+                          onGenerateReceitaPDF(updatedRecord, true);
+                        }}
+                        className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                        title="Salva e envia o PDF timbrado e carimbado diretamente para o WhatsApp do paciente"
+                      >
+                        <Send size={16} />
+                        Enviar PDF no WhatsApp
                       </button>
                     )}
                   </div>
 
                   <p className="text-[11px] text-slate-500 font-medium flex items-center gap-1.5 pt-1">
                     <Info size={13} className="text-blue-500 shrink-0" />
-                    <span>Ao salvar (seja pelo botão <strong>"Evoluir Prontuário"</strong> no topo ou <strong>"Salvar Tudo no Prontuário"</strong> aqui), todos os dados clínicos e a receita são gravados juntos de forma unificada.</span>
+                    <span>Ao salvar (pelo botão <strong>"Salvar Consulta"</strong> no topo ou <strong>"Salvar Tudo no Prontuário"</strong> aqui), todos os dados clínicos e a receita são gravados juntos de forma unificada.</span>
                   </p>
                 </div>
 
@@ -2909,10 +3077,24 @@ export default function PatientDossierView({
                   </div>
 
                   <div className="pt-4 text-center border-t border-slate-200 text-xs space-y-0.5">
-                    <div className="w-32 border-b border-slate-400 mx-auto mb-1.5" />
+                    {(() => {
+                      const clinicCfg = getActiveClinicConfig(undefined, activeDoctor.id);
+                      const stamp = clinicCfg?.carimbo_url || clinicCfg?.signature_url;
+                      if (stamp) {
+                        return (
+                          <div className="flex justify-center mb-1">
+                            <img src={stamp} alt="Carimbo Oficial" className="max-h-14 max-w-[160px] object-contain" />
+                          </div>
+                        );
+                      }
+                      return <div className="w-32 border-b border-slate-400 mx-auto mb-1.5" />;
+                    })()}
                     <p className="font-bold text-slate-900">{activeDoctor.full_name}</p>
                     <p className="text-[10px] text-slate-600 font-medium">{activeDoctor.crm_cro} • {activeDoctor.especialidade}</p>
-                    <p className="text-[9px] text-slate-400">Assinatura Digital ICP-Brasil Verificada</p>
+                    <p className="text-[9px] text-blue-700 font-semibold flex items-center justify-center gap-1">
+                      <ShieldCheck size={12} className="text-blue-600" />
+                      Assinatura Digital & Carimbo ICP-Brasil (MP 2.200-2/2001)
+                    </p>
                   </div>
                 </div>
               </div>
@@ -3050,7 +3232,7 @@ export default function PatientDossierView({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSaveRecord}
-                  title="Grava o prontuário completo, conduta e receitas juntos (o mesmo que 'Evoluir Prontuário')"
+                  title="Grava o prontuário completo, conduta e receitas juntos no banco de dados"
                   className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 active:scale-95"
                 >
                   <CheckCircle2 size={16} />
@@ -3474,8 +3656,8 @@ export default function PatientDossierView({
 
                             {/* Active Items in this date */}
                             <div className="space-y-1 pt-1">
-                              <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">
-                                Suplementos & Procedimentos Ativos:
+                              <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider block">
+                                💊 Remédios, Suplementos & Procedimentos Ativos:
                               </span>
                               {step.items.length > 0 ? (
                                 <div className="flex flex-wrap gap-1">
@@ -3489,7 +3671,7 @@ export default function PatientDossierView({
                                       }`}
                                       title={it.status === 'mantido' ? 'Mantido da consulta anterior' : 'Novo / Iniciado nesta data'}
                                     >
-                                      {it.status === 'mantido' ? '🟢' : '🔵'} {it.name} {it.dose ? `(${it.dose})` : ''}
+                                      {it.status === 'mantido' ? '🟢' : '🔵'} {it.category === 'Medicamento Prescrito' ? '💊 ' : ''}{it.name} {it.dose ? `(${it.dose})` : ''}
                                     </span>
                                   ))}
                                 </div>

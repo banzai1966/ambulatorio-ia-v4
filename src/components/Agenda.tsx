@@ -445,13 +445,13 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
     let msgText = '';
     if (isTele) {
-      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos sua *Teleconsulta Online* com *${docName}*:\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n🔒 *Link da Sala Virtual Segura:*\n${teleRoomUrl}\n(Você pode acessar pelo celular ou computador sem precisar instalar nada, no dia e horário agendados).\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n📝 *Pré-Anamnese Digital:*\nPara que o(a) especialista conheça seu histórico antes da chamada, preencha sua ficha rápida:\n${anamneseLink}`;
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos sua *Teleconsulta Online* com *${docName}*:\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n🔒 *Link da Sala Virtual Segura:*\n${teleRoomUrl}\n(Acesso direto pelo celular ou computador no dia e horário agendados).\n\n📝 *Ficha Pré-Consulta Digital:*\nPara agilizar seu atendimento e preparar seu prontuário com antecedência, clique no link abaixo para confirmar sua presença e adiantar seu cadastro em 1 minuto:\n${anamneseLink}\n\n_(Caso precise reagendar ou cancelar, basta nos responder por aqui)._`;
     } else if (docKey === 'dra_lucy') {
-      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento no *Consultório da Dra. Lucy Murata* (Odontologia Biológica & Saúde Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n📍 *Local:* Torre II - Praça Maastricht, 200 - Sl 103 - Bragança Paulista/SP\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🌿 *Pré-Anamnese Odontológica Digital:*\nPara que sua avaliação biológica seja personalizada e sem filas na recepção, preencha sua ficha rápida pelo link oficial abaixo:\n${anamneseLink}`;
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento no *Consultório da Dra. Lucy Murata* (Odontologia Biológica & Saúde Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n📍 *Local:* Torre II - Praça Maastricht, 200 - Sl 103 - Bragança Paulista/SP\n\n🌿 *Ficha Pré-Consulta Odontológica:*\nPara agilizar sua recepção e evitar filas na clínica, clique no link abaixo para confirmar sua presença e adiantar seus dados de saúde em 1 minuto:\n${anamneseLink}\n\n_(Caso precise reagendar ou cancelar, basta nos responder por aqui)._`;
     } else if (docKey === 'dr_carlos') {
-      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na *Clínica do Dr. Carlos Morato* (Neurologia & Medicina Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n🧠 *Pré-Anamnese Clínica Digital:*\nPara agilizar seu atendimento e preparar seu prontuário, preencha seus dados de saúde pelo link oficial abaixo:\n${anamneseLink}`;
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na *Clínica do Dr. Carlos Morato* (Neurologia & Medicina Integrativa):\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n🧠 *Ficha Pré-Consulta Digital:*\nPara agilizar sua recepção e preparar seu prontuário com antecedência, clique no link abaixo para confirmar sua presença e preencher sua ficha rápida:\n${anamneseLink}\n\n_(Caso precise reagendar ou cancelar, basta nos responder por aqui)._`;
     } else {
-      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n👉 *Por favor, responda SIM para confirmar sua presença* ou *NÃO* caso precise reagendar.\n\n⚡ *Ficha de Pré-Cadastro Digital:*\nPara agilizar sua recepção e evitar filas na clínica, preencha seus dados rápidos pelo link:\n${anamneseLink}`;
+      msgText = `Olá *${app.paciente_nome || 'Paciente'}*! 👋\n\nConfirmamos seu agendamento na nossa clínica:\n👨‍⚕️ *Profissional:* ${docName}\n📅 *Data:* ${aptDate}\n⏰ *Horário:* ${aptTime}\n\n⚡ *Ficha Pré-Consulta Digital:*\nPara agilizar sua recepção e evitar filas, clique no link abaixo para confirmar sua presença e adiantar seus dados rápidos:\n${anamneseLink}\n\n_(Caso precise reagendar ou cancelar, basta nos responder por aqui)._`;
     }
 
     let sent = false;
@@ -1258,6 +1258,19 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                 ? formatBrazilDate(app.data_consulta) 
                 : formatBrazilDate(app.data_hora_inicio);
 
+              // Checa se a pré-anamnese já foi preenchida pelo paciente
+              const cleanP = (app.paciente_telefone || '').replace(/\D/g, '');
+              const cleanPNo55 = cleanP.startsWith('55') && cleanP.length > 10 ? cleanP.slice(2) : cleanP;
+              const hasFilledAnamnese = Boolean(
+                app.foto_url ||
+                (app.paciente_cpf && app.cep) ||
+                (typeof window !== 'undefined' && (
+                  (cleanP && localStorage.getItem(`anamnese_${cleanP}`)) ||
+                  (cleanPNo55 && localStorage.getItem(`anamnese_${cleanPNo55}`)) ||
+                  (app.id && localStorage.getItem(`anamnese_app_${app.id}`))
+                ))
+              );
+
               return (
                 <div 
                   key={app.id} 
@@ -1323,6 +1336,25 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1 shadow-2xs">
                             <Video size={11} className="text-indigo-600 animate-pulse" />
                             Teleconsulta
+                          </span>
+                        )}
+
+                        {/* Selo Automático de Pré-Anamnese Preenchida */}
+                        {hasFilledAnamnese ? (
+                          <span 
+                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs"
+                            title="O paciente já preencheu a ficha pré-consulta pelo celular!"
+                          >
+                            <CheckCircle2 size={11} className="text-emerald-600" />
+                            Ficha Recebida
+                          </span>
+                        ) : (
+                          <span 
+                            className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-500 border border-slate-200/80 flex items-center gap-1"
+                            title="Aguardando paciente preencher pelo link enviado"
+                          >
+                            <ClipboardList size={11} className="text-slate-400" />
+                            Ficha Pendente
                           </span>
                         )}
 
@@ -1483,20 +1515,24 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
                       }}
                       className={cn(
                         "px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 border",
-                        (app.medico_nome || '').toLowerCase().includes('lucy') || 
-                        (app.medico_nome || '').toLowerCase().includes('luci') || 
-                        (app.medico_nome || '').toLowerCase().includes('murata') ||
-                        (app.medico_especialidade || '').toLowerCase().includes('odonto')
+                        hasFilledAnamnese
                           ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300 ring-1 ring-emerald-500/20"
-                          : "bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200"
+                          : ((app.medico_nome || '').toLowerCase().includes('lucy') || 
+                             (app.medico_nome || '').toLowerCase().includes('luci') || 
+                             (app.medico_nome || '').toLowerCase().includes('murata') ||
+                             (app.medico_especialidade || '').toLowerCase().includes('odonto')
+                              ? "bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border-slate-200"
+                              : "bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-800 border-slate-200")
                       )}
-                      title="Ver ou preencher Questionário / Pré-Anamnese do paciente"
+                      title={hasFilledAnamnese ? "Ficha preenchida pelo paciente! Clique para visualizar ou editar" : "Ficha ainda pendente. Clique caso a recepção queira preencher manualmente"}
                     >
-                      <ClipboardList size={15} className={(app.medico_nome || '').toLowerCase().includes('lucy') || (app.medico_nome || '').toLowerCase().includes('luci') || (app.medico_nome || '').toLowerCase().includes('murata') ? "text-emerald-600" : "text-indigo-600"} />
+                      {hasFilledAnamnese ? (
+                        <CheckCircle2 size={15} className="text-emerald-600" />
+                      ) : (
+                        <ClipboardList size={15} className="text-slate-500" />
+                      )}
                       <span>
-                        {(app.medico_nome || '').toLowerCase().includes('lucy') || (app.medico_nome || '').toLowerCase().includes('luci') || (app.medico_nome || '').toLowerCase().includes('murata') || (app.medico_especialidade || '').toLowerCase().includes('odonto')
-                          ? "Questionário Odonto"
-                          : "Questionário Clínico"}
+                        {hasFilledAnamnese ? "Ver Ficha Pré-Consulta" : "Preencher Ficha"}
                       </span>
                     </button>
 

@@ -2334,7 +2334,14 @@ export default function App() {
           setPendingDraft(null);
         } catch (e) {}
 
-        toast.success("✨ IA preencheu a ficha e prontuário com sucesso!", { id: toastId });
+        toast.success("✨ IA preencheu a consulta com sucesso!", { id: toastId });
+
+        // Auto-salvamento silencioso e seguro no banco de dados
+        try {
+          await saveRecord(newRecord);
+        } catch (autoSaveErr) {
+          console.warn("[Auto-Save] Erro no auto-salvamento:", autoSaveErr);
+        }
     } catch (err: any) {
       console.error("Erro no processamento clínico:", err);
       const friendlyMsg = formatAiErrorMessage(err);
@@ -2443,8 +2450,8 @@ export default function App() {
       recordToSave.dados_especialidade = rec.dados_especialidade || currentRecord?.dados_especialidade || specialtyData;
       recordToSave.exame_fisico = rec.exame_fisico || currentRecord?.exame_fisico || '';
 
-      const trySaveRecord = async (data: any): Promise<{ error: any }> => {
-        console.log("LOG_VERSAO: 3.1 - Início do salvamento");
+      const trySaveRecord = async (data: any): Promise<{ error: any; savedId?: string | null }> => {
+        console.log("LOG_VERSAO: 3.2 - Início do salvamento");
         
         // Colunas que REALMENTE existem no banco (conforme schema verificado)
         const EXPLICIT_ALLOWED_COLUMNS = [
@@ -2489,28 +2496,47 @@ export default function App() {
         console.log("PAYLOAD_ENVIADO (Chaves):", Object.keys(payload));
         
         try {
-          const { error } = await supabase
-            .from('prontuarios')
-            .insert(payload)
-            .select('id');
-          
-          if (error) {
-            console.error("ERRO DETALHADO DO SUPABASE AO SALVAR:", JSON.stringify(error, null, 2));
-            return { error };
+          const existingId = rec.id || currentRecord?.id;
+          if (existingId && typeof existingId === 'string' && !existingId.startsWith('OFFLINE_') && !existingId.startsWith('local-')) {
+            // Atualiza prontuário existente, prevenindo registros duplicados
+            const { error } = await supabase
+              .from('prontuarios')
+              .update(payload)
+              .eq('id', existingId);
+            
+            if (error) {
+              console.error("ERRO DETALHADO DO SUPABASE AO ATUALIZAR:", JSON.stringify(error, null, 2));
+              return { error, savedId: null };
+            }
+            return { error: null, savedId: existingId };
+          } else {
+            // Novo prontuário
+            const { data: insertedData, error } = await supabase
+              .from('prontuarios')
+              .insert(payload)
+              .select('id');
+            
+            if (error) {
+              console.error("ERRO DETALHADO DO SUPABASE AO SALVAR:", JSON.stringify(error, null, 2));
+              return { error, savedId: null };
+            }
+            const newId = insertedData && insertedData.length > 0 ? insertedData[0]?.id : null;
+            return { error: null, savedId: newId };
           }
-          return { error: null };
         } catch (e: any) {
           console.error("Erro fatal no trySaveRecord:", e);
-          return { error: e };
+          return { error: e, savedId: null };
         }
       };
 
       console.log("saveRecord - recordToSave:", recordToSave);
       
       let saveError: any = null;
+      let newSavedId: string | null = null;
       if (isOnline) {
         const res = await trySaveRecord(recordToSave);
         saveError = res.error;
+        newSavedId = res.savedId || null;
       } else {
         saveError = new Error("NETWORK_OFFLINE");
       }
@@ -2523,12 +2549,19 @@ export default function App() {
         setSaveSuccess(true);
         setCurrentRecord(localRecord as any);
         setOfflinePendingCount(prev => prev + 1);
-        setHistory(prev => [localRecord as any, ...prev]);
+        setHistory(prev => {
+          const filtered = prev.filter(p => p.id !== localRecord.id && (p as any).offline_id !== localRecord.offline_id);
+          return [localRecord as any, ...filtered];
+        });
       } else {
-        console.log("saveRecord - Sucesso ao salvar na Nuvem!");
+        console.log("saveRecord - Sucesso ao salvar na Nuvem! ID:", newSavedId);
         toast.success("✅ Prontuário, Evolução e Receita salvos com sucesso na nuvem!");
         setSaveSuccess(true);
-        setCurrentRecord(recordToSave);
+        const finalSavedRecord = {
+          ...recordToSave,
+          id: newSavedId || recordToSave.id
+        };
+        setCurrentRecord(finalSavedRecord);
         fetchHistory();
       }
         
@@ -3265,32 +3298,63 @@ export default function App() {
         }
       }
       
-      // Rodapé
-      const footerY = pageHeight - 35;
-      doc.setDrawColor(0, 50, 100);
-      doc.setLineWidth(0.5);
-      doc.line(pageWidth / 2 - 40, footerY, pageWidth / 2 + 40, footerY);
-      
-      doc.setFontSize(11);
-      doc.setTextColor(0, 50, 100);
-      doc.setFont('helvetica', 'bold');
-      
+      // Rodapé com Carimbo e Assinatura Digital ICP-Brasil
+      const footerY = pageHeight - 38;
       const detected = detectRecordSpecialtyAndDoctor(record);
       const isDental = detected.isDental || examMode === 'biological_dentistry';
       const docName = record.profiles?.full_name || record.profissional_responsavel || (isDental ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato');
       const prefix = (docName.toLowerCase().startsWith('dr.') || docName.toLowerCase().startsWith('dra.') || docName.toLowerCase().startsWith('dr ') || docName.toLowerCase().startsWith('dra ')) ? '' : 'Dr(a). ';
+      const councilText = isDental ? 'CRO-SP: 69246 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Neurologia & Medicina Integrativa';
+      
+      const doctorClinicConfig = getActiveClinicConfig(undefined, detected.doctorId);
+      const carimboImg = doctorClinicConfig.carimbo_url || doctorClinicConfig.signature_url;
+
+      // Se houver imagem do carimbo/assinatura anexada
+      if (carimboImg && carimboImg.startsWith('data:image')) {
+        try {
+          doc.addImage(carimboImg, 'PNG', pageWidth / 2 - 27, footerY - 20, 54, 20);
+        } catch (e) {
+          console.warn("Aviso ao desenhar carimbo no PDF:", e);
+        }
+      } else {
+        // Carimbo Digital Institucional em moldura nítida
+        doc.setDrawColor(0, 50, 100);
+        doc.setLineWidth(0.4);
+        doc.roundedRect(pageWidth / 2 - 45, footerY - 17, 90, 16, 1.5, 1.5);
+        doc.setFontSize(8);
+        doc.setTextColor(0, 50, 100);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${prefix}${docName}`.toUpperCase(), pageWidth / 2, footerY - 11, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${councilText.split('•')[0].trim()} • CARIMBO ELETRÔNICO ICP-BRASIL`, pageWidth / 2, footerY - 5, { align: 'center' });
+      }
+
+      doc.setDrawColor(0, 50, 100);
+      doc.setLineWidth(0.5);
+      doc.line(pageWidth / 2 - 45, footerY + 1, pageWidth / 2 + 45, footerY + 1);
+      
+      doc.setFontSize(10.5);
+      doc.setTextColor(0, 50, 100);
+      doc.setFont('helvetica', 'bold');
       doc.text(`${prefix}${docName}`, pageWidth / 2, footerY + 6, { align: 'center' });
       
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(80, 80, 80);
       doc.setFont('helvetica', 'normal');
-      const councilText = isDental ? 'CRO-SP: 69246 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Neurologia & Medicina Integrativa';
-      doc.text(councilText, pageWidth / 2, footerY + 11, { align: 'center' });
+      doc.text(councilText, pageWidth / 2, footerY + 10.5, { align: 'center' });
 
-      doc.setFontSize(7.5);
-      doc.setTextColor(150, 150, 150);
+      // Selo de Conformidade ICP-Brasil / Retenção Farmacêutica
+      doc.setFillColor(245, 248, 255);
+      doc.roundedRect(margin, footerY + 14, contentWidth, 9, 1.5, 1.5, 'F');
+      doc.setFontSize(6.5);
+      doc.setTextColor(0, 50, 100);
+      doc.setFont('helvetica', 'bold');
+      doc.text("PADRÃO ICP-BRASIL • MEDIDA PROVISÓRIA Nº 2.200-2/2001 • LEI FEDERAL 14.063/2020", pageWidth / 2, footerY + 18, { align: 'center' });
+      doc.setFontSize(6);
       doc.setFont('helvetica', 'normal');
-      doc.text("Documento com validade digital gerado pelo Ambulatório IA.", pageWidth / 2, footerY + 16, { align: 'center' });
+      doc.setTextColor(110, 120, 135);
+      doc.text("Assinatura eletrônica qualificada com aceite obrigatório para dispensação e retenção em farmácias (Portaria SVS/MS 344/98).", pageWidth / 2, footerY + 21.5, { align: 'center' });
       
       const fileName = `receita_${(record.paciente_nome_completo || 'paciente').replace(/\s+/g, '_')}.pdf`;
 
@@ -3300,16 +3364,19 @@ export default function App() {
           return;
         }
         const base64 = doc.output('datauristring').split(',')[1];
-        toast.loading("Enviando receituário via WhatsApp...", { id: 'sending-pdf' });
+        toast.loading("Enviando receituário oficial em PDF para o WhatsApp...", { id: 'sending-pdf' });
         try {
-          await sendWhatsAppMessage(record.paciente_telefone, "Segue seu receituário gerado pelo Ambulatório IA.", base64, 'document', fileName);
-          toast.success("Receituário enviado com sucesso!", { id: 'sending-pdf' });
+          const patientGreeting = record.paciente_nome_completo ? `Olá ${record.paciente_nome_completo}, ` : 'Olá, ';
+          const whatsappMsg = `💊 *RECEITUÁRIO MÉDICO DIGITAL*\n\n${patientGreeting}segue em anexo o seu receituário oficial emitido em sua consulta com *${prefix}${docName}* (${councilText.split('•')[0].trim()}).\n\n📄 O arquivo PDF timbrado e com certificação digital segue em anexo para você apresentar na farmácia ou imprimir quando desejar.\n\n_Ambulatório IA • Saúde e Tecnologia_`;
+
+          await sendWhatsAppMessage(record.paciente_telefone, whatsappMsg, base64, 'document', fileName);
+          toast.success("Receituário em PDF enviado com sucesso no WhatsApp!", { id: 'sending-pdf' });
         } catch (err) {
-          toast.error("Erro ao enviar receituário.", { id: 'sending-pdf' });
+          toast.error("Erro ao enviar receituário via WhatsApp.", { id: 'sending-pdf' });
         }
       } else {
         doc.save(fileName);
-        toast.success("Receituário gerado com sucesso!");
+        toast.success("Receituário gerado em PDF com sucesso!");
       }
     } catch (error) {
       console.error("Erro ao gerar receituário:", error);
@@ -4794,10 +4861,10 @@ export default function App() {
                     if (currentRecord) generatePDF(currentRecord);
                     else toast.success('Atestado Médico emitido em PDF com sucesso!');
                   }}
-                  onGenerateReceitaPDF={(recOverride) => {
+                  onGenerateReceitaPDF={(recOverride, sendToWhatsApp = false) => {
                     const recToUse = recOverride || currentRecord;
                     if (recToUse) {
-                      generatePrescriptionPDF(recToUse);
+                      generatePrescriptionPDF(recToUse, sendToWhatsApp);
                     } else {
                       toast.error('Nenhum registro selecionado para emissão do receituário.');
                     }

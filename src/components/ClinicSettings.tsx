@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
-import { Save, Building2, MapPin, Phone, Mail, Globe, Loader2, QrCode, MessageSquare, CheckCircle2, Key, Link2, Server, HelpCircle, ChevronDown, ChevronUp, Eye, EyeOff, Sparkles, Brain, Stethoscope, Shield, FileText } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, Mail, Globe, Loader2, QrCode, MessageSquare, CheckCircle2, Key, Link2, Server, HelpCircle, ChevronDown, ChevronUp, Eye, EyeOff, Sparkles, Brain, Stethoscope, Shield, FileText, Upload, Trash2, FileSignature } from 'lucide-react';
 import WhatsAppQRModal from './WhatsAppQRModal';
 import { 
   CLINIC_PROFILES_CONFIG, 
@@ -132,8 +132,14 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
       };
       
       saveActiveClinicConfig(cleanInfo, currentUser, selectedDoctorKey);
+      if (cleanInfo.carimbo_url) {
+        localStorage.setItem(`ambulatorio_carimbo_${selectedDoctorKey}`, cleanInfo.carimbo_url);
+      }
+      if (cleanInfo.signature_url) {
+        localStorage.setItem(`ambulatorio_signature_${selectedDoctorKey}`, cleanInfo.signature_url);
+      }
       setInfo(cleanInfo);
-      toast.success(`Configurações de ${cleanInfo.professional_name} (Instância: ${cleanInfo.evolution_instance}) salvas com sucesso!`);
+      toast.success(`Configurações de ${cleanInfo.professional_name} salvas com sucesso!`);
       checkStatus(cleanInfo);
       setTimeout(onClose, 600);
     } catch (err) {
@@ -647,6 +653,128 @@ export default function ClinicSettings({ onClose, currentUser, defaultDoctorKey 
                 className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 outline-none text-xs font-medium"
                 placeholder="Ex: Olá {paciente}, segue o seu receituário médico / pedido emitido em sua consulta."
               />
+            </div>
+          </div>
+
+          {/* SEÇÃO 4: CARIMBO MÉDICO / ODONTOLÓGICO & ASSINATURA DIGITAL (ICP-BRASIL) */}
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <FileSignature size={15} className="text-blue-600" />
+                4. Carimbo Oficial & Assinatura Digital (ICP-Brasil)
+              </h4>
+              <span className="text-[10px] bg-blue-50 text-blue-700 font-bold px-2.5 py-0.5 rounded-full border border-blue-200">
+                Receituário Retido & Anvisa
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Anexe a imagem do seu <strong>carimbo físico</strong> ou <strong>assinatura escaneada</strong> (PNG com fundo transparente ou JPG). Esta imagem será estampada no rodapé das receitas oficiais (branca, azul e amarela), garantindo aceitação para retenção em farmácias com certificação digital.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Upload e Controles */}
+              <div className="space-y-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="text-xs font-bold text-slate-700 block">
+                  Imagem do Carimbo ou Assinatura:
+                </label>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-all shadow-xs">
+                    <Upload size={14} />
+                    <span>{info.carimbo_url ? 'Trocar Imagem do Carimbo' : 'Fazer Upload do Carimbo'}</span>
+                    <input 
+                      type="file" 
+                      accept="image/png,image/jpeg,image/webp" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 4 * 1024 * 1024) {
+                          toast.error("A imagem deve ter até 4MB.");
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const base64 = ev.target?.result as string;
+                          setInfo(prev => ({ ...prev, carimbo_url: base64, signature_url: base64 }));
+                          try {
+                            localStorage.setItem(`ambulatorio_carimbo_${selectedDoctorKey}`, base64);
+                            localStorage.setItem(`ambulatorio_signature_${selectedDoctorKey}`, base64);
+                          } catch (err) {}
+                          toast.success("Carimbo carregado com sucesso! Não se esqueça de Salvar Alterações.");
+                        };
+                        reader.readAsDataURL(file);
+                      }} 
+                    />
+                  </label>
+
+                  {info.carimbo_url && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInfo(prev => ({ ...prev, carimbo_url: undefined, signature_url: undefined }));
+                        try {
+                          localStorage.removeItem(`ambulatorio_carimbo_${selectedDoctorKey}`);
+                          localStorage.removeItem(`ambulatorio_signature_${selectedDoctorKey}`);
+                        } catch (err) {}
+                        toast.success("Carimbo removido.");
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold transition-all border border-rose-200 cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      Remover
+                    </button>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={info.icp_brasil_enabled !== false} 
+                      onChange={(e) => setInfo({ ...info, icp_brasil_enabled: e.target.checked })}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>Incluir selo de conformidade <strong>MP 2.200-2/2001 (ICP-Brasil)</strong> no rodapé</span>
+                  </label>
+                  <p className="text-[10px] text-slate-500 mt-1 pl-5">
+                    Obrigatório para farmácias aceitarem dispensação de medicamentos controlados retidos (Portaria SVS/MS 344/98).
+                  </p>
+                </div>
+              </div>
+
+              {/* Preview do Carimbo no Receituário */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
+                  <span>Prévia do Carimbo no Receituário:</span>
+                  <span className="text-[10px] text-emerald-600 font-semibold">
+                    {info.carimbo_url ? '✓ Imagem Personalizada Ativa' : '✓ Carimbo Padrão do Conselho'}
+                  </span>
+                </label>
+
+                <div className="p-3.5 bg-white border-2 border-dashed border-blue-200 rounded-2xl flex flex-col items-center justify-center text-center shadow-xs min-h-[110px]">
+                  {info.carimbo_url ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <img 
+                        src={info.carimbo_url} 
+                        alt="Carimbo Profissional" 
+                        className="max-h-16 max-w-[180px] object-contain" 
+                      />
+                      <span className="text-[9px] text-slate-400 font-mono">
+                        {info.professional_name} • {info.council_badge}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="border border-blue-900/30 rounded-lg p-2.5 bg-blue-50/40 w-full max-w-[260px] text-blue-950 font-serif">
+                      <p className="text-[10px] font-bold uppercase tracking-wider">{info.professional_name}</p>
+                      <p className="text-[9px] font-semibold text-blue-900">{info.council_badge} • {info.specialty_label}</p>
+                      <div className="border-t border-blue-300/60 my-1"></div>
+                      <p className="text-[8px] text-slate-500 uppercase tracking-tight">ASSINATURA DIGITAL • MP 2.200-2/2001</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>

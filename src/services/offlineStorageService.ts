@@ -53,9 +53,28 @@ export function getOfflineRecords(): OfflineRecord[] {
  */
 export function saveRecordLocally(recordData: Partial<OfflineRecord>): OfflineRecord {
   const records = getOfflineRecords();
+  const now = new Date().toISOString();
+
+  // Se já existe um registro local com esse id ou offline_id, atualiza no mesmo lugar
+  const existingIndex = records.findIndex(r => 
+    (recordData.offline_id && r.offline_id === recordData.offline_id) || 
+    (recordData.id && r.id === recordData.id)
+  );
+
+  if (existingIndex >= 0) {
+    const updatedRecord: OfflineRecord = {
+      ...records[existingIndex],
+      ...recordData,
+      saved_at: now,
+      is_offline_pending: true
+    };
+    records[existingIndex] = updatedRecord;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    console.log('[OfflineStorage] Prontuário local atualizado com sucesso:', updatedRecord.offline_id);
+    return updatedRecord;
+  }
   
   const offlineId = `OFFLINE_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  const now = new Date().toISOString();
 
   const newOfflineRecord: OfflineRecord = {
     ...recordData,

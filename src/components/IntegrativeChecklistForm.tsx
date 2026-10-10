@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { IntegrativeChecklistData, initialIntegrativeData } from '../types/integrativeChecklist';
-import { Search, CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, ChevronDown, ChevronUp, History, Copy, Check, Sparkles } from 'lucide-react';
+import { cn, hasMeaningfulData } from '../lib/utils';
 
 interface Props {
   data: IntegrativeChecklistData;
   onChange: (data: IntegrativeChecklistData) => void;
   historyRecords?: any[];
   currentDate?: string;
+  currentRecordId?: string;
 }
 
 // v2 - Mapeamento completo para fidelidade ao PDF
@@ -119,11 +121,13 @@ const LABEL_MAPPING: Record<string, string> = {
   cmv_5: "CMV 5",
 };
 
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ');
-}
-
-export default function IntegrativeChecklistForm({ data, onChange, historyRecords = [], currentDate }: Props) {
+export default function IntegrativeChecklistForm({ 
+  data, 
+  onChange, 
+  historyRecords = [], 
+  currentDate, 
+  currentRecordId 
+}: Props) {
   
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return (
@@ -150,6 +154,7 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
   const formattedCurrentDate = formatShort(currentDate as string | undefined);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     suplementos: true,
     fitoterapicos_especiais: true,
@@ -226,29 +231,100 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
       .replace('Ac ', 'Ácido ');
   };
 
-  const historyToDisplay = historyRecords
-    .filter(h => h && h.checklist_integrativo)
-    .sort((a, b) => {
+  const previousRecordWithChecklist = useMemo(() => {
+    if (!historyRecords || !Array.isArray(historyRecords)) return null;
+    const candidates = historyRecords.filter(h => {
+      if (!h) return false;
+      if (currentRecordId && (h.id === currentRecordId || h.offline_id === currentRecordId)) return false;
+      const chk = h.checklist_integrativo || h.dados_especialidade?.checklist_integrativo;
+      return chk && hasMeaningfulData(chk);
+    });
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => {
       const dateA = new Date(a.created_at || a.data_consulta || 0).getTime();
       const dateB = new Date(b.created_at || b.data_consulta || 0).getTime();
       return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
-    })
-    .slice(0, 2)
-    .reverse();
+    });
+    return candidates[0];
+  }, [historyRecords, currentRecordId]);
+
+  const historyToDisplay = useMemo(() => {
+    if (!historyRecords || !Array.isArray(historyRecords)) return [];
+    return historyRecords
+      .filter(h => {
+        if (!h) return false;
+        if (currentRecordId && (h.id === currentRecordId || h.offline_id === currentRecordId)) return false;
+        const chk = h.checklist_integrativo || h.dados_especialidade?.checklist_integrativo;
+        return chk && hasMeaningfulData(chk);
+      })
+      .sort((a, b) => {
+        const dateA = new Date(a.created_at || a.data_consulta || 0).getTime();
+        const dateB = new Date(b.created_at || b.data_consulta || 0).getTime();
+        return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+      })
+      .slice(0, 3)
+      .reverse();
+  }, [historyRecords, currentRecordId]);
+
+  const handleCopyFromPrevious = () => {
+    if (!previousRecordWithChecklist) return;
+    const prevChk = previousRecordWithChecklist.checklist_integrativo || previousRecordWithChecklist.dados_especialidade?.checklist_integrativo;
+    if (!prevChk) return;
+    
+    // Mescla mantendo a integridade de todas as seções
+    const merged: any = { ...initialIntegrativeData, ...data };
+    Object.keys(prevChk).forEach(secKey => {
+      if (prevChk[secKey] && typeof prevChk[secKey] === 'object') {
+        merged[secKey] = {
+          ...(merged[secKey] || {}),
+          ...prevChk[secKey]
+        };
+      }
+    });
+    onChange(merged);
+    setCopiedSuccess(true);
+    setTimeout(() => setCopiedSuccess(false), 3000);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md pb-2">
-        <div className="relative">
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-md pb-2 pt-1 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text"
-            placeholder="Buscar item no checklist (ex: Cortisol, Vitamina D)..."
+            placeholder="Buscar item no checklist (ex: Cortisol, Vitamina D, Coenzima Q10, Melatonina)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-clinical-blue focus:border-transparent transition-all shadow-sm"
+            className="w-full pl-10 pr-4 py-2.5 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-clinical-blue focus:border-transparent transition-all shadow-sm"
           />
         </div>
+
+        {previousRecordWithChecklist && (
+          <button
+            type="button"
+            onClick={handleCopyFromPrevious}
+            className={cn(
+              "flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm shrink-0",
+              copiedSuccess 
+                ? "bg-emerald-600 text-white shadow-emerald-200" 
+                : "bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300/80 active:scale-95"
+            )}
+            title="Copia os suplementos e dosagens preenchidos na última consulta para manter como base"
+          >
+            {copiedSuccess ? (
+              <>
+                <Check size={14} className="stroke-[3]" />
+                <span>Valores Copiados da Última Consulta!</span>
+              </>
+            ) : (
+              <>
+                <Copy size={14} className="text-slate-500" />
+                <span>Copiar da Última Consulta ({formatShort(previousRecordWithChecklist.data_consulta || previousRecordWithChecklist.created_at)})</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -284,7 +360,7 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
                     <div className="w-2 h-2 rounded-full bg-current opacity-50"></div>
                     {section.title}
                     <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-white/50">
-                      {Object.values(sectionData).filter(v => v !== '' && v !== 'false').length} valores
+                      {Object.values(sectionData).filter(v => v !== '' && v !== 'false').length} valores preenchidos
                     </span>
                   </div>
                   {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
@@ -294,71 +370,101 @@ export default function IntegrativeChecklistForm({ data, onChange, historyRecord
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse bg-white">
                       <thead>
-                        <tr className="bg-slate-50/50 border-b border-slate-100">
-                          <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest min-w-[150px]">Ativo/BIOMARCADOR</th>
-                          <th className="p-3 text-[10px] font-black text-clinical-blue uppercase tracking-widest border-l border-clinical-blue/10 min-w-[120px] text-left bg-clinical-blue/5">
-                            Valor {formattedCurrentDate ? `(${formattedCurrentDate})` : 'Atual'}
+                        <tr className="bg-slate-50/70 border-b border-slate-200">
+                          <th className="p-3 text-[10px] font-black text-slate-500 uppercase tracking-widest min-w-[170px]">
+                            Ativo / BIOMARCADOR
+                          </th>
+                          <th className="p-3 text-[10px] font-black text-clinical-blue uppercase tracking-widest border-l border-clinical-blue/20 min-w-[150px] text-left bg-clinical-blue/5">
+                            Valor Atual {formattedCurrentDate ? `(${formattedCurrentDate})` : '(Hoje)'}
                           </th>
                           {historyToDisplay.map((h, i) => {
                             const dateVal = h.data_consulta || h.created_at;
                             let formatted = formatShort(dateVal);
                             if (formatted) {
-                              formatted = formatted.substring(0, 5); // Pega apenas DD/MM
+                              formatted = formatted.substring(0, 5); // DD/MM
                             }
                             
                             return (
-                              <th key={h.id || i} className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest border-l border-slate-100 min-w-[100px] text-left">
+                              <th key={h.id || i} className="p-3 text-[10px] font-black text-slate-600 uppercase tracking-widest border-l border-slate-200 min-w-[120px] text-left bg-slate-50/50">
                                 Histórico ({formatted || 'Ant.'})
                               </th>
                             );
                           })}
+                          {historyToDisplay.length === 0 && (
+                            <th className="p-3 text-[10px] font-medium text-slate-400 uppercase tracking-wider border-l border-slate-100 text-left italic">
+                              Histórico anterior (1ª Consulta)
+                            </th>
+                          )}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {fields.map((field) => (
-                          <tr key={field} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="p-3">
-                              <span className="text-xs font-bold text-slate-700 block">{formatLabel(field)}</span>
-                            </td>
-                            <td className="p-3 border-l border-clinical-blue/10 bg-clinical-blue/5">
-                              <input 
-                                type="text"
-                                value={safeStringifyItem((sectionData as any)[field])}
-                                onChange={(e) => updateField(section.id as keyof IntegrativeChecklistData, field, e.target.value)}
-                                placeholder="Ponto/Valor"
-                                className="w-full bg-transparent border-none focus:ring-0 text-xs font-black text-clinical-blue text-left placeholder:text-slate-300 p-0"
-                              />
-                            </td>
-                            {historyToDisplay.map((h, i) => {
-                              let histVal = h.checklist_integrativo?.[section.id]?.[field] || '';
-                              
-                              // Force-use the safeStringifyItem logic to remain consistent
-                              const displayVal: string = safeStringifyItem(histVal);
-                               
-                              const dateVal = h.data_consulta || h.created_at;
-                              let dateStr = formatShort(dateVal);
-                              if (dateStr) {
-                                dateStr = dateStr.substring(0, 5); // Apenas DD/MM
-                              } else {
-                                dateStr = 'Ant.';
-                              }
-                              
-                              return (
-                                <td key={h.id || i} className="p-3 border-l border-slate-100 text-left">
-                                  <div className="flex flex-col gap-1 items-start">
-                                    <span className={cn(
-                                      "text-[10px] font-bold px-2 py-0.5 rounded min-w-[40px] inline-flex items-center gap-2 whitespace-nowrap",
-                                      (displayVal !== '' && displayVal !== 'false' && displayVal !== 'undefined') ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-400 opacity-50"
-                                    )}>
-                                      <span className="text-[8px] opacity-70 tracking-wider">[{dateStr}]</span>
-                                      <span>{displayVal !== '' ? displayVal : '-'}</span>
-                                    </span>
-                                  </div>
+                      <tbody className="divide-y divide-slate-100">
+                        {fields.map((field) => {
+                          const curRawVal = (sectionData as any)[field];
+                          const curDisplayVal = safeStringifyItem(curRawVal);
+
+                          return (
+                            <tr key={field} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-3">
+                                <span className="text-xs font-bold text-slate-700 block">{formatLabel(field)}</span>
+                              </td>
+                              <td className="p-3 border-l border-clinical-blue/20 bg-clinical-blue/5">
+                                <input 
+                                  type="text"
+                                  value={curDisplayVal}
+                                  onChange={(e) => updateField(section.id as keyof IntegrativeChecklistData, field, e.target.value)}
+                                  placeholder="Ponto/Valor"
+                                  className="w-full bg-transparent border-none focus:ring-0 text-xs font-black text-clinical-blue text-left placeholder:text-slate-300 p-0"
+                                />
+                              </td>
+                              {historyToDisplay.map((h, i) => {
+                                const histChecklist = h.checklist_integrativo || h.dados_especialidade?.checklist_integrativo || {};
+                                const histVal = histChecklist?.[section.id]?.[field] || '';
+                                const histDisplayVal: string = safeStringifyItem(histVal);
+                                
+                                const dateVal = h.data_consulta || h.created_at;
+                                let dateStr = formatShort(dateVal);
+                                if (dateStr) {
+                                  dateStr = dateStr.substring(0, 5); // DD/MM
+                                } else {
+                                  dateStr = 'Ant.';
+                                }
+
+                                const isFilled = histDisplayVal !== '' && histDisplayVal !== 'false' && histDisplayVal !== 'undefined';
+                                const isMatch = isFilled && curDisplayVal !== '' && curDisplayVal.toLowerCase() === histDisplayVal.toLowerCase();
+                                
+                                return (
+                                  <td key={h.id || i} className="p-3 border-l border-slate-100 text-left bg-slate-50/20">
+                                    <div className="flex flex-col gap-1 items-start">
+                                      {isFilled ? (
+                                        <span className={cn(
+                                          "text-[10px] font-bold px-2 py-0.5 rounded min-w-[40px] inline-flex items-center gap-1.5 whitespace-nowrap",
+                                          isMatch 
+                                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
+                                            : "bg-slate-100 text-slate-700 border border-slate-200"
+                                        )}>
+                                          <span className="text-[8px] font-semibold text-slate-400">[{dateStr}]</span>
+                                          <span>{histDisplayVal}</span>
+                                          {isMatch && (
+                                            <span className="text-[8px] bg-emerald-200/70 text-emerald-900 px-1 rounded uppercase font-extrabold tracking-wider">
+                                              mantido
+                                            </span>
+                                          )}
+                                        </span>
+                                      ) : (
+                                        <span className="text-[11px] text-slate-300 font-mono pl-2">-</span>
+                                      )}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                              {historyToDisplay.length === 0 && (
+                                <td className="p-3 border-l border-slate-100 text-left text-[11px] text-slate-300 italic">
+                                  -
                                 </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
+                              )}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

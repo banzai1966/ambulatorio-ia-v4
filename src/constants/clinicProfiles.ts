@@ -13,6 +13,9 @@ export interface ClinicProfileConfig {
   website: string;
   slogan: string;
   logo_url?: string;
+  signature_url?: string;
+  carimbo_url?: string;
+  icp_brasil_enabled?: boolean;
   prescription_footer?: string;
   whatsapp_message_template?: string;
   evolution_url: string;
@@ -309,10 +312,16 @@ export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): C
         ? parsed.logo_url 
         : (baseDefault.logo_url || DEFAULT_CLINIC_LOGO_URL);
       
+      const savedCarimbo = localStorage.getItem(`ambulatorio_carimbo_${key}`) || localStorage.getItem('ambulatorio_carimbo_default');
+      const savedSig = localStorage.getItem(`ambulatorio_signature_${key}`) || localStorage.getItem('ambulatorio_signature_default');
+
       return {
         ...baseDefault,
         ...parsed,
         logo_url: logoUrl,
+        carimbo_url: parsed.carimbo_url || savedCarimbo || undefined,
+        signature_url: parsed.signature_url || savedSig || undefined,
+        icp_brasil_enabled: parsed.icp_brasil_enabled !== undefined ? parsed.icp_brasil_enabled : true,
         evolution_url: parsed.evolution_url || baseDefault.evolution_url,
         evolution_instance: parsed.evolution_instance || baseDefault.evolution_instance,
         evolution_apikey: apikey
@@ -322,7 +331,15 @@ export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): C
     console.warn("Aviso ao ler clinic_info específica:", e);
   }
 
-  return baseDefault;
+  const savedCarimbo = typeof window !== 'undefined' ? (localStorage.getItem(`ambulatorio_carimbo_${key}`) || localStorage.getItem('ambulatorio_carimbo_default')) : null;
+  const savedSig = typeof window !== 'undefined' ? (localStorage.getItem(`ambulatorio_signature_${key}`) || localStorage.getItem('ambulatorio_signature_default')) : null;
+
+  return {
+    ...baseDefault,
+    carimbo_url: savedCarimbo || undefined,
+    signature_url: savedSig || undefined,
+    icp_brasil_enabled: true
+  };
 }
 
 export function saveActiveClinicConfig(config: ClinicProfileConfig, user?: any, doctorKey?: string) {

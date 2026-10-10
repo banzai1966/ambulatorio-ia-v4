@@ -58,6 +58,7 @@ export default function PrescriptionAnvisaModal({
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
   const [isVoiceListening, setIsVoiceListening] = useState(false);
   const [isMemedHubOpen, setIsMemedHubOpen] = useState(false);
+  const [numVias, setNumVias] = useState<1 | 2>(2);
 
   // Reconhecimento de Voz para Buscar / Ditar Medicamentos ANVISA
   const handleVoiceSearch = () => {
@@ -192,145 +193,232 @@ export default function PrescriptionAnvisaModal({
     const isAzul = recipeType === 'azul';
     const isAmarela = recipeType === 'amarela';
 
-    // Cabeçalho Clínica - cores personalizadas por tipo regulatório
-    if (isAzul) {
-      doc.setFillColor(30, 58, 138); // Azul ANVISA (Blue 900)
-    } else if (isAmarela) {
-      doc.setFillColor(180, 83, 9); // Âmbar Notificação A
-    } else {
-      doc.setFillColor(15, 23, 42); // slate-900 (Padrão Branca C1/Antimicrobianos)
-    }
-    doc.rect(0, 0, 210, 42, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(15);
-    doc.setFont("helvetica", "bold");
-    doc.text(clinicConfig.name || clinicName, 14, 15);
-    doc.setFontSize(8.5);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${clinicConfig.slogan || 'Neurologia Clínica & Medicina Integrativa'} | ${clinicConfig.phone}`, 14, 21);
-    doc.text(clinicConfig.address || 'Av. Paulista, 1000 - São Paulo/SP', 14, 26);
-    
-    // Título Oficial da Notificação/Receita
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    if (isAzul) {
-      doc.text(`NOTIFICAÇÃO DE RECEITA B (AZUL - PSICOTRÓPICOS) | PORTARIA SVS/MS 344/98`, 14, 33);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Nº Notificação: ${numeroNotificacao}/${ufNotificacao} • USO HUMANO • RETENÇÃO OBRIGATÓRIA DA VIA FÍSICA`, 14, 38);
-    } else if (isAmarela) {
-      doc.text(`NOTIFICAÇÃO DE RECEITA A (AMARELA - ENTORPECENTES) | PORTARIA SVS/MS 344/98`, 14, 33);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Nº Notificação: ${numeroNotificacao}/${ufNotificacao} • USO HUMANO • RETENÇÃO DA VIA PELA VIGILÂNCIA`, 14, 38);
-    } else {
-      doc.text("RECEITUÁRIO DE CONTROLE ESPECIAL / ANTIMICROBIANOS (2 VIAS)", 14, 33);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "normal");
-      doc.text("VALIDADO VIA PORTARIA 344/98 & MP 2.200-2/2001 (ACEITAÇÃO EM FARMÁCIAS NACIONAIS)", 14, 38);
-    }
-
-    // Dados do Paciente e Médico
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(9.5);
-    doc.setFont("helvetica", "bold");
-    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 50);
-    if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 56);
-    doc.text(`PROFISSIONAL RESPONSÁVEL: ${(doctorName || clinicConfig.professional_name).toUpperCase()}`, 14, patientCpf ? 62 : 56);
-    doc.text(`REGISTRO: ${clinicConfig.council_badge} | ${clinicConfig.specialty_label}`, 14, patientCpf ? 68 : 62);
-    doc.text(`DATA DE EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}`, 140, 50);
-
-    doc.setLineWidth(0.5);
-    doc.setDrawColor(226, 232, 240);
-    const lineY = patientCpf ? 73 : 67;
-    doc.line(14, lineY, 196, lineY);
-
-    // Tabela de Medicamentos
-    const tableRows = prescriptionItems.map((item, index) => [
-      `${index + 1}. ${item.medication.nome}\n(${item.selectedApresentacao})`,
-      item.quantidade,
-      item.posologiaCustomizada
-    ]);
-
-    autoTable(doc, {
-      startY: lineY + 4,
-      head: [['MEDICAMENTO / APRESENTAÇÃO', 'QTD', 'POSOLOGIA E ORIENTAÇÕES DE USO']],
-      body: tableRows,
-      headStyles: { 
-        fillColor: isAzul ? [30, 58, 138] : isAmarela ? [180, 83, 9] : [30, 41, 59], 
-        textColor: [255, 255, 255], 
-        fontStyle: 'bold',
-        fontSize: 9
-      },
-      styles: { fontSize: 9.5, cellPadding: 4.5 },
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 84 }
+    const renderViaPage = (viaIndex: number) => {
+      if (viaIndex > 1) {
+        doc.addPage();
       }
-    });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 140;
+      const viaBadgeText = numVias === 2 
+        ? (viaIndex === 1 ? '1ª VIA - RETENÇÃO DA FARMÁCIA' : '2ª VIA - ORIENTAÇÃO DO PACIENTE')
+        : 'VIA ÚNICA';
 
-    // Se for Notificação Azul ou Amarela, adiciona campos de Retenção de Farmácia (Comprador e Fornecedor)
-    if (isAzul || isAmarela) {
-      doc.setDrawColor(203, 213, 225);
-      doc.setLineWidth(0.3);
+      // Cabeçalho Clínica - cores personalizadas por tipo regulatório
+      if (isAzul) {
+        doc.setFillColor(30, 58, 138); // Azul ANVISA (Blue 900)
+      } else if (isAmarela) {
+        doc.setFillColor(180, 83, 9); // Âmbar Notificação A
+      } else {
+        doc.setFillColor(15, 23, 42); // slate-900 (Padrão Branca C1/Antimicrobianos)
+      }
+      doc.rect(0, 0, 210, 42, 'F');
       
-      // Bloco Identificação do Comprador
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(14, finalY + 6, 88, 38, 2, 2, 'FD');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(15);
+      doc.setFont("helvetica", "bold");
+      doc.text(clinicConfig.name || clinicName, 14, 15);
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${clinicConfig.slogan || 'Neurologia Clínica & Medicina Integrativa'} | ${clinicConfig.phone}`, 14, 21);
+      doc.text(clinicConfig.address || 'Av. Paulista, 1000 - São Paulo/SP', 14, 26);
+
+      // Badge no canto superior direito destacando a VIA
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(132, 10, 64, 8, 1.5, 1.5, 'F');
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(30, 41, 59);
-      doc.text("IDENTIFICAÇÃO DO COMPRADOR:", 17, finalY + 12);
-      doc.setFont("helvetica", "normal");
-      doc.text("Nome: ____________________________________", 17, finalY + 19);
-      doc.text("Identidade (RG): ________________ Órgão: ____", 17, finalY + 25);
-      doc.text("Endereço: _________________________________", 17, finalY + 31);
-      doc.text("Telefone: ________________ Cidade/UF: _______", 17, finalY + 37);
-
-      // Bloco Identificação do Fornecedor / Farmácia
-      doc.setFillColor(248, 250, 252);
-      doc.roundedRect(108, finalY + 6, 88, 38, 2, 2, 'FD');
-      doc.setFont("helvetica", "bold");
-      doc.text("IDENTIFICAÇÃO DO FORNECEDOR (FARMÁCIA):", 111, finalY + 12);
-      doc.setFont("helvetica", "normal");
-      doc.text("Farmacêutico Responsável: __________________", 111, finalY + 19);
-      doc.text("CRF: __________________ Data de Aviamento: ___/___", 111, finalY + 25);
-      doc.text("Lote dispensado: ____________________________", 111, finalY + 31);
-      doc.text("Assinatura do Farmacêutico: __________________", 111, finalY + 37);
-
-      // Assinatura do Médico/Dentista
-      const signY = finalY + 54;
-      doc.setDrawColor(148, 163, 184);
-      doc.line(110, signY + 14, 196, signY + 14);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.setTextColor(15, 23, 42);
-      doc.text(doctorName || clinicConfig.professional_name, 110, signY + 19);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, signY + 24);
-      doc.setFontSize(7);
-      doc.setTextColor(100, 116, 139);
-      doc.text("Assinatura do Profissional Emissor (Retenção da 1ª Via pela Farmácia)", 14, signY + 24);
-    } else {
-      // Receita Branca padrão
-      doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text(clinicConfig.prescription_footer || "Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 16);
+      if (isAzul) doc.setTextColor(30, 58, 138);
+      else if (isAmarela) doc.setTextColor(180, 83, 9);
+      else doc.setTextColor(15, 23, 42);
+      doc.text(viaBadgeText, 164, 15.5, { align: 'center' });
       
-      doc.setDrawColor(148, 163, 184);
-      doc.line(110, finalY + 32, 196, finalY + 32);
-      doc.setFont("helvetica", "bold");
+      // Título Oficial da Notificação/Receita
       doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      if (isAzul) {
+        doc.text(`NOTIFICAÇÃO DE RECEITA B (AZUL - PSICOTRÓPICOS) | PORTARIA SVS/MS 344/98`, 14, 33);
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Nº Notificação: ${numeroNotificacao}/${ufNotificacao} • USO HUMANO • ${viaIndex === 1 ? 'RETENÇÃO OBRIGATÓRIA DA 1ª VIA' : '2ª VIA DO PACIENTE'}`, 14, 38);
+      } else if (isAmarela) {
+        doc.text(`NOTIFICAÇÃO DE RECEITA A (AMARELA - ENTORPECENTES) | PORTARIA SVS/MS 344/98`, 14, 33);
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Nº Notificação: ${numeroNotificacao}/${ufNotificacao} • USO HUMANO • ${viaIndex === 1 ? 'RETENÇÃO DA 1ª VIA PELA VIGILÂNCIA' : '2ª VIA DO PACIENTE'}`, 14, 38);
+      } else {
+        doc.text(`RECEITUÁRIO DE CONTROLE ESPECIAL / ANTIMICROBIANOS (${viaBadgeText})`, 14, 33);
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "normal");
+        doc.text("VALIDADO VIA PORTARIA 344/98 & MP 2.200-2/2001 (ACEITAÇÃO EM FARMÁCIAS NACIONAIS)", 14, 38);
+      }
+
+      // Dados do Paciente e Médico
       doc.setTextColor(15, 23, 42);
-      doc.text(doctorName || clinicConfig.professional_name, 110, finalY + 38);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, finalY + 43);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 14, 50);
+      if (patientCpf) doc.text(`CPF: ${patientCpf}`, 14, 56);
+      doc.text(`PROFISSIONAL RESPONSÁVEL: ${(doctorName || clinicConfig.professional_name).toUpperCase()}`, 14, patientCpf ? 62 : 56);
+      doc.text(`REGISTRO: ${clinicConfig.council_badge} | ${clinicConfig.specialty_label}`, 14, patientCpf ? 68 : 62);
+      doc.text(`DATA DE EMISSÃO: ${new Date().toLocaleDateString('pt-BR')}`, 140, 50);
+
+      doc.setLineWidth(0.5);
+      doc.setDrawColor(226, 232, 240);
+      const lineY = patientCpf ? 73 : 67;
+      doc.line(14, lineY, 196, lineY);
+
+      // Tabela de Medicamentos
+      const tableRows = prescriptionItems.map((item, index) => [
+        `${index + 1}. ${item.medication.nome}\n(${item.selectedApresentacao})`,
+        item.quantidade,
+        item.posologiaCustomizada
+      ]);
+
+      autoTable(doc, {
+        startY: lineY + 4,
+        head: [['MEDICAMENTO / APRESENTAÇÃO', 'QTD', 'POSOLOGIA E ORIENTAÇÕES DE USO']],
+        body: tableRows,
+        headStyles: { 
+          fillColor: isAzul ? [30, 58, 138] : isAmarela ? [180, 83, 9] : [30, 41, 59], 
+          textColor: [255, 255, 255], 
+          fontStyle: 'bold',
+          fontSize: 9
+        },
+        styles: { fontSize: 9.5, cellPadding: 4.5 },
+        columnStyles: {
+          0: { cellWidth: 70 },
+          1: { cellWidth: 28 },
+          2: { cellWidth: 84 }
+        }
+      });
+
+      const finalY = (doc as any).lastAutoTable.finalY || 140;
+
+      // Se for Notificação Azul ou Amarela, adiciona campos de Retenção de Farmácia (Comprador e Fornecedor)
+      if (isAzul || isAmarela) {
+        doc.setDrawColor(203, 213, 225);
+        doc.setLineWidth(0.3);
+        
+        // Bloco Identificação do Comprador
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(14, finalY + 6, 88, 38, 2, 2, 'FD');
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(30, 41, 59);
+        doc.text("IDENTIFICAÇÃO DO COMPRADOR:", 17, finalY + 12);
+        doc.setFont("helvetica", "normal");
+        doc.text("Nome: ____________________________________", 17, finalY + 19);
+        doc.text("Identidade (RG): ________________ Órgão: ____", 17, finalY + 25);
+        doc.text("Endereço: _________________________________", 17, finalY + 31);
+        doc.text("Telefone: ________________ Cidade/UF: _______", 17, finalY + 37);
+
+        // Bloco Identificação do Fornecedor / Farmácia
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(108, finalY + 6, 88, 38, 2, 2, 'FD');
+        doc.setFont("helvetica", "bold");
+        doc.text("IDENTIFICAÇÃO DO FORNECEDOR (FARMÁCIA):", 111, finalY + 12);
+        doc.setFont("helvetica", "normal");
+        doc.text("Farmacêutico Responsável: __________________", 111, finalY + 19);
+        doc.text("CRF: __________________ Data de Aviamento: ___/___", 111, finalY + 25);
+        doc.text("Lote dispensado: ____________________________", 111, finalY + 31);
+        doc.text("Assinatura do Farmacêutico: __________________", 111, finalY + 37);
+
+        // Assinatura do Médico/Dentista
+        const signY = finalY + 54;
+
+        // Desenha imagem do carimbo se houver
+        const carimboImg = clinicConfig.carimbo_url || clinicConfig.signature_url;
+        if (carimboImg && carimboImg.startsWith('data:image')) {
+          try {
+            doc.addImage(carimboImg, 'PNG', 125, signY - 10, 55, 22);
+          } catch (e) {
+            console.warn("Aviso ao desenhar carimbo no PDF:", e);
+          }
+        }
+
+        doc.setDrawColor(148, 163, 184);
+        doc.line(110, signY + 14, 196, signY + 14);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(15, 23, 42);
+        doc.text(doctorName || clinicConfig.professional_name, 110, signY + 19);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, signY + 24);
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Assinatura do Profissional Emissor (${viaBadgeText})`, 14, signY + 24);
+
+        // Selo de Certificação ICP-Brasil no Rodapé
+        if (clinicConfig.icp_brasil_enabled !== false) {
+          doc.setFillColor(241, 245, 249);
+          doc.roundedRect(14, signY + 8, 88, 12, 1.5, 1.5, 'F');
+          doc.setFontSize(6.5);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 58, 138);
+          doc.text("PADRÃO ICP-BRASIL • MEDIDA PROVISÓRIA Nº 2.200-2/2001", 17, signY + 13);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(100, 116, 139);
+          doc.text("Dispensação e retenção autorizadas nos termos da Portaria 344/98", 17, signY + 17.5);
+        }
+      } else {
+        // Receita Branca padrão
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.text(clinicConfig.prescription_footer || "Assinatura Eletrônica Qualificada com Validação em Farmácias (MP 2.200-2/2001)", 14, finalY + 16);
+        
+        const signY = finalY + 32;
+
+        // Desenha imagem do carimbo se houver
+        const carimboImg = clinicConfig.carimbo_url || clinicConfig.signature_url;
+        if (carimboImg && carimboImg.startsWith('data:image')) {
+          try {
+            doc.addImage(carimboImg, 'PNG', 125, signY - 18, 55, 22);
+          } catch (e) {
+            console.warn("Aviso ao desenhar carimbo no PDF:", e);
+          }
+        } else {
+          // Carimbo institucional em moldura nítida
+          doc.setDrawColor(30, 58, 138);
+          doc.setLineWidth(0.4);
+          doc.roundedRect(110, signY - 14, 86, 16, 1.5, 1.5);
+          doc.setFontSize(7.5);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 58, 138);
+          doc.text((doctorName || clinicConfig.professional_name).toUpperCase(), 113, signY - 8);
+          doc.setFontSize(7);
+          doc.setFont("helvetica", "normal");
+          doc.text(`${clinicConfig.council_badge} • CARIMBO ELETRÔNICO ICP-BRASIL`, 113, signY - 3);
+        }
+
+        doc.setDrawColor(148, 163, 184);
+        doc.line(110, signY + 4, 196, signY + 4);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(15, 23, 42);
+        doc.text(doctorName || clinicConfig.professional_name, 110, signY + 10);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.text(`${clinicConfig.council_badge} - ${clinicConfig.specialty_label}`, 110, signY + 15);
+
+        // Selo regulatório
+        if (clinicConfig.icp_brasil_enabled !== false) {
+          doc.setFillColor(241, 245, 249);
+          doc.roundedRect(14, signY + 4, 88, 12, 1.5, 1.5, 'F');
+          doc.setFontSize(6.5);
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 58, 138);
+          doc.text("ASSINATURA DIGITAL QUALIFICADA • MP Nº 2.200-2/2001", 17, signY + 9);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(100, 116, 139);
+          doc.text("Aceitação válida em todo o território nacional • Lei Federal 14.063/20", 17, signY + 13.5);
+        }
+      }
+    };
+
+    renderViaPage(1);
+    if (numVias === 2) {
+      renderViaPage(2);
     }
 
     return doc;
@@ -370,7 +458,13 @@ export default function PrescriptionAnvisaModal({
       toast.error("Adicione pelo menos um medicamento.");
       return;
     }
+    if (!patientPhone) {
+      toast.error("Telefone do paciente não informado.");
+      return;
+    }
+
     setIsSendingWhatsApp(true);
+    toast.loading("Gerando PDF e enviando via WhatsApp...", { id: 'sending-recipe-wa' });
     try {
       const clinicConfig = getActiveClinicConfig(doctorName);
       const itemsText = prescriptionItems.map((item, idx) => 
@@ -380,23 +474,32 @@ export default function PrescriptionAnvisaModal({
       const customGreeting = (clinicConfig.whatsapp_message_template || 'Olá {paciente}, segue o seu receituário emitido em sua consulta.')
         .replace('{paciente}', patientName);
 
-      const messageText = `💊 *RECEITA MÉDICA DIGITAL - ${clinicConfig.name || clinicName}*\n\n${customGreeting}\n\n*Paciente:* ${patientName}\n*Médico:* ${doctorName || clinicConfig.professional_name} (${clinicConfig.council_badge})\n*Especialidade:* ${clinicConfig.specialty_label}\n*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n===========================\n\n${itemsText}\n\n===========================\n\n🔍 *Consulte as bulas oficiais da ANVISA:* \n${prescriptionItems.map(i => `• ${i.medication.nome}: ${i.medication.bulaUrl}`).join('\n')}\n\n✅ *${clinicConfig.prescription_footer || 'Receita digital com validação direta nas farmácias.'}*`;
+      const messageText = `💊 *RECEITA MÉDICA DIGITAL - ${clinicConfig.name || clinicName}*\n\n${customGreeting}\n\n*Paciente:* ${patientName}\n*Médico:* ${doctorName || clinicConfig.professional_name} (${clinicConfig.council_badge})\n*Especialidade:* ${clinicConfig.specialty_label}\n*Data:* ${new Date().toLocaleDateString('pt-BR')}\n\n===========================\n\n${itemsText}\n\n===========================\n\n📄 *O PDF timbrado e carimbado oficial segue anexado acima!*\n\n✅ *${clinicConfig.prescription_footer || 'Receita digital com validade e aceitação nas farmácias.'}*`;
+
+      // Gera o documento PDF completo timbrado com carimbo e assinatura
+      const doc = generatePDF();
+      const prefix = recipeType === 'azul' ? 'Notificacao_Azul' : recipeType === 'amarela' ? 'Notificacao_Amarela' : 'Receita_Digital';
+      const fileName = `${prefix}_${patientName.replace(/\s+/g, '_')}.pdf`;
+      const base64Data = doc.output('datauristring').split(',')[1];
 
       const res = await fetch('/api/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: patientPhone,
-          message: messageText
+          message: messageText,
+          media: base64Data,
+          mediaType: 'document',
+          fileName: fileName
         })
       });
 
-      if (!res.ok) throw new Error("Falha ao enviar mensagem");
+      if (!res.ok) throw new Error("Falha ao enviar mensagem pela Evolution API");
 
-      toast.success("Receita enviada com sucesso para o WhatsApp do paciente!");
+      toast.success("Receita em PDF enviada com sucesso no WhatsApp do paciente!", { id: 'sending-recipe-wa' });
       onClose();
     } catch (err: any) {
-      toast.error("Erro ao enviar via WhatsApp: " + err.message);
+      toast.error("Erro ao enviar via WhatsApp: " + err.message, { id: 'sending-recipe-wa' });
     } finally {
       setIsSendingWhatsApp(false);
     }
@@ -541,7 +644,43 @@ export default function PrescriptionAnvisaModal({
 
           {/* Abas de Tipos de Receitas Oficiais ANVISA */}
           <div className="space-y-2">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Selecione o Modelo de Receita ANVISA:</span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+                Selecione o Modelo de Receita ANVISA:
+              </span>
+
+              {/* Seletor de Vias Automáticas */}
+              <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                <span className="text-[11px] font-bold text-slate-600 px-1.5 flex items-center gap-1">
+                  <Printer className="w-3 h-3 text-blue-600" />
+                  Vias:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setNumVias(2)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    numVias === 2 
+                      ? 'bg-blue-600 text-white shadow-xs' 
+                      : 'bg-transparent text-slate-600 hover:bg-slate-200'
+                  }`}
+                  title="Gera automaticamente 2 páginas (1ª Via Farmácia + 2ª Via Paciente) no mesmo PDF para imprimir tudo junto com 1 clique"
+                >
+                  📑 2 Vias Automáticas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNumVias(1)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    numVias === 1 
+                      ? 'bg-blue-600 text-white shadow-xs' 
+                      : 'bg-transparent text-slate-600 hover:bg-slate-200'
+                  }`}
+                  title="Gera apenas 1 via única"
+                >
+                  📄 1 Via
+                </button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <button
                 type="button"

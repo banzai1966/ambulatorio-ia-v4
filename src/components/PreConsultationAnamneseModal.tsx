@@ -1576,7 +1576,7 @@ export default function PreConsultationAnamneseModal({
               className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs transition-all shadow-md active:scale-95 flex items-center gap-2"
             >
               <ShieldCheck className="w-4 h-4" />
-              {isSubmitting ? "Enviando..." : "Confirmar e Transmitir Anamnese"}
+              {isSubmitting ? "Salvando..." : "Salvar Dados da Ficha"}
             </button>
           </div>
 

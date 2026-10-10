@@ -766,25 +766,67 @@ export default function ManualClinicoModal({ isOpen, onClose, defaultProfile = '
 
                 {selectedManual === 'dr_carlos' && activeSection === 'carlos_bodymap_sinais' && (
                   <div className="space-y-6 animate-in fade-in duration-300">
-                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                    <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xs space-y-5">
                       <div className="flex items-center gap-3">
                         <div className="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
                           <Layers size={24} />
                         </div>
                         <div>
-                          <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Mapeamento Visual</span>
-                          <h3 className="text-xl font-extrabold text-slate-900">5. Mapeamento Corporal de Dores & Sinais Vitais</h3>
-                          <p className="text-xs text-slate-500">Localização anatômica de pontos de gatilho miofasciais e registro de sinais vitais.</p>
+                          <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Mapeamento Visual & Monitor Clínico</span>
+                          <h3 className="text-xl font-extrabold text-slate-900">5. Mapeamento Corporal de Dores & Painel de Sinais Vitais / Soroterapia</h3>
+                          <p className="text-xs text-slate-500">Localização anatômica de pontos de dor, triagem hemodinâmica e controle de infusão parenteral.</p>
                         </div>
                       </div>
 
                       <div className="space-y-3 text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
                         <p>
-                          O <strong>BodyMap 2D/3D</strong> permite ao Dr. Carlos clicar diretamente na silhueta do corpo humano para marcar pontos de dor crônica, queimação, parestesia ou irradiação lombar/cervical, com escala EVA de 0 a 10.
+                          O <strong>BodyMap 2D/3D</strong> permite ao Dr. Carlos clicar diretamente na silhueta anatômica para marcar pontos de dor crônica, queimação, parestesia ou irradiação lombar/cervical, com escala analógica visual (EVA) de 0 a 10.
                         </p>
-                        <p>
-                          No painel de <strong>Sinais Vitais</strong>, insira Pressão Arterial (PA), Frequência Cardíaca (FC), Saturação de Oxigênio (SpO2), Temperatura e Glicemia. O sistema gera alertas visuais imediatos se houver desvios significativos dos padrões fisiológicos.
-                        </p>
+                      </div>
+
+                      {/* Guia Didático do Novo Painel de Sinais Vitais & Soroterapia */}
+                      <div className="p-5 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                          <div className="flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
+                            <h4 className="text-sm font-bold text-slate-100">
+                              Como funciona o Painel Clínico de Sinais Vitais & Soroterapia na Vida Real?
+                            </h4>
+                          </div>
+                          <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-bold">
+                            Modo Híbrido (Triagem vs Soroterapia)
+                          </span>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3 text-xs">
+                          {/* Modo 1 */}
+                          <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <span className="text-blue-400 font-bold block flex items-center gap-1.5">
+                              🩺 Modo 1: Consulta & Triagem Rápida
+                            </span>
+                            <p className="text-slate-300 text-[11px] leading-relaxed">
+                              • <strong>5 Parâmetros com Classificação Imediata:</strong> PA (Ótima, Normal, Hipertensão Estágio 1/2 pelas Diretrizes Brasileiras), FC, SpO2, Temperatura e Glicemia.<br />
+                              • <strong>100% por Voz:</strong> Enquanto o profissional examina o paciente, basta falar no gravador: <em>"Pressão 120 por 80, saturação 98%"</em> e os números são atualizados sem cliques.<br />
+                              • <strong>1 Clique:</strong> Botão para copiar o resumo formatado diretamente para o campo de Exame Físico da consulta.
+                            </p>
+                          </div>
+
+                          {/* Modo 2 */}
+                          <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+                            <span className="text-emerald-400 font-bold block flex items-center gap-1.5">
+                              💉 Modo 2: Soroterapia IV & Sedação Cirúrgica
+                            </span>
+                            <p className="text-slate-300 text-[11px] leading-relaxed">
+                              • <strong>Medicina & Terapias Integrativas:</strong> Prescreva e cronometre infusões na poltrona (Myer's Cocktail, Glutationa, Vitamina C alta dose, Quelantes).<br />
+                              • <strong>Cálculo Automático de Vazão:</strong> Selecione a bolsa (ex: 250ml ou 500ml) e a taxa (ex: 21 ou 28 gotas/min); o sistema calcula o tempo exato em minutos.<br />
+                              • <strong>Alertas & Registro:</strong> Aviso suave e visual quando faltar 10% da bolsa. Ao término, o botão <em>"Gravar na Evolução"</em> insere o relatório completo no prontuário.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 bg-blue-950/40 rounded-xl border border-blue-500/20 text-[11px] text-blue-200">
+                          🦷 <strong>Cirurgias & Odontologia Biológica:</strong> Em procedimentos de implante ou remoção de amálgama sob sedação inalatória (óxido nitroso) ou oral, a equipe acompanha SpO2 e pulso contínuos, com alertas automáticos se a saturação cair abaixo de 92%, resguardando exigências regulatórias.
+                        </div>
                       </div>
                     </div>
                   </div>

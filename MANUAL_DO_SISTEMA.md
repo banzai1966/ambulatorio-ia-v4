@@ -94,4 +94,23 @@ O sistema é multiusuário e seguro:
 * **No Celular ou Tablet (Android/iPhone):** No navegador, toque no menu de opções ou compartilhar e selecione **"Adicionar à Tela de Início / Instalar Aplicativo"**.
 
 ---
+
+## 🩺 6. PAINEL CLÍNICO DE SINAIS VITAIS, TRIAGEM E SOROTERAPIA IV / SEDAÇÃO
+
+No topo de qualquer atendimento clínico, clique no botão **"Vitais & Soro"** para expandir o painel híbrido de suporte hemodinâmico. Ele possui dois modos práticos:
+
+### 6.1 Modo 1: Consulta & Triagem Rápida (Rotina Ambulatorial)
+* **Parâmetros Aferidos:** Pressão Arterial (PA), Frequência Cardíaca (FC), Saturação (SpO2), Temperatura e Glicemia (HGT).
+* **Alimentado 100% por Voz:** Enquanto o médico examina o paciente, basta falar no microfone: *"Pressão 120 por 80, saturação 98%"*. A Inteligência Artificial preenche os visores instantaneamente.
+* **Classificação Médica Automática:** Analisa a pressão pelas Diretrizes Brasileiras de Hipertensão (Ótima, Normal, Pré-Hipertensão, Hipertensão Estágio 1/2) e alerta sobre dessaturação em SpO2 < 92%.
+* **1 Clique:** Botão para copiar o resumo estruturado diretamente para o campo de Exame Físico da consulta.
+
+### 6.2 Modo 2: Soroterapia IV & Sedação Cirúrgica (Medicina Integrativa & Odontologia Biológica)
+* **Soroterapia & Terapias Injetáveis:** Prescreva e cronometre protocolos injetáveis na poltrona (Myer's Cocktail, Glutationa, Vitamina C alta dose, Quelantes EDTA/DMSO).
+* **Cálculo de Vazão Automático:** Selecione o volume da bolsa (ex: 250ml ou 500ml) e o gotejamento (ex: 21 ou 28 gotas/min); o sistema calcula o tempo total em minutos e inicia o cronômetro regressivo.
+* **Alertas Sonoros/Visuais:** O sistema emite aviso sonoro e visual aos 90% da infusão para checar a punção venosa e avisa quando a bolsa for concluída (com controle de mudo a qualquer momento).
+* **Cirurgias & Sedação com Óxido Nitroso:** Monitoramento contínuo de SpO2 e pulso durante remoção segura de amálgama (SMART) e implantes de zircônia, resguardando exigências éticas e legais dos Conselhos Profissionais e Anvisa.
+* **Botão "Gravar Procedimento na Evolução":** Registra data, horários de início/fim, volume, solução, gotejamento e estabilidade do paciente direto no prontuário oficial.
+
+---
 *Manual oficial do sistema Ambulatório IA. Versão 3.2 — Todos os direitos reservados.*
