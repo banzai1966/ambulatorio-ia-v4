@@ -296,6 +296,33 @@ export function resolveDoctorKey(userOrEmail?: any, name?: string): 'dra_lucy' |
   return 'dr_carlos'; // Padrão seguro
 }
 
+/**
+ * Retorna o nome formatado oficial do profissional a ser exibido na interface.
+ * Evita exibir nomes genéricos como "Médico" quando o perfil for Dr. Carlos, Dra. Lucy ou Marco Duarte.
+ */
+export function resolveDoctorDisplayName(userOrEmail?: any, fallbackName?: string): string {
+  const rawName = (typeof userOrEmail === 'object' ? (userOrEmail?.full_name || fallbackName || '') : (fallbackName || '')).trim();
+  const lowerName = rawName.toLowerCase();
+
+  // Se já tiver um nome específico que não seja o placeholder 'médico' ou 'medico'
+  if (rawName && lowerName !== 'médico' && lowerName !== 'medico' && lowerName !== 'doctor') {
+    return rawName;
+  }
+
+  const key = resolveDoctorKey(userOrEmail, fallbackName);
+  if (key === 'marco_admin') {
+    return 'Marco Duarte';
+  }
+  if (key === 'dr_carlos') {
+    return 'Dr. Carlos Morato';
+  }
+  if (key === 'dra_lucy') {
+    return 'Dra. Lucy Morata';
+  }
+
+  return rawName || 'Profissional';
+}
+
 export function getActiveClinicConfig(user?: any, overrideDoctorKey?: string): ClinicProfileConfig {
   const key = overrideDoctorKey || resolveDoctorKey(user);
   const baseDefault = CLINIC_PROFILES_CONFIG[key] || CLINIC_PROFILES_CONFIG.dra_lucy;

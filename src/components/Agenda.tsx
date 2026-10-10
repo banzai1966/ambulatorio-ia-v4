@@ -30,7 +30,9 @@ import {
   Receipt,
   CheckCircle2,
   MoreVertical,
-  Video
+  Video,
+  Bell,
+  Sparkles
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
@@ -357,7 +359,36 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         console.warn("Erro ao salvar no módulo financeiro:", errFin);
       }
 
-      // 3. Envia Comprovante / Recibo no WhatsApp se solicitado
+      // 3. Atualiza o status automaticamente no CRM para 'Tratamento Fechado'
+      try {
+        const savedCrm = localStorage.getItem('ambulatorio_crm_cards_v1');
+        if (savedCrm) {
+          const currentCards = JSON.parse(savedCrm);
+          const cleanPhone = (payingAppointment.paciente_telefone || '').replace(/\D/g, '');
+          const cleanName = (payingAppointment.paciente_nome || '').toLowerCase().trim();
+
+          const updatedCards = currentCards.map((card: any) => {
+            const cardPhone = (card.paciente_telefone || '').replace(/\D/g, '');
+            const cardName = (card.paciente_nome || '').toLowerCase().trim();
+            if ((cleanPhone && cardPhone && cardPhone === cleanPhone) || (cleanName && cardName === cleanName)) {
+              return {
+                ...card,
+                stage: 'tratamento_fechado',
+                valor_estimado: numAmount || card.valor_estimado,
+                updated_at: new Date().toISOString()
+              };
+            }
+            return card;
+          });
+
+          localStorage.setItem('ambulatorio_crm_cards_v1', JSON.stringify(updatedCards));
+          window.dispatchEvent(new CustomEvent('crm_cards_updated'));
+        }
+      } catch (errCrm) {
+        console.warn("Aviso ao atualizar CRM com baixa de pagamento:", errCrm);
+      }
+
+      // 4. Envia Comprovante / Recibo no WhatsApp se solicitado
       if (sendReceiptWhatsApp && payingAppointment.paciente_telefone) {
         const digitsPhone = payingAppointment.paciente_telefone.replace(/\D/g, '');
         const cleanPhone = digitsPhone.startsWith('55') ? digitsPhone : `55${digitsPhone}`;
@@ -1208,6 +1239,27 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={async () => {
+                if (displayedAppointments.length === 0) {
+                  toast.error("Nenhum agendamento encontrado para esta exibição.");
+                  return;
+                }
+                const toastId = toast.loading("Disparando lembretes inteligentes de véspera via WhatsApp...");
+                let count = 0;
+                for (const app of displayedAppointments) {
+                  if (app.paciente_telefone) {
+                    await executeAutoWhatsAppSend(app);
+                    count++;
+                  }
+                }
+                toast.success(`✅ Lembretes de véspera (24h/Feriados) disparados para ${count} paciente(s)!`, { id: toastId });
+              }}
+              className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 font-bold text-xs cursor-pointer"
+              title="Disparar lembrete de confirmação de 24h / Feriado para todos os pacientes da lista via WhatsApp"
+            >
+              <Bell size={16} /> Disparar Lembretes 24h
+            </button>
             <button 
               onClick={() => fetchAppointments(true)}
               className="p-3.5 bg-white text-slate-400 hover:text-clinical-blue rounded-2xl border border-slate-200 hover:border-blue-200 transition-all shadow-xs cursor-pointer"

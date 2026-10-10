@@ -78,7 +78,7 @@ import PatientMediaGallery from './components/PatientMediaGallery';
 import PublicAnamneseView from './components/PublicAnamneseView';
 import { PWAInstallButton } from './components/PWAInstallButton';
 import { SPECIALTIES } from './constants/specialties';
-import { getActiveClinicConfig, resolveDoctorKey, detectRecordSpecialtyAndDoctor, DEFAULT_CLINIC_LOGO_URL } from './constants/clinicProfiles';
+import { getActiveClinicConfig, resolveDoctorKey, resolveDoctorDisplayName, detectRecordSpecialtyAndDoctor, DEFAULT_CLINIC_LOGO_URL } from './constants/clinicProfiles';
 import { 
   getOfflineRecords, 
   saveRecordLocally, 
@@ -399,6 +399,14 @@ export default function App() {
   }, [user]);
 
   const updateUserState = (newUser: { email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string; avatar_url?: string } | null) => {
+    if (newUser) {
+      // Garante sanitização do nome completo caso esteja vazio ou com placeholder 'Médico'
+      const cleanName = resolveDoctorDisplayName(newUser, newUser.full_name);
+      newUser = {
+        ...newUser,
+        full_name: cleanName
+      };
+    }
     setUser(newUser);
     if (typeof window !== 'undefined') {
       if (newUser) {
@@ -4043,59 +4051,63 @@ export default function App() {
 
         {/* User Profile & Logout */}
         <div className="pt-3 border-t border-slate-100 space-y-2 mt-3">
-          {!isSidebarCollapsed ? (
-            <div 
-              onClick={() => setShowProfileModal(true)}
-              className="px-3 py-2 bg-slate-50 hover:bg-slate-100/90 rounded-2xl border border-slate-200/70 flex items-center gap-3 cursor-pointer transition-all group active:scale-98"
-              title="Clique para ver ou alterar foto e dados do perfil"
-            >
-              <div className="relative shrink-0">
-                {user?.avatar_url ? (
-                  <img
-                    src={user.avatar_url}
-                    alt={user.full_name || 'Foto de Perfil'}
-                    className="w-9 h-9 rounded-xl object-cover border border-blue-400/80 shadow-2xs group-hover:border-blue-500 transition-colors"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs group-hover:from-blue-700 group-hover:to-indigo-700 transition-all">
-                    {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'M'}
+          {(() => {
+            const userDisplayName = resolveDoctorDisplayName(user, user?.full_name);
+            const userInitial = userDisplayName ? userDisplayName.replace(/^Dr\.\s*|^Dra\.\s*/i, '').charAt(0).toUpperCase() : 'M';
+            return !isSidebarCollapsed ? (
+              <div 
+                onClick={() => setShowProfileModal(true)}
+                className="px-3 py-2 bg-slate-50 hover:bg-slate-100/90 rounded-2xl border border-slate-200/70 flex items-center gap-3 cursor-pointer transition-all group active:scale-98"
+                title="Clique para ver ou alterar foto e dados do perfil"
+              >
+                <div className="relative shrink-0">
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={userDisplayName}
+                      className="w-9 h-9 rounded-xl object-cover border border-blue-400/80 shadow-2xs group-hover:border-blue-500 transition-colors"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs group-hover:from-blue-700 group-hover:to-indigo-700 transition-all">
+                      {userInitial}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-xs text-slate-600 group-hover:text-blue-600">
+                    <Camera size={9} />
                   </div>
-                )}
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-xs text-slate-600 group-hover:text-blue-600">
-                  <Camera size={9} />
+                </div>
+                <div className="overflow-hidden min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700 transition-colors">
+                    {userDisplayName}
+                  </p>
+                  <p className="text-[10px] text-blue-600 font-semibold uppercase">{user?.role || 'Médico'}</p>
                 </div>
               </div>
-              <div className="overflow-hidden min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700 transition-colors">
-                  {user?.full_name || user?.email}
-                </p>
-                <p className="text-[10px] text-blue-600 font-semibold uppercase">{user?.role || 'Médico'}</p>
-              </div>
-            </div>
-          ) : (
-            <div 
-              onClick={() => setShowProfileModal(true)}
-              className="flex justify-center cursor-pointer group" 
-              title={`${user?.full_name || user?.email} (${user?.role || 'Médico'}) - Clique para alterar foto`}
-            >
-              <div className="relative">
-                {user?.avatar_url ? (
-                  <img
-                    src={user.avatar_url}
-                    alt={user.full_name || 'Foto de Perfil'}
-                    className="w-9 h-9 rounded-2xl object-cover border border-blue-400/80 shadow-2xs group-hover:ring-2 group-hover:ring-blue-500/40 transition-all"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs group-hover:scale-105 transition-all">
-                    {user?.full_name ? user.full_name.charAt(0).toUpperCase() : 'M'}
+            ) : (
+              <div 
+                onClick={() => setShowProfileModal(true)}
+                className="flex justify-center cursor-pointer group" 
+                title={`${userDisplayName} (${user?.role || 'Médico'}) - Clique para alterar foto`}
+              >
+                <div className="relative">
+                  {user?.avatar_url ? (
+                    <img
+                      src={user.avatar_url}
+                      alt={userDisplayName}
+                      className="w-9 h-9 rounded-2xl object-cover border border-blue-400/80 shadow-2xs group-hover:ring-2 group-hover:ring-blue-500/40 transition-all"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs group-hover:scale-105 transition-all">
+                      {userInitial}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-xs text-slate-600">
+                    <Camera size={8} />
                   </div>
-                )}
-                <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-xs text-slate-600">
-                  <Camera size={8} />
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <button
             onClick={handleLogout}
