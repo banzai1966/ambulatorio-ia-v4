@@ -293,7 +293,7 @@ export function resolveDoctorKey(userOrEmail?: any, name?: string): 'dra_lucy' |
     return 'dra_lucy';
   }
 
-  return 'dr_carlos'; // Padrão seguro
+  return 'marco_admin'; // Padrão Administrador Master
 }
 
 /**

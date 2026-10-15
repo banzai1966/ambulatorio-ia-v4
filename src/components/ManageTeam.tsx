@@ -130,24 +130,17 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
                      currentUserEmailNorm === 'lucimurata@gmail.com' || 
                      currentUserNameNorm.includes('luc');
 
-  const canManageTeam = isMasterAdmin || isCarlosUser || isLucyUser || currentUser?.role === 'admin';
+  const canManageTeam = isMasterAdmin || isLucyUser || currentUser?.role === 'admin';
 
   const IMMORTAL_EMAILS = [
-    'marco.agduarte22@gmail.com',
-    'carvalhomorato@gmail.com',
-    'lucimurata@gmail.com'
+    'marco.agduarte22@gmail.com'
   ];
 
   const isImmortalClinicalMember = (p: Partial<Profile>) => {
     const normEmail = (p.email || '').toLowerCase().trim();
     const normName = (p.full_name || '').toLowerCase().trim();
     return normEmail === 'marco.agduarte22@gmail.com' ||
-           normEmail === 'carvalhomorato@gmail.com' ||
-           normEmail === 'lucimurata@gmail.com' ||
-           normName.includes('marco duarte') ||
-           normName.includes('carlos morato') ||
-           normName.includes('luci murata') ||
-           normName.includes('lucy morata');
+           normName.includes('marco duarte');
   };
 
   const getLocalDeletedMembers = (): string[] => {
@@ -158,9 +151,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         if (Array.isArray(parsed)) {
           return parsed.filter(item => {
             const norm = String(item).toLowerCase().trim();
-            return norm !== 'marco.agduarte22@gmail.com' && 
-                   norm !== 'carvalhomorato@gmail.com' &&
-                   norm !== 'dr-carlos-morato';
+            return norm !== 'marco.agduarte22@gmail.com';
           });
         }
       }
@@ -287,15 +278,6 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
           status: 'approved' as const
         },
         {
-          id: 'dr-carlos-morato',
-          email: 'carvalhomorato@gmail.com',
-          full_name: 'Dr. Carlos Morato',
-          role: 'admin' as const,
-          especialidade: 'Neurologia & Medicina Integrativa',
-          crm_cro: 'CRM/SP 145.892',
-          status: 'approved' as const
-        },
-        {
           id: 'dra-lucy-morata',
           email: 'lucimurata@gmail.com',
           full_name: 'Dra. Lucy Murata',
@@ -310,7 +292,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
         const foundIndex = uniqueProfiles.findIndex(p => 
           (p.email && p.email.toLowerCase().trim() === core.email) ||
           (p.full_name && p.full_name.toLowerCase().includes(
-            core.email.includes('carlos') ? 'carlos' : core.email.includes('luci') ? 'luci' : 'duarte'
+            core.email.includes('luci') ? 'luci' : 'duarte'
           ))
         );
         if (foundIndex === -1) {

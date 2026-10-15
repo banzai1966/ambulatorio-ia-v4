@@ -717,6 +717,20 @@ export default function App() {
       if (authUser) {
         console.log("Verificando usuário:", authUser.email);
         
+        // Bloqueio imediato para Dr. Carlos (acesso revogado pelo Administrador)
+        if (
+          authUser.email === 'carvalhomorato@gmail.com' || 
+          authUser.id === 'dr-carlos-morato-id' ||
+          authUser.id === 'dr-carlos-morato'
+        ) {
+          console.warn("🚫 Acesso revogado para Dr. Carlos Morato.");
+          await supabase.auth.signOut().catch(() => {});
+          updateUserState(null);
+          setError("Acesso bloqueado: Este usuário foi desativado pelo Administrador.");
+          toast.error("Acesso bloqueado pelo Administrador.", { duration: 5000 });
+          return;
+        }
+
         // 1. Tenta buscar o perfil pelo ID atual (Auth ID)
         const { data: profiles, error: fetchError } = await supabase
           .from('profiles')
@@ -768,15 +782,19 @@ export default function App() {
 
         console.log("Perfil final:", profile);
           
-        // Marco Duarte e Dr. Carlos Morato são Administradores com acesso total
+        // Marco Duarte é o Administrador Mestre com acesso total
         const isAdminUser = authUser.email === 'marco.agduarte22@gmail.com' || 
-                            authUser.email === 'carvalhomorato@gmail.com' || 
-                            authUser.id === 'master-admin-marco' ||
-                            authUser.id === 'dr-carlos-morato-id';
+                            authUser.id === 'master-admin-marco';
         
         if (profile) {
+          if (profile.status === 'blocked') {
+            await supabase.auth.signOut().catch(() => {});
+            updateUserState(null);
+            setError("Acesso bloqueado: Este usuário foi desativado pelo Administrador.");
+            toast.error("Acesso bloqueado pelo Administrador.");
+            return;
+          }
           const role = isAdminUser ? 'admin' : (profile.role || 'doctor');
-          // Se for médico ou admin, o status padrão é aprovado para permitir trabalhar diretamente
           const status = (isAdminUser || profile.status === 'approved' || role === 'doctor' || role === 'admin') ? 'approved' : profile.status;
           
           console.log(`Usuário ${authUser.email} - Role: ${role}, Status: ${status}`);
@@ -844,98 +862,8 @@ export default function App() {
     }
   };
 
-  const handleCarlosLogin = async () => {
-    setAuthLoading(true);
-    setError(null);
-    const carlosEmail = 'carvalhomorato@gmail.com';
-    const carlosPassword = 'Morato123@';
-    
-    try {
-      fetch("/api/auth/ensure-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: carlosEmail,
-          password: carlosPassword,
-          full_name: 'Dr. Carlos Morato',
-          role: 'admin',
-          especialidade: 'Neurologia & Medicina Integrativa',
-          crm_cro: 'CRM/SP 145.892'
-        })
-      }).catch(e => console.warn("Backend auth sync aviso:", e));
-
-      const { data, error: sErr } = await supabase.auth.signInWithPassword({
-        email: carlosEmail,
-        password: carlosPassword
-      });
-
-      if (data?.user) {
-        updateUserState({
-          email: carlosEmail,
-          id: data.user.id,
-          role: 'admin',
-          status: 'approved',
-          full_name: 'Dr. Carlos Morato'
-        });
-        toast.success("Bem-vindo, Dr. Carlos Morato (Administrador)!");
-        return;
-      }
-
-      if (sErr && sErr.message.includes('Invalid login credentials')) {
-        const { data: signUpData } = await supabase.auth.signUp({
-          email: carlosEmail,
-          password: carlosPassword,
-          options: {
-            data: {
-              full_name: 'Dr. Carlos Morato',
-              role: 'admin',
-              especialidade: 'Neurologia & Medicina Integrativa',
-              crm_cro: 'CRM/SP 145.892'
-            }
-          }
-        });
-        if (signUpData?.user) {
-          await supabase.from('profiles').upsert({
-            id: signUpData.user.id,
-            email: carlosEmail,
-            role: 'admin',
-            status: 'approved',
-            full_name: 'Dr. Carlos Morato',
-            especialidade: 'Neurologia & Medicina Integrativa'
-          }, { onConflict: 'email' });
-          updateUserState({
-            email: carlosEmail,
-            id: signUpData.user.id,
-            role: 'admin',
-            status: 'approved',
-            full_name: 'Dr. Carlos Morato'
-          });
-          toast.success("Bem-vindo, Dr. Carlos Morato (Administrador)!");
-          return;
-        }
-      }
-
-      updateUserState({
-        email: carlosEmail,
-        id: 'dr-carlos-morato-id',
-        role: 'admin',
-        status: 'approved',
-        full_name: 'Dr. Carlos Morato'
-      });
-      toast.success("🩺 Acesso Liberado: Dr. Carlos Morato (Administrador)!");
-    } catch (err: any) {
-      console.warn("Acesso Carlos Fallback:", err);
-      updateUserState({
-        email: carlosEmail,
-        id: 'dr-carlos-morato-id',
-        role: 'admin',
-        status: 'approved',
-        full_name: 'Dr. Carlos Morato'
-      });
-      toast.success("🩺 Acesso Liberado: Dr. Carlos Morato (Administrador)!");
-    } finally {
-      setAuthLoading(false);
-    }
+  const handleCarlosLogin = () => {
+    toast.error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
   };
 
   const handleLucyLogin = async () => {
@@ -1217,6 +1145,10 @@ export default function App() {
           normInputEmail = 'lucimurata@gmail.com';
         }
 
+        if (normInputEmail === 'carvalhomorato@gmail.com' || normInputEmail.includes('carvalhomorato')) {
+          throw new Error("Acesso bloqueado: Este perfil foi desativado pelo Administrador.");
+        }
+
         let primaryPassword = password;
         let altPassword = password;
         if (normInputEmail === 'lucimurata@gmail.com') {
@@ -1262,15 +1194,14 @@ export default function App() {
           // Se ainda falhar no Netlify (sem backend node), tenta signUp client-side
           if (error && error.message.includes('Invalid login credentials')) {
             try {
-              const isCarlos = normInputEmail.includes('carlos') || normInputEmail === 'carvalhomorato@gmail.com';
               const isLucy = normInputEmail.includes('lucy') || normInputEmail.includes('morata') || normInputEmail.includes('luci') || normInputEmail.includes('murata');
               const isMarco = normInputEmail.includes('marco') || normInputEmail === 'marco.agduarte22@gmail.com';
 
-              if (isCarlos || isLucy || isMarco) {
-                const fullName = isMarco ? 'Dr. Marco Duarte (Admin)' : (isCarlos ? 'Dr. Carlos Morato' : 'Dra. Lucy Morata');
-                const spec = isCarlos ? 'Neurologia & Medicina Integrativa' : (isLucy ? 'Odontologia Biológica & Saúde Integrativa' : 'Clínica Geral & Gestão');
+              if (isLucy || isMarco) {
+                const fullName = isMarco ? 'Dr. Marco Duarte (Admin)' : 'Dra. Lucy Morata';
+                const spec = isLucy ? 'Odontologia Biológica & Saúde Integrativa' : 'Clínica Geral & Gestão';
                 const role = 'admin';
-                const crm_cro = isMarco ? 'ADMIN-MASTER-01' : (isCarlos ? 'CRM/SP 145.892' : 'CRO/SP 98.412');
+                const crm_cro = isMarco ? 'ADMIN-MASTER-01' : 'CRO/SP 98.412';
                 
                 const { data: sUpData } = await supabase.auth.signUp({
                   email: normInputEmail,
@@ -1301,7 +1232,7 @@ export default function App() {
                   // Fallback de contingência local
                   updateUserState({
                     email: normInputEmail,
-                    id: isMarco ? 'master-admin-marco' : (isCarlos ? 'dr-carlos-morato-id' : 'dra-lucy-morata-id'),
+                    id: isMarco ? 'master-admin-marco' : 'dra-lucy-morata-id',
                     role,
                     status: 'approved',
                     full_name: fullName
@@ -1327,7 +1258,12 @@ export default function App() {
           throw error;
         }
         if (data.user) {
-          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email === 'carvalhomorato@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
+          if (data.user.email === 'carvalhomorato@gmail.com') {
+            await supabase.auth.signOut().catch(() => {});
+            throw new Error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
+          }
+
+          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
           
           const { data: profiles } = await supabase
             .from('profiles')
@@ -1335,9 +1271,13 @@ export default function App() {
             .eq('id', data.user.id);
           
           const profile = profiles && profiles.length > 0 ? profiles[0] : null;
+
+          if (profile?.status === 'blocked') {
+            await supabase.auth.signOut().catch(() => {});
+            throw new Error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
+          }
           
           const resolvedName = profile?.full_name || (
-            data.user.email === 'carvalhomorato@gmail.com' ? 'Dr. Carlos Morato' :
             data.user.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte (Admin)' :
             (data.user.email?.includes('lucy') || data.user.email === 'dra.lucy.morata@gmail.com') ? 'Dra. Lucy Morata' :
             data.user.email
@@ -3549,16 +3489,6 @@ export default function App() {
                 >
                   <ShieldCheck size={18} />
                   Entrar como Dr. Marco Duarte (Admin)
-                </button>
-
-                <button 
-                  type="button"
-                  onClick={handleCarlosLogin}
-                  disabled={authLoading}
-                  className="w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs"
-                >
-                  <Stethoscope size={16} className="text-indigo-600" />
-                  Entrar como Dr. Carlos Morato (Neurologia)
                 </button>
 
                 <button 

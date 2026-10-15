@@ -318,17 +318,13 @@ const DELETED_MEMBERS_FILE = path.join(process.cwd(), 'deleted_members.json');
 const CRM_CRO_FILE = path.join(process.cwd(), 'crm_cro_map.json');
 
 const PROTECTED_ADMIN_EMAILS = [
-  'marco.agduarte22@gmail.com',
-  'carvalhomorato@gmail.com'
+  'marco.agduarte22@gmail.com'
 ];
 
 function isProtectedClinicalEmail(emailOrId?: string): boolean {
   if (!emailOrId) return false;
   const norm = String(emailOrId).toLowerCase().trim();
-  return norm === 'marco.agduarte22@gmail.com' || norm.includes('marco.agduarte22@gmail.com') ||
-         norm === 'carvalhomorato@gmail.com' || norm.includes('carvalhomorato@gmail.com') ||
-         norm.includes('carlos') || norm.includes('morato') ||
-         norm === 'lucimurata@gmail.com' || norm.includes('lucimurata') || norm.includes('lucy') || norm.includes('murata');
+  return norm === 'marco.agduarte22@gmail.com' || norm.includes('marco.agduarte22@gmail.com');
 }
 
 const CORE_CLINIC_USERS = [
@@ -341,14 +337,6 @@ const CORE_CLINIC_USERS = [
     crm_cro: 'ADMIN-MASTER-01'
   },
   {
-    email: 'carvalhomorato@gmail.com',
-    password: 'Morato123@',
-    full_name: 'Dr. Carlos Morato',
-    role: 'admin',
-    especialidade: 'Neurologia & Medicina Integrativa',
-    crm_cro: 'CRM/SP 145.892'
-  },
-  {
     email: 'lucimurata@gmail.com',
     password: 'Murata123@',
     full_name: 'Dra. Lucy Morata',
@@ -359,7 +347,26 @@ const CORE_CLINIC_USERS = [
 ];
 
 async function ensureCoreClinicUsers() {
-  console.log("[SERVER] 🛡️ Verificando e garantindo os 3 Profissionais Principais do Ambulatório IA...");
+  console.log("[SERVER] 🛡️ Verificando e garantindo os Profissionais do Ambulatório IA...");
+  
+  // Garante que o Dr. Carlos seja purgado do Supabase Auth e desativado
+  try {
+    saveDeletedMember('carvalhomorato@gmail.com');
+    saveDeletedMember('dr-carlos-morato');
+    
+    const { data: usersList } = await supabase.auth.admin.listUsers();
+    const carlosUser = (usersList?.users as any[])?.find((usr: any) => 
+      usr.email?.toLowerCase().trim() === 'carvalhomorato@gmail.com'
+    );
+    if (carlosUser) {
+      console.log("[SERVER] 🚫 Purgando acesso do Dr. Carlos do Supabase Auth...");
+      await supabase.auth.admin.deleteUser(carlosUser.id).catch((e: any) => console.warn("Aviso ao deletar Dr. Carlos do Auth:", e.message));
+    }
+    await supabase.from('profiles').update({ status: 'blocked' }).eq('email', 'carvalhomorato@gmail.com');
+  } catch (purgeErr: any) {
+    console.warn("[SERVER] Aviso na checagem de bloqueio do Dr. Carlos:", purgeErr?.message);
+  }
+
   for (const u of CORE_CLINIC_USERS) {
     try {
       unmarkDeletedMember(u.email);
@@ -404,7 +411,7 @@ async function ensureCoreClinicUsers() {
       console.warn(`[SERVER] Erro não-bloqueante ao assegurar ${u.email}:`, e.message);
     }
   }
-  console.log("[SERVER] ✅ Profissionais Principais (Dr. Carlos, Dra. Lucy e Dr. Marco) blindados e prontos!");
+  console.log("[SERVER] ✅ Profissionais Principais (Dr. Marco e Dra. Lucy) ativos e prontos!");
 }
 
 function getCrmCroMapServer(): Record<string, string> {
@@ -543,9 +550,12 @@ app.post("/api/admin/create-member", async (req, res) => {
       return res.status(400).json({ error: "Nome e e-mail são obrigatórios" });
     }
     const normEmail = email.toLowerCase().trim();
+    if (normEmail === 'carvalhomorato@gmail.com' || getDeletedMembers().includes(normEmail)) {
+      return res.status(403).json({ error: "Este usuário foi bloqueado/desativado pelo Administrador Master." });
+    }
     const userPassword = password || "Duarte2026!";
     const userName = full_name.trim();
-    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com') ? 'admin' : (role || 'doctor');
+    const userRole = normEmail === 'marco.agduarte22@gmail.com' ? 'admin' : (role || 'doctor');
     const userSpec = especialidade || 'Nenhuma';
     const userCrm = (crm_cro || '').trim();
 
@@ -629,11 +639,14 @@ app.post("/api/auth/ensure-user", async (req, res) => {
     if (normEmail.endsWith('@gmail.com.br')) {
       normEmail = normEmail.replace('@gmail.com.br', '@gmail.com');
     }
+    if (normEmail === 'carvalhomorato@gmail.com' || getDeletedMembers().includes(normEmail)) {
+      return res.status(403).json({ error: "Este usuário foi bloqueado/desativado pelo Administrador Master." });
+    }
     const isLucy = normEmail === 'lucimurata@gmail.com' || normEmail.includes('lucimurata') || normEmail.includes('lucy') || normEmail.includes('murata');
     const userPassword = password || (isLucy ? 'Murata123@' : 'Duarte2026!');
-    const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : (normEmail === 'carvalhomorato@gmail.com' ? 'Dr. Carlos Morato' : (isLucy ? 'Dra. Lucy Morata' : 'Médico')));
-    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || normEmail === 'carvalhomorato@gmail.com' || isLucy) ? 'admin' : (role || 'doctor');
-    const userSpec = especialidade || (isLucy ? 'Odontologia Biológica & Saúde Integrativa' : (normEmail === 'carvalhomorato@gmail.com' ? 'Neurologia & Medicina Integrativa' : 'Clínica Geral & Gestão'));
+    const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : (isLucy ? 'Dra. Lucy Morata' : 'Médico'));
+    const userRole = (normEmail === 'marco.agduarte22@gmail.com' || isLucy) ? 'admin' : (role || 'doctor');
+    const userSpec = especialidade || (isLucy ? 'Odontologia Biológica & Saúde Integrativa' : 'Clínica Geral & Gestão');
     const userCrm = (crm_cro || (isLucy ? 'CRO/SP 98.412' : '')).trim();
 
     unmarkDeletedMember(normEmail);
