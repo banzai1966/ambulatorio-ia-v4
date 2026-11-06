@@ -559,7 +559,12 @@ export default function PatientDossierView({
 }: PatientDossierViewProps) {
   const [activeTab, setActiveTab] = useState<
     'evolucao' | 'anamnese' | 'plano' | 'especialidade' | 'prescricoes' | 'anexos' | 'contratos' | 'financeiro'
-  >('evolucao');
+  >(() => {
+    if (examMode === 'biological_dentistry' || activeDoctor.default_mode === 'biological_dentistry') {
+      return 'especialidade';
+    }
+    return 'evolucao';
+  });
 
   const [showAudioModeMenu, setShowAudioModeMenu] = useState(false);
 
@@ -1890,7 +1895,27 @@ export default function PatientDossierView({
 
             {/* Abas Dinâmicas de acordo com o Profissional Selecionado */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-1">
-              {/* 1. Evolução & Atendimento (SOAP) em Primeiro Lugar */}
+              {/* 1. Odontologia Biológica para Dra. Lucy ou Modo Odonto (Destaque Principal) */}
+              {(activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry') && (
+                <button
+                  type="button"
+                  id="tab-odontologia-biologica"
+                  onClick={() => {
+                    setExamMode('biological_dentistry');
+                    setActiveTab('especialidade');
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+                    activeTab === 'especialidade' && examMode === 'biological_dentistry'
+                      ? 'bg-emerald-700 text-white shadow-md shadow-emerald-700/20'
+                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 hover:text-emerald-900 border border-emerald-200/60'
+                  }`}
+                >
+                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-amber-300' : 'text-emerald-600'} />
+                  Odontologia Biológica (Odontograma & SMART)
+                </button>
+              )}
+
+              {/* Evolução & Atendimento (SOAP) */}
               <button
                 type="button"
                 id="tab-evolucao-soap"
@@ -1909,26 +1934,6 @@ export default function PatientDossierView({
                 <Activity size={14} />
                 Evolução & Atendimento (SOAP)
               </button>
-
-              {/* 2. Odontologia Biológica para Dra. Lucy */}
-              {(activeDoctor.default_mode === 'biological_dentistry' || examMode === 'biological_dentistry') && (
-                <button
-                  type="button"
-                  id="tab-odontologia-biologica"
-                  onClick={() => {
-                    setExamMode('biological_dentistry');
-                    setActiveTab('especialidade');
-                  }}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                    activeTab === 'especialidade' && examMode === 'biological_dentistry'
-                      ? 'bg-slate-800 text-white shadow-xs'
-                      : 'bg-slate-100/90 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
-                  }`}
-                >
-                  <Sparkles size={14} className={activeTab === 'especialidade' && examMode === 'biological_dentistry' ? 'text-amber-300' : 'text-slate-500'} />
-                  Odontologia Biológica
-                </button>
-              )}
 
               {/* Destaque Neurológico - Dr. Carlos ou Especialistas em Neuro */}
               {(activeDoctor.default_mode === 'neurological' || examMode === 'neurological') && (

@@ -284,11 +284,12 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [historyDoctorFilter, setHistoryDoctorFilter] = useState<'all' | 'dra_lucy' | 'dr_carlos' | 'offline'>('all');
   
-  // Persistência de Aba Ativa
+  // Persistência de Aba Ativa - Padrão direto na Odontologia Biológica (Atendimento)
   const savedActiveTab = typeof window !== 'undefined' ? localStorage.getItem('ambulatorio_active_tab') : null;
-  const [showHistory, setShowHistory] = useState(savedActiveTab === 'historico');
-  const [showAgenda, setShowAgenda] = useState(savedActiveTab === 'agenda');
-  const [showMessageHistory, setShowMessageHistory] = useState(savedActiveTab === 'mensagens');
+  const initialActiveTab = savedActiveTab || 'atendimento';
+  const [showHistory, setShowHistory] = useState(initialActiveTab === 'historico');
+  const [showAgenda, setShowAgenda] = useState(initialActiveTab === 'agenda');
+  const [showMessageHistory, setShowMessageHistory] = useState(initialActiveTab === 'mensagens');
   const [showSystemOverview, setShowSystemOverview] = useState(false);
   const [showManualClinico, setShowManualClinico] = useState(false);
   const [manualDefaultProfile, setManualDefaultProfile] = useState<'dr_carlos' | 'dra_lucy'>('dr_carlos');
@@ -333,6 +334,7 @@ export default function App() {
   ) : false;
   const currentDoctorKey = user ? resolveDoctorKey(user.email, user.full_name) : null;
   const isAdmin = isMasterAdmin;
+  const isDoctorLucy = currentDoctorKey === 'dra_lucy';
 
   useEffect(() => {
     if (!isMasterAdmin && currentDoctorKey) {
@@ -363,10 +365,10 @@ export default function App() {
   }, [user]);
 
   const [showHelp, setShowHelp] = useState(false);
-  const [showManageTeam, setShowManageTeam] = useState(savedActiveTab === 'equipe');
-  const [showFinancial, setShowFinancial] = useState(savedActiveTab === 'financeiro');
-  const [showCrm, setShowCrm] = useState(savedActiveTab === 'crm');
-  const [showDashboard, setShowDashboard] = useState(!savedActiveTab || savedActiveTab === 'dashboard');
+  const [showManageTeam, setShowManageTeam] = useState(initialActiveTab === 'equipe');
+  const [showFinancial, setShowFinancial] = useState(initialActiveTab === 'financeiro');
+  const [showCrm, setShowCrm] = useState(initialActiveTab === 'crm');
+  const [showDashboard, setShowDashboard] = useState(initialActiveTab === 'dashboard');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -455,10 +457,12 @@ export default function App() {
   const [examMode, setExamMode] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const savedDoc = localStorage.getItem('clinic_active_doctor_id');
-      if (savedDoc === 'dra_lucy') return 'biological_dentistry';
       if (savedDoc === 'dr_carlos') return 'neurological';
+      if (savedDoc === 'dra_lucy') return 'biological_dentistry';
+      const savedExam = localStorage.getItem('clinic_active_exam_mode');
+      if (savedExam) return savedExam;
     }
-    return 'neurological';
+    return 'biological_dentistry'; // Padrão prioritário de maior impacto: Odontologia Biológica
   });
   const [specialtyData, setSpecialtyData] = useState<any>({});
   const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -717,13 +721,13 @@ export default function App() {
       if (authUser) {
         console.log("Verificando usuário:", authUser.email);
         
-        // Bloqueio imediato para Dr. Carlos (acesso revogado pelo Administrador)
+        // Bloqueio mantido apenas para Dr. Carlos (acesso revogado pelo Administrador)
         if (
           authUser.email === 'carvalhomorato@gmail.com' || 
           authUser.id === 'dr-carlos-morato-id' ||
           authUser.id === 'dr-carlos-morato'
         ) {
-          console.warn("🚫 Acesso revogado para Dr. Carlos Morato.");
+          console.warn("🚫 Acesso revogado para Dr. Carlos.");
           await supabase.auth.signOut().catch(() => {});
           updateUserState(null);
           setError("Acesso bloqueado: Este usuário foi desativado pelo Administrador.");
@@ -880,92 +884,82 @@ export default function App() {
           email: lucyEmail,
           password: lucyPassword,
           full_name: 'Dra. Lucy Morata',
-          role: 'admin',
-          especialidade: 'Odontologia Biológica & Saúde Integrativa',
-          crm_cro: 'CRO/SP 98.412'
+          role: 'doctor',
+          especialidade: 'Odontologia Biológica & Saúde Integrativa'
         })
       }).catch(e => console.warn("Backend auth sync aviso:", e));
 
+      // 1. Tenta login no Supabase
       let { data, error: sErr } = await supabase.auth.signInWithPassword({
         email: lucyEmail,
         password: lucyPassword
       });
 
-      if (!data?.user && sErr) {
-        const altRes = await supabase.auth.signInWithPassword({
+      // 2. Tenta com senha alternativa se necessário
+      if (sErr) {
+        const altTry = await supabase.auth.signInWithPassword({
           email: lucyEmail,
           password: 'murata123'
         });
-        if (altRes.data?.user) {
-          data = altRes.data;
+        if (!altTry.error && altTry.data) {
+          data = altTry.data;
           sErr = null;
         }
       }
 
       if (data?.user) {
-        updateUserState({
-          email: lucyEmail,
-          id: data.user.id,
-          role: 'admin',
-          status: 'approved',
-          full_name: 'Dra. Lucy Morata'
-        });
-        toast.success("Bem-vinda, Dra. Lucy Morata!");
-        return;
-      }
-
-      if (sErr && sErr.message.includes('Invalid login credentials')) {
-        const { data: signUpData } = await supabase.auth.signUp({
-          email: lucyEmail,
-          password: lucyPassword,
-          options: {
-            data: {
-              full_name: 'Dra. Lucy Morata',
-              role: 'admin',
-              especialidade: 'Odontologia Biológica & Saúde Integrativa',
-              crm_cro: 'CRO/SP 98.412'
-            }
-          }
-        });
-        if (signUpData?.user) {
+        try {
           await supabase.from('profiles').upsert({
-            id: signUpData.user.id,
+            id: data.user.id,
             email: lucyEmail,
-            role: 'admin',
+            role: 'doctor',
             status: 'approved',
             full_name: 'Dra. Lucy Morata',
             especialidade: 'Odontologia Biológica & Saúde Integrativa'
           }, { onConflict: 'email' });
-          updateUserState({
-            email: lucyEmail,
-            id: signUpData.user.id,
-            role: 'admin',
-            status: 'approved',
-            full_name: 'Dra. Lucy Morata'
-          });
-          toast.success("Bem-vinda, Dra. Lucy Morata!");
-          return;
+        } catch (upErr) {
+          console.warn("Aviso ao atualizar perfil Dra. Lucy:", upErr);
         }
+
+        updateUserState({
+          email: lucyEmail,
+          id: data.user.id,
+          role: 'doctor',
+          status: 'approved',
+          full_name: 'Dra. Lucy Morata'
+        });
+        localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+        setExamMode('biological_dentistry');
+        navigateToTab('atendimento');
+        toast.success("Bem-vinda, Dra. Lucy Morata! (Odontologia Biológica)");
+        return;
       }
 
+      // Fallback seguro direto para Dra. Lucy
       updateUserState({
         email: lucyEmail,
         id: 'dra-lucy-morata-id',
-        role: 'admin',
+        role: 'doctor',
         status: 'approved',
         full_name: 'Dra. Lucy Morata'
       });
-      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata!");
+      localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+      setExamMode('biological_dentistry');
+      navigateToTab('atendimento');
+      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata (Odontologia Biológica)");
     } catch (err: any) {
-      console.warn("Acesso Lucy Fallback:", err);
+      console.warn("Acesso Dra. Lucy Fallback ativado:", err);
       updateUserState({
         email: lucyEmail,
         id: 'dra-lucy-morata-id',
-        role: 'admin',
+        role: 'doctor',
         status: 'approved',
         full_name: 'Dra. Lucy Morata'
       });
-      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata!");
+      localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+      setExamMode('biological_dentistry');
+      navigateToTab('atendimento');
+      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata (Odontologia Biológica)");
     } finally {
       setAuthLoading(false);
     }
@@ -1126,6 +1120,69 @@ export default function App() {
       console.error("Erro no login demo:", err);
       setError(err.message || "Falha no login de demonstração.");
       toast.error("Erro ao acessar conta demo.");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleTestDentistLogin = async () => {
+    setAuthLoading(true);
+    setError(null);
+    const testEmail = 'dentista.teste@ambulatorio.ia';
+    const testPassword = 'TesteDentista123!';
+    
+    try {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: testEmail,
+        password: testPassword,
+      });
+
+      if (signInError && signInError.message.includes('Invalid login credentials')) {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: testEmail,
+          password: testPassword,
+          options: {
+            data: {
+              full_name: 'Dr(a). Dentista Convidado (Teste)'
+            }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (signUpData.user) {
+          await supabase.from('profiles').upsert({
+            id: signUpData.user.id,
+            email: testEmail,
+            role: 'doctor',
+            status: 'approved',
+            full_name: 'Dr(a). Dentista Convidado (Teste)'
+          });
+          
+          toast.success("Acesso de Dentista Convidado liberado!");
+          await checkUser();
+          return;
+        }
+      } else if (signInError) {
+        throw signInError;
+      }
+
+      if (signInData.user) {
+        await supabase.from('profiles').upsert({
+          id: signInData.user.id,
+          email: testEmail,
+          role: 'doctor',
+          status: 'approved',
+          full_name: 'Dr(a). Dentista Convidado (Teste)'
+        });
+      }
+
+      await checkUser();
+      toast.success("Login como Dentista Convidado realizado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro no login de teste:", err);
+      setError(err.message || "Falha no login de teste.");
+      toast.error("Erro ao acessar conta de teste.");
     } finally {
       setAuthLoading(false);
     }
@@ -1353,24 +1410,67 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.warn("SignOut warning:", e);
+      // 1. Zera imediatamente o estado no React para exibir a tela de login na hora
+      setUser(null);
+
+      // 2. Limpeza profunda de tokens e sessão no localStorage e sessionStorage
+      if (typeof window !== 'undefined') {
+        try {
+          (window as any).__isExplicitlyLoggedOut = true;
+          localStorage.removeItem('ambulatorio_user_session');
+          localStorage.removeItem('ambulatorio_active_tab');
+          localStorage.removeItem('clinic_active_doctor_id');
+          localStorage.removeItem('clinic_active_exam_mode');
+          
+          // Remove todos os tokens do Supabase (sb-*-auth-token) para impedir auto-restauração imediata na VPS
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token') || key.includes('ambulatorio_user_session'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(k => localStorage.removeItem(k));
+          sessionStorage.clear();
+        } catch (storageErr) {
+          console.warn("Aviso ao limpar storage de autenticação:", storageErr);
+        }
+      }
+
+      // 3. Reseta estados de visualização
+      setShowDashboard(false);
+      setShowHistory(false);
+      setShowAgenda(false);
+      setShowMessageHistory(false);
+      setShowFinancial(false);
+      setShowManageTeam(false);
+      setShowCrm(false);
+      setHistory([]);
+      setCurrentRecord(null);
+      setSelectedPatient(null);
+      setShowSecretControls(false);
+      setLogoClicks(0);
+      setEmail('');
+      setPassword('');
+
+      // 4. Executa signOut do Supabase em paralelo com timeout de 600ms (nunca trava a UI na VPS)
+      try {
+        await Promise.race([
+          supabase.auth.signOut({ scope: 'local' }).catch(() => {}).then(() => supabase.auth.signOut().catch(() => {})),
+          new Promise(resolve => setTimeout(resolve, 600))
+        ]);
+      } catch (e) {
+        console.warn("Aviso no signOut remoto:", e);
+      }
+
+      toast.success("Desconectado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao deslogar:", err);
+      setUser(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ambulatorio_user_session');
+      }
     }
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ambulatorio_active_tab', 'dashboard');
-    }
-    updateUserState(null);
-    setShowDashboard(true);
-    setShowHistory(false);
-    setShowAgenda(false);
-    setShowMessageHistory(false);
-    setShowFinancial(false);
-    setShowManageTeam(false);
-    setHistory([]);
-    setCurrentRecord(null);
-    setShowSecretControls(false);
-    setLogoClicks(0);
   };
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -3510,6 +3610,16 @@ export default function App() {
                   <Stethoscope size={16} className="text-slate-500" />
                   Acesso Rápido Médico de Demonstração
                 </button>
+
+                <button 
+                  type="button"
+                  onClick={handleTestDentistLogin}
+                  disabled={authLoading}
+                  className="w-full py-3 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs shadow-xs"
+                >
+                  <Sparkles size={16} className="text-teal-600" />
+                  Testar Acesso - Nova Dentista Convidada
+                </button>
               </div>
             )}
           </form>
@@ -3663,6 +3773,13 @@ export default function App() {
             </button>
           </div>
 
+          {isDoctorLucy && !isSidebarCollapsed && (
+            <div className="mx-1 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/70 flex items-center gap-2 text-[11px] text-emerald-800 font-bold shadow-2xs">
+              <Sparkles size={13} className="text-emerald-600 shrink-0" />
+              <span className="truncate">Modo Odontologia Biológica</span>
+            </div>
+          )}
+
           {/* Navigation Links */}
           <nav className="space-y-1">
             {!isSidebarCollapsed && (
@@ -3671,39 +3788,53 @@ export default function App() {
               </div>
             )}
 
-            <button
-              onClick={() => navigateToTab('dashboard')}
-              title={isSidebarCollapsed ? "Dashboard Geral" : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                showDashboard 
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-              )}
-            >
-              <Activity size={17} className={showDashboard ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>Dashboard Geral</span>}
-            </button>
+            {/* Dashboard Geral (Oculto para Dra. Lucy para modo 100% focado no atendimento odontológico) */}
+            {!isDoctorLucy && (
+              <button
+                onClick={() => navigateToTab('dashboard')}
+                title={isSidebarCollapsed ? "Dashboard Geral" : undefined}
+                className={cn(
+                  "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
+                  showDashboard 
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                    : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+                )}
+              >
+                <Activity size={17} className={showDashboard ? "text-white" : "text-slate-500"} />
+                {!isSidebarCollapsed && <span>Dashboard Geral</span>}
+              </button>
+            )}
 
+            {/* Atendimento Clínico / Odontologia Biológica */}
             <button
-              onClick={() => navigateToTab('atendimento')}
-              title={isSidebarCollapsed ? "Atendimento Clínico" : undefined}
+              onClick={() => {
+                if (isDoctorLucy) setExamMode('biological_dentistry');
+                navigateToTab('atendimento');
+              }}
+              title={isSidebarCollapsed ? (isDoctorLucy ? "Odontologia Biológica" : "Atendimento Clínico") : undefined}
               className={cn(
                 "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
                 isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
                 (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial)
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                  ? (isDoctorLucy 
+                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20" 
+                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20")
                   : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
               )}
             >
-              <Mic size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>Atendimento Clínico</span>}
+              {isDoctorLucy ? (
+                <Sparkles size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-white" : "text-emerald-600"} />
+              ) : (
+                <Mic size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-white" : "text-slate-500"} />
+              )}
+              {!isSidebarCollapsed && <span>{isDoctorLucy ? "Odontologia Biológica" : "Atendimento Clínico"}</span>}
             </button>
 
+            {/* Agenda Médica / Odonto */}
             <button
               onClick={() => navigateToTab('agenda')}
-              title={isSidebarCollapsed ? "Agenda Médica" : undefined}
+              title={isSidebarCollapsed ? (isDoctorLucy ? "Agenda Odonto" : "Agenda Médica") : undefined}
               className={cn(
                 "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
                 isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
@@ -3713,29 +3844,33 @@ export default function App() {
               )}
             >
               <Calendar size={17} className={showAgenda ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>Agenda Médica</span>}
+              {!isSidebarCollapsed && <span>{isDoctorLucy ? "Agenda Odonto" : "Agenda Médica"}</span>}
             </button>
 
-            <button
-              onClick={() => navigateToTab('crm')}
-              title={isSidebarCollapsed ? "CRM & Funil de Pacientes" : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                showCrm 
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-              )}
-            >
-              <TrendingUp size={17} className={showCrm ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && (
-                <div className="flex items-center justify-between w-full">
-                  <span>CRM & Funil</span>
-                  <span className="px-1.5 py-0.2 text-[9px] font-black bg-indigo-100 text-indigo-700 rounded-md">PRO</span>
-                </div>
-              )}
-            </button>
+            {/* CRM & Funil de Pacientes (Oculto para Dra. Lucy) */}
+            {!isDoctorLucy && (
+              <button
+                onClick={() => navigateToTab('crm')}
+                title={isSidebarCollapsed ? "CRM & Funil de Pacientes" : undefined}
+                className={cn(
+                  "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
+                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
+                  showCrm 
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
+                    : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+                )}
+              >
+                <TrendingUp size={17} className={showCrm ? "text-white" : "text-slate-500"} />
+                {!isSidebarCollapsed && (
+                  <div className="flex items-center justify-between w-full">
+                    <span>CRM & Funil</span>
+                    <span className="px-1.5 py-0.2 text-[9px] font-black bg-indigo-100 text-indigo-700 rounded-md">PRO</span>
+                  </div>
+                )}
+              </button>
+            )}
 
+            {/* Mensagens & WhatsApp */}
             <button
               onClick={() => navigateToTab('mensagens')}
               title={isSidebarCollapsed ? "Mensagens & WhatsApp" : undefined}
@@ -3751,9 +3886,13 @@ export default function App() {
               {!isSidebarCollapsed && <span>Mensagens & WhatsApp</span>}
             </button>
 
+            {/* Histórico de Prontuários */}
             <button
-              onClick={() => navigateToTab('historico')}
-              title={isSidebarCollapsed ? "Histórico de Prontuários" : undefined}
+              onClick={() => {
+                if (isDoctorLucy) setHistoryDoctorFilter('dra_lucy');
+                navigateToTab('historico');
+              }}
+              title={isSidebarCollapsed ? (isDoctorLucy ? "Prontuários Odonto" : "Histórico de Prontuários") : undefined}
               className={cn(
                 "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
                 isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
@@ -3763,7 +3902,7 @@ export default function App() {
               )}
             >
               <History size={17} className={showHistory ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>Histórico de Prontuários</span>}
+              {!isSidebarCollapsed && <span>{isDoctorLucy ? "Prontuários Odonto" : "Histórico de Prontuários"}</span>}
             </button>
 
             {/* Módulos Exclusivos do Administrador */}
@@ -4033,14 +4172,15 @@ export default function App() {
           })()}
 
           <button
+            type="button"
             onClick={handleLogout}
             title={isSidebarCollapsed ? "Sair do Sistema" : undefined}
             className={cn(
-              "w-full flex items-center bg-red-50 hover:bg-red-100 text-red-600 rounded-xl font-bold text-xs transition-colors border border-red-100",
-              isSidebarCollapsed ? "justify-center p-2.5" : "justify-center gap-2 px-4 py-2"
+              "w-full flex items-center bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-all border border-red-200/60 cursor-pointer shadow-2xs active:scale-95",
+              isSidebarCollapsed ? "justify-center p-2.5" : "justify-center gap-2 px-4 py-2.5"
             )}
           >
-            <LogOut size={15} />
+            <LogOut size={16} />
             {!isSidebarCollapsed && <span>Sair do Sistema</span>}
           </button>
         </div>
