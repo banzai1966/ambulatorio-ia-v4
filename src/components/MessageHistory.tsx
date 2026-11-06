@@ -123,16 +123,33 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     }
   }, [initialPhone]);
 
+  // Trava de segurança para desobstruir painel de mensagens se demorar
+  useEffect(() => {
+    if (loading) {
+      const safetyTimer = setTimeout(() => {
+        console.warn("[IA] Desbloqueando interface de mensagens por timeout de segurança (3.0s)");
+        setLoading(false);
+      }, 3000);
+      return () => clearTimeout(safetyTimer);
+    }
+  }, [loading]);
+
   // Carrega mapeamento de nomes de pacientes
   const fetchPatientNames = async () => {
     try {
-      const { data } = await supabase
+      const fetchPromise = supabase
         .from('prontuarios')
         .select('paciente_telefone, paciente_nome_completo');
       
+      const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout mapa nomes')), 2500)
+      );
+
+      const { data } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+      
       if (data && data.length > 0) {
         const map: Record<string, string> = {};
-        data.forEach(p => {
+        data.forEach((p: any) => {
           if (p.paciente_telefone && p.paciente_nome_completo) {
             const norm = normalizePhone(p.paciente_telefone);
             if (norm) map[norm] = p.paciente_nome_completo;
@@ -141,7 +158,7 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         setPatientNamesMap(map);
       }
     } catch (err) {
-      console.error("Erro ao buscar mapa de nomes:", err);
+      console.warn("Aviso ao buscar mapa de nomes:", err);
     }
   };
 
@@ -313,15 +330,23 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
   const fetchMessages = async (page = 0, pageSize = 50, showLoading = true) => {
     console.time(`[PERF] fetchMessages-${page}`);
     try {
-      if (showLoading) setLoading(true);
+      if (showLoading && messages.length === 0) setLoading(true);
       const from = page * pageSize;
       const to = from + pageSize - 1;
 
-      const { data, error } = await supabase
-        .from('mensagens')
-        .select('id, created_at, telefone_cliente, mensagem, direcao, midia_url, tipo, tipo_midia')
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      const queryPromise = (async () => {
+        return await supabase
+          .from('mensagens')
+          .select('id, created_at, telefone_cliente, mensagem, direcao, midia_url, tipo, tipo_midia')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+      })();
+
+      const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+        setTimeout(() => reject(new Error('Tempo limite excedido ao buscar mensagens')), 3000)
+      );
+
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
         
       if (error) throw error;
       
@@ -336,10 +361,9 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
         if (page === 0) setMessages([]);
       }
     } catch (err: any) {
-      console.error("[IA] Erro ao buscar mensagens:", err);
-      if (showLoading) toast.error(`Erro ao carregar mensagens: ${err.message || "Erro de conexão"}`);
+      console.warn("[IA] Aviso ao carregar mensagens:", err?.message || err);
     } finally {
-      if (showLoading) setLoading(false);
+      setLoading(false);
       console.timeEnd(`[PERF] fetchMessages-${page}`);
     }
   };
@@ -646,17 +670,6 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
     toast.success(`Conversa aberta com ${clean}`);
   };
 
-  if (loading && messages.length === 0) {
-    return (
-      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs h-[650px] flex items-center justify-center p-8">
-        <div className="flex flex-col items-center gap-3 text-slate-500">
-          <Loader2 size={32} className="animate-spin text-blue-600" />
-          <p className="text-sm font-semibold">Carregando painel de mensagens...</p>
-        </div>
-      </div>
-    );
-  }
-
   const currentPatientName = patientHistory[0]?.paciente_nome_completo || (selectedPhone ? patientNamesMap[normalizePhone(selectedPhone)] : null) || selectedPhone;
 
   return (
@@ -732,19 +745,30 @@ export default function MessageHistory({ onSchedule, initialPhone }: { onSchedul
 
         {/* Lista Scrollável de Contatos */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100 bg-white">
-          {contacts.length === 0 && !loading && (
+          {loading && contacts.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 flex flex-col items-center justify-center h-48 gap-3">
+              <Loader2 size={24} className="animate-spin text-blue-600" />
+              <p className="text-xs font-semibold text-slate-500">Sincronizando conversas...</p>
+              <button 
+                onClick={() => setLoading(false)}
+                className="text-[11px] text-blue-600 hover:underline font-bold"
+              >
+                Abrir painel direto
+              </button>
+            </div>
+          ) : contacts.length === 0 ? (
             <div className="p-6 text-center text-slate-400 flex flex-col items-center justify-center h-full">
               <MessageSquare size={36} className="text-slate-300 mb-2" />
               <p className="text-xs font-semibold">Nenhuma conversa recente</p>
               <p className="text-[11px] text-slate-400 mt-1 max-w-[200px]">Clique em "Nova" para digitar um número de WhatsApp.</p>
               <button 
                 onClick={() => setIsNewChatModalOpen(true)}
-                className="mt-3 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all"
+                className="mt-3 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold hover:bg-blue-100 transition-all cursor-pointer"
               >
                 + Iniciar Conversa
               </button>
             </div>
-          )}
+          ) : null}
 
           {contacts
             .filter(c => 

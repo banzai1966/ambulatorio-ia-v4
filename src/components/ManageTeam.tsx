@@ -66,6 +66,11 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
   useEffect(() => {
     fetchProfiles();
 
+    // Trava de segurança para desobstruir listagem de equipe
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 3500);
+
     const channel = supabase
       .channel('public:profiles')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
@@ -74,6 +79,7 @@ export default function ManageTeam({ currentUser, onClose }: { currentUser?: any
       .subscribe();
 
     return () => {
+      clearTimeout(safetyTimer);
       supabase.removeChannel(channel);
     };
   }, []);

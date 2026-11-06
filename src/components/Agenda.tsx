@@ -721,34 +721,49 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
 
   const [testMessage, setTestMessage] = useState('Olá! Esta é uma mensagem de teste do seu Ambulatório IA.');
 
+  // Trava de segurança contra spinners infinitos na Agenda
+  useEffect(() => {
+    if (isLoading) {
+      const safetyTimer = setTimeout(() => {
+        console.warn("Agenda: Desbloqueando interface por timeout de segurança (3.5s)");
+        setIsLoading(false);
+      }, 3500);
+      return () => clearTimeout(safetyTimer);
+    }
+  }, [isLoading]);
+
   const fetchAppointments = async (showLoadingSpinner: boolean = false) => {
-    if (showLoadingSpinner) {
+    if (showLoadingSpinner && appointments.length === 0) {
       setIsLoading(true);
     }
     try {
       console.log("Agenda: Iniciando busca de agendamentos...");
       
       const tryFetch = async (tableName: string, columns: string = '*'): Promise<any> => {
-        let query = supabase.from(tableName).select(columns);
-        
-        // Só tenta ordenar se a coluna existir no select ou se for '*'
-        if (columns === '*' || columns.includes('created_at')) {
-          query = query.order('created_at', { ascending: false });
-        } else if (columns.includes('data_hora_inicio')) {
-          query = query.order('data_hora_inicio', { ascending: false });
-        }
+        const queryPromise = (async () => {
+          let query = supabase.from(tableName).select(columns);
+          
+          if (columns === '*' || columns.includes('created_at')) {
+            query = query.order('created_at', { ascending: false });
+          } else if (columns.includes('data_hora_inicio')) {
+            query = query.order('data_hora_inicio', { ascending: false });
+          }
 
-        const { data, error } = await query;
+          return await query;
+        })();
+
+        const timeoutPromise = new Promise<{ data: any; error: any }>((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout na busca de ${tableName}`)), 3000)
+        );
+
+        const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
         if (error) {
           console.warn(`Agenda: Erro ao buscar de '${tableName}' com colunas '${columns}':`, error.message);
           
-          // Se o erro for de coluna inexistente (como created_at na ordenação)
-          if (error.message.includes('column') && error.message.includes('does not exist')) {
+          if (error.message?.includes('column') && error.message?.includes('does not exist')) {
             if (columns === '*') {
-              // Se falhou com '*', tenta colunas específicas básicas
               return tryFetch(tableName, 'id, paciente_nome, data_hora_inicio, status, motivo, medico_id');
             } else {
-              // Se falhou com colunas específicas, tenta remover a problemática se identificada
               const match = error.message.match(/column "([^"]+)"/);
               if (match && match[1]) {
                 const missing = match[1];
@@ -762,24 +777,44 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         return data;
       };
 
-      let data;
+      let data: any[] | null = null;
       try {
         data = await tryFetch('agendamentos');
       } catch (err) {
         try {
           data = await tryFetch('appointments');
         } catch (altErr) {
-          console.error("Agenda: Falha total ao buscar agendamentos:", altErr);
-          setAppointments([]);
+          console.warn("Agenda: Busca de agendamentos remota indisponível ou vazia:", altErr);
+          setAppointments(prev => prev.length > 0 ? prev : []);
           return;
         }
       }
 
-      if (data) {
+      if (data && Array.isArray(data)) {
         console.log(`Agenda: ${data.length} registros brutos encontrados.`);
-        
-        const formattedAppointments = await Promise.all(data.map(async (app: any) => {
-          // Mapeamento flexível de campos (suporta ambos os esquemas)
+
+        // Mapa em memória de médicos conhecidos para não fazer N+1 queries assíncronas no banco
+        const doctorProfileMap: Record<string, { name: string; specialty: string }> = {
+          'dra_lucy': { name: 'Dra. Lucy Morata', specialty: 'Odontologia Biológica' },
+          'dra-lucy-morata': { name: 'Dra. Lucy Morata', specialty: 'Odontologia Biológica' },
+          'dr_carlos': { name: 'Dr. Carlos Morato', specialty: 'Neurologia' },
+          'dr-carlos-morato': { name: 'Dr. Carlos Morato', specialty: 'Neurologia' },
+          'master-admin-marco': { name: 'Dr. Marco Duarte', specialty: 'Administrador Clínico' },
+          'marco-duarte-admin': { name: 'Dr. Marco Duarte', specialty: 'Administrador Clínico' }
+        };
+
+        // Adiciona médicos carregados em cache
+        doctors.forEach(d => {
+          if (d.id) {
+            doctorProfileMap[d.id] = {
+              name: d.full_name || 'Médico',
+              specialty: d.especialidade || 'Clínico Geral'
+            };
+          }
+        });
+
+        // Mapeamento síncrono rápido (instantâneo, sem travar a interface)
+        const formattedAppointments = data.map((app: any) => {
           const paciente_nome = app.paciente_nome || app.patient_name || 'Paciente';
           const paciente_telefone = app.paciente_telefone || app.patient_phone || '';
           const data_consulta = app.data_consulta || app.appointment_date;
@@ -795,7 +830,6 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           else if (rawStatus.toLowerCase() === 'faltou') status = 'Faltou';
           else if (rawStatus) status = rawStatus;
 
-          // Se estiver como 'Agendado', checar se já existe anamnese pré-consulta preenchida
           const cleanPhoneDigits = (paciente_telefone || '').replace(/\D/g, '');
           const cleanPhoneDigitsNo55 = cleanPhoneDigits.startsWith('55') && cleanPhoneDigits.length > 10 ? cleanPhoneDigits.slice(2) : cleanPhoneDigits;
           
@@ -813,25 +847,11 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
           let medicoNome = app.medico_nome || 'Médico';
           let especialidadeNome = app.especialidade_nome || 'Clínico Geral';
           
-          // Busca informações do médico se não estiverem no registro
-          if ((medicoNome === 'Médico' || !especialidadeNome) && medico_id) {
-            try {
-              const { data: profileData } = await supabase
-                .from('profiles')
-                .select('full_name, especialidade')
-                .eq('id', medico_id)
-                .maybeSingle();
-                
-              if (profileData) {
-                if (medicoNome === 'Médico') medicoNome = profileData.full_name || medicoNome;
-                especialidadeNome = profileData.especialidade || especialidadeNome;
-              }
-            } catch (e) {
-              console.warn("Erro ao buscar perfil do médico:", e);
-            }
+          if (medico_id && doctorProfileMap[medico_id]) {
+            if (medicoNome === 'Médico') medicoNome = doctorProfileMap[medico_id].name;
+            if (!especialidadeNome || especialidadeNome === 'Clínico Geral') especialidadeNome = doctorProfileMap[medico_id].specialty;
           }
 
-          // Normalização de data/hora protegida contra deslocamento UTC
           const normalizedDataConsulta = app.data_consulta || (app.data_hora_inicio ? extractBrazilDateISO(app.data_hora_inicio) : (app.data_hora ? extractBrazilDateISO(app.data_hora) : getBrazilTodayDate()));
           const normalizedHoraConsulta = app.hora_consulta || (app.data_hora_inicio ? extractBrazilTime(app.data_hora_inicio) : (app.data_hora ? extractBrazilTime(app.data_hora) : '09:00'));
           let dataHoraInicio = app.data_hora_inicio || `${normalizedDataConsulta}T${normalizedHoraConsulta}-03:00`;
@@ -871,7 +891,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
             status_pagamento,
             tipo_consulta
           };
-        }));
+        });
 
         // Filtro por médico selecionado (se houver)
         const filtered = selectedMedicoId 
@@ -881,8 +901,7 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         setAppointments(filtered);
       }
     } catch (err: any) {
-      console.error("Erro crítico ao carregar agenda:", err);
-      toast.error("Erro ao carregar agenda. Verifique sua conexão.");
+      console.warn("Agenda: Aviso ao carregar agenda:", err?.message || err);
     } finally {
       setIsLoading(false);
     }
@@ -1261,10 +1280,16 @@ export default function Agenda({ onStartConsultation, onOpenChat, user, prefillP
         
         {/* LISTAGEM DE AGENDAMENTOS */}
         <div className="grid gap-4">
-          {isLoading ? (
+          {isLoading && appointments.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm flex flex-col items-center justify-center gap-4">
               <Loader2 size={48} className={isDentalClinic ? "text-emerald-600 animate-spin" : "text-clinical-blue animate-spin"} />
               <p className="text-slate-500 font-medium text-xs">Carregando agendamentos...</p>
+              <button
+                onClick={() => setIsLoading(false)}
+                className="mt-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-xl transition-all"
+              >
+                Continuar sem aguardar
+              </button>
             </div>
           ) : displayedAppointments.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
