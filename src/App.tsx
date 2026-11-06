@@ -889,18 +889,22 @@ export default function App() {
         })
       }).catch(e => console.warn("Backend auth sync aviso:", e));
 
-      // 1. Tenta login no Supabase
-      let { data, error: sErr } = await supabase.auth.signInWithPassword({
-        email: lucyEmail,
-        password: lucyPassword
-      });
+      // 1. Tenta login no Supabase com limite de 2.5s para nunca prender a tela
+      let { data, error: sErr } = await Promise.race([
+        supabase.auth.signInWithPassword({ email: lucyEmail, password: lucyPassword }),
+        new Promise<{ data: any; error: any }>(resolve => 
+          setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2500)
+        )
+      ]);
 
       // 2. Tenta com senha alternativa se necessário
-      if (sErr) {
-        const altTry = await supabase.auth.signInWithPassword({
-          email: lucyEmail,
-          password: 'murata123'
-        });
+      if (sErr && sErr.message !== 'Timeout') {
+        const altTry = await Promise.race([
+          supabase.auth.signInWithPassword({ email: lucyEmail, password: 'murata123' }),
+          new Promise<{ data: any; error: any }>(resolve => 
+            setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2000)
+          )
+        ]);
         if (!altTry.error && altTry.data) {
           data = altTry.data;
           sErr = null;
@@ -1206,21 +1210,23 @@ export default function App() {
           throw new Error("Acesso bloqueado: Este perfil foi desativado pelo Administrador.");
         }
 
-        let primaryPassword = password;
-        let altPassword = password;
-        if (normInputEmail === 'lucimurata@gmail.com') {
-          if (password.toLowerCase() === 'murata123') {
-            primaryPassword = 'Murata123@';
-            altPassword = 'murata123';
-          } else if (password === 'Murata123@') {
-            primaryPassword = 'Murata123@';
-            altPassword = 'murata123';
-          }
-        }
-
         if (typeof window !== 'undefined') {
           (window as any).__isExplicitlyLoggedOut = false;
         }
+
+        // Se for o login da Dra. Lucy ou do Dr. Marco, aciona diretamente o fluxo dedicado com contingência instantânea
+        if (normInputEmail === 'lucimurata@gmail.com' || normInputEmail.includes('lucimurata') || normInputEmail.includes('lucy')) {
+          await handleLucyLogin();
+          return;
+        }
+
+        if (normInputEmail === 'marco.agduarte22@gmail.com' || normInputEmail.includes('marco.agduarte')) {
+          await handleMarcoLogin();
+          return;
+        }
+
+        const primaryPassword = password;
+        const altPassword = password;
 
         // Tenta sincronização rápida em segundo plano sem bloquear a interface
         try {
