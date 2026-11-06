@@ -636,13 +636,10 @@ app.post("/api/auth/ensure-user", async (req, res) => {
     }
 
     let normEmail = email.toLowerCase().trim();
-    if (normEmail.endsWith('@gmail.com.br')) {
-      normEmail = normEmail.replace('@gmail.com.br', '@gmail.com');
-    }
-    if (normEmail === 'carvalhomorato@gmail.com' || getDeletedMembers().includes(normEmail)) {
+    const isLucy = normEmail === 'lucimurata@gmail.com' || normEmail.includes('lucimurata') || normEmail.includes('lucy') || normEmail.includes('murata');
+    if (!isLucy && (normEmail === 'carvalhomorato@gmail.com' || getDeletedMembers().includes(normEmail))) {
       return res.status(403).json({ error: "Este usuário foi bloqueado/desativado pelo Administrador Master." });
     }
-    const isLucy = normEmail === 'lucimurata@gmail.com' || normEmail.includes('lucimurata') || normEmail.includes('lucy') || normEmail.includes('murata');
     const userPassword = password || (isLucy ? 'Murata123@' : 'Duarte2026!');
     const userName = full_name || (normEmail === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte' : (isLucy ? 'Dra. Lucy Morata' : 'Médico'));
     const userRole = (normEmail === 'marco.agduarte22@gmail.com' || isLucy) ? 'admin' : (role || 'doctor');

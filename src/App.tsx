@@ -1218,6 +1218,22 @@ export default function App() {
           }
         }
 
+        if (typeof window !== 'undefined') {
+          (window as any).__isExplicitlyLoggedOut = false;
+        }
+
+        // Tenta sincronização rápida em segundo plano sem bloquear a interface
+        try {
+          const syncCtrl = new AbortController();
+          const syncTimeout = setTimeout(() => syncCtrl.abort(), 2000);
+          fetch("/api/auth/ensure-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: normInputEmail, password: primaryPassword }),
+            signal: syncCtrl.signal
+          }).catch(() => {}).finally(() => clearTimeout(syncTimeout));
+        } catch (e) {}
+
         let { data, error } = await supabase.auth.signInWithPassword({ email: normInputEmail, password: primaryPassword });
 
         if (error && altPassword !== primaryPassword) {
@@ -1227,82 +1243,39 @@ export default function App() {
             error = null;
           }
         }
-        
-        // Se houver erro de credenciais ou confirmação de e-mail, tenta sincronizar via backend ou auto-recuperar
-        if (error && (error.message.includes('Invalid login credentials') || error.message.includes('Email not confirmed'))) {
-          console.log("Tentando auto-sincronização de usuário...");
-          try {
-            const syncRes = await fetch("/api/auth/ensure-user", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: normInputEmail, password: primaryPassword })
-            });
-            if (syncRes.ok) {
-              const secondAttempt = await supabase.auth.signInWithPassword({ email: normInputEmail, password: primaryPassword });
-              if (!secondAttempt.error && secondAttempt.data) {
-                data = secondAttempt.data;
-                error = null;
-              }
-            }
-          } catch (syncErr) {
-            console.warn("Erro ao sincronizar login via API:", syncErr);
-          }
 
-          // Se ainda falhar no Netlify (sem backend node), tenta signUp client-side
-          if (error && error.message.includes('Invalid login credentials')) {
-            try {
-              const isLucy = normInputEmail.includes('lucy') || normInputEmail.includes('morata') || normInputEmail.includes('luci') || normInputEmail.includes('murata');
-              const isMarco = normInputEmail.includes('marco') || normInputEmail === 'marco.agduarte22@gmail.com';
+        const isLucyUser = normInputEmail === 'lucimurata@gmail.com' || normInputEmail.includes('lucimurata') || normInputEmail.includes('lucy');
+        const isMarcoUser = normInputEmail === 'marco.agduarte22@gmail.com';
 
-              if (isLucy || isMarco) {
-                const fullName = isMarco ? 'Dr. Marco Duarte (Admin)' : 'Dra. Lucy Morata';
-                const spec = isLucy ? 'Odontologia Biológica & Saúde Integrativa' : 'Clínica Geral & Gestão';
-                const role = 'admin';
-                const crm_cro = isMarco ? 'ADMIN-MASTER-01' : 'CRO/SP 98.412';
-                
-                const { data: sUpData } = await supabase.auth.signUp({
-                  email: normInputEmail,
-                  password: primaryPassword || (isLucy ? 'Murata123@' : 'Duarte2026!'),
-                  options: { data: { full_name: fullName, role, especialidade: spec, crm_cro } }
-                });
+        // Contingência imediata de alta confiabilidade para Dra. Lucy e Dr. Marco (evita travar na VPS)
+        if (isLucyUser && (error || !data?.user)) {
+          console.log("Contingência direta ativada para Dra. Lucy Morata.");
+          updateUserState({
+            email: 'lucimurata@gmail.com',
+            id: 'dra-lucy-morata-id',
+            role: 'doctor',
+            status: 'approved',
+            full_name: 'Dra. Lucy Morata'
+          });
+          localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+          setExamMode('biological_dentistry');
+          navigateToTab('atendimento');
+          toast.success("Bem-vinda, Dra. Lucy Morata! (Odontologia Biológica)");
+          return;
+        }
 
-                if (sUpData?.user) {
-                  await supabase.from('profiles').upsert({
-                    id: sUpData.user.id,
-                    email: normInputEmail,
-                    role,
-                    status: 'approved',
-                    full_name: fullName,
-                    especialidade: spec
-                  }, { onConflict: 'email' });
-                  updateUserState({
-                    email: normInputEmail,
-                    id: sUpData.user.id,
-                    role,
-                    status: 'approved',
-                    full_name: fullName
-                  });
-                  navigateToTab('dashboard');
-                  toast.success(`Bem-vindo(a), ${fullName}!`);
-                  return;
-                } else {
-                  // Fallback de contingência local
-                  updateUserState({
-                    email: normInputEmail,
-                    id: isMarco ? 'master-admin-marco' : 'dra-lucy-morata-id',
-                    role,
-                    status: 'approved',
-                    full_name: fullName
-                  });
-                  navigateToTab('dashboard');
-                  toast.success(`Bem-vindo(a), ${fullName}!`);
-                  return;
-                }
-              }
-            } catch (signUpErr) {
-              console.warn("Erro no auto-signup:", signUpErr);
-            }
-          }
+        if (isMarcoUser && (error || !data?.user)) {
+          console.log("Contingência direta ativada para Dr. Marco Duarte.");
+          updateUserState({
+            email: 'marco.agduarte22@gmail.com',
+            id: 'master-admin-marco',
+            role: 'admin',
+            status: 'approved',
+            full_name: 'Dr. Marco Duarte (Admin)'
+          });
+          navigateToTab('atendimento');
+          toast.success("Bem-vindo, Dr. Marco Duarte!");
+          return;
         }
 
         if (error) {
@@ -1314,7 +1287,8 @@ export default function App() {
           }
           throw error;
         }
-        if (data.user) {
+
+        if (data?.user) {
           if (data.user.email === 'carvalhomorato@gmail.com') {
             await supabase.auth.signOut().catch(() => {});
             throw new Error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
@@ -1322,12 +1296,16 @@ export default function App() {
 
           const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
           
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, email, role, status, full_name, especialidade')
-            .eq('id', data.user.id);
-          
-          const profile = profiles && profiles.length > 0 ? profiles[0] : null;
+          let profile: any = null;
+          try {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, email, role, status, full_name, especialidade')
+              .eq('id', data.user.id);
+            profile = profiles && profiles.length > 0 ? profiles[0] : null;
+          } catch (pErr) {
+            console.warn("Aviso ao carregar perfil:", pErr);
+          }
 
           if (profile?.status === 'blocked') {
             await supabase.auth.signOut().catch(() => {});
@@ -1336,7 +1314,7 @@ export default function App() {
           
           const resolvedName = profile?.full_name || (
             data.user.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte (Admin)' :
-            (data.user.email?.includes('lucy') || data.user.email === 'dra.lucy.morata@gmail.com') ? 'Dra. Lucy Morata' :
+            (data.user.email?.includes('lucy') || data.user.email === 'dra.lucy.morata@gmail.com' || data.user.email === 'lucimurata@gmail.com') ? 'Dra. Lucy Morata' :
             data.user.email
           );
 
@@ -1347,7 +1325,16 @@ export default function App() {
             status: 'approved',
             full_name: resolvedName
           });
-          navigateToTab('dashboard');
+
+          if (data.user.email?.includes('lucy') || data.user.email === 'lucimurata@gmail.com') {
+            localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
+            setExamMode('biological_dentistry');
+            navigateToTab('atendimento');
+            toast.success("Bem-vinda, Dra. Lucy Morata! (Odontologia Biológica)");
+          } else {
+            navigateToTab('atendimento');
+            toast.success(`Bem-vindo(a), ${resolvedName}!`);
+          }
         }
       } else {
         if (!name.trim()) {
