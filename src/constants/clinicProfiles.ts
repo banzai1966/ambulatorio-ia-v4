@@ -9,13 +9,13 @@ export interface WhiteLabelClinicBrand {
 }
 
 export const DEFAULT_WHITE_LABEL_BRAND: WhiteLabelClinicBrand = {
-  clinicName: 'Clínica Studio Visual IA',
-  professionalName: 'Dr(a). Especialista',
-  councilBadge: 'CRM / CRO',
-  specialtySubtitle: 'Odontologia Biológica · Nutrologia · Dermatologia',
+  clinicName: 'Odonto Studio Visual IA',
+  professionalName: 'Dr(a). Cirurgião-Dentista',
+  councilBadge: 'CRO',
+  specialtySubtitle: 'Odontologia Biológica & Diagnóstico Visual IA',
   phone: '',
   address: '',
-  cityFooter: 'Documento clínico emitido digitalmente para fins de orientação diagnóstica e terapêutica.'
+  cityFooter: 'Documento odontológico emitido digitalmente para fins de orientação diagnóstica e terapêutica.'
 };
 
 const BRAND_STORAGE_KEY = 'studio_clinico_whitelabel_brand_v1';

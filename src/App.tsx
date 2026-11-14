@@ -31,12 +31,11 @@ import {
 } from './constants/clinicProfiles';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import BiologicalDentistryForm, { BiologicalDentistryData } from './components/BiologicalDentistryForm';
-import NutrologyModule, { NutrologyData } from './components/NutrologyModule';
-import DermatologyModule, { DermatologyData } from './components/DermatologyModule';
+import IntegrativePresentationSuite from './components/IntegrativePresentationSuite';
 import type { OdontogramData } from './components/InteractiveOdontogram';
 
 export default function App() {
-  const [activeSpecialty, setActiveSpecialty] = useState<StudioSpecialtyId>('biological_dentistry');
+  const activeSpecialty: StudioSpecialtyId = 'biological_dentistry';
   const [brand, setBrand] = useState<WhiteLabelClinicBrand>(() => loadWhiteLabelBrand());
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [draftBrand, setDraftBrand] = useState<WhiteLabelClinicBrand>(brand);
@@ -56,10 +55,8 @@ export default function App() {
   const [clinicalSummary, setClinicalSummary] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
 
-  // Estados independentes por pilar clínico (isolamento total entre especialidades)
+  // Estado clínico exclusivo da Odontologia Biológica
   const [dentalData, setDentalData] = useState<BiologicalDentistryData>({});
-  const [nutrologyData, setNutrologyData] = useState<NutrologyData>({});
-  const [dermatologyData, setDermatologyData] = useState<DermatologyData>({});
 
   // Pasta Rápida de Atendimentos Salvos (para guardar ditado por voz, síntese IA e laudos)
   interface SavedConsultationRecord {
@@ -73,8 +70,6 @@ export default function App() {
     clinicalSummary: string;
     prescriptionText: string;
     dentalData: BiologicalDentistryData;
-    nutrologyData: NutrologyData;
-    dermatologyData: DermatologyData;
   }
 
   const SAVED_RECORDS_KEY = 'studio_clinico_saved_records_v1';
@@ -102,27 +97,24 @@ export default function App() {
     const rec: SavedConsultationRecord = {
       id: `rec_${Date.now()}`,
       savedAt: new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
-      specialty: override?.specialty || activeSpecialty,
+      specialty: 'biological_dentistry',
       patientName: (override?.patientName ?? patientName).trim() || 'Paciente sem nome',
       patientDob: override?.patientDob ?? patientDob,
       patientPhone: override?.patientPhone ?? patientPhone,
       clinicalInput: override?.clinicalInput ?? clinicalInput,
       clinicalSummary: override?.clinicalSummary ?? clinicalSummary,
       prescriptionText: override?.prescriptionText ?? prescriptionText,
-      dentalData: override?.dentalData ?? dentalData,
-      nutrologyData: override?.nutrologyData ?? nutrologyData,
-      dermatologyData: override?.dermatologyData ?? dermatologyData
+      dentalData: override?.dentalData ?? dentalData
     };
 
     const next = [rec, ...savedRecords].slice(0, 40);
     persistSavedRecords(next);
     if (!silent) {
-      toast.success('Atendimento e ditado salvos na Pasta Rápida!');
+      toast.success('Protocolo e ditado salvos na Pasta Rápida!');
     }
   };
 
   const handleLoadSavedRecord = (rec: SavedConsultationRecord) => {
-    setActiveSpecialty(rec.specialty);
     setPatientName(rec.patientName === 'Paciente sem nome' ? '' : rec.patientName);
     setPatientDob(rec.patientDob || '');
     setPatientPhone(rec.patientPhone || '');
@@ -130,8 +122,6 @@ export default function App() {
     setClinicalSummary(rec.clinicalSummary || '');
     setPrescriptionText(rec.prescriptionText || '');
     setDentalData(rec.dentalData || {});
-    setNutrologyData(rec.nutrologyData || {});
-    setDermatologyData(rec.dermatologyData || {});
     setShowSavedDrawer(false);
     toast.success(`Atendimento de ${rec.patientName} carregado na tela.`);
   };
@@ -253,71 +243,32 @@ export default function App() {
       const nextSummary = parsed.resumo_formatado || clinicalSummary;
       const nextPrescription = parsed.prescricao || prescriptionText;
 
-      let nextDental = dentalData;
-      let nextNutro = nutrologyData;
-      let nextDerma = dermatologyData;
-
-      if (activeSpecialty === 'biological_dentistry') {
-        nextDental = {
-          ...dentalData,
-          ...specData,
-          odontograma: specData.odontograma
-            ? {
-                ...(dentalData.odontograma || {}),
-                ...specData.odontograma,
-                teeth: {
-                  ...(dentalData.odontograma?.teeth || {}),
-                  ...(specData.odontograma?.teeth || {})
-                }
+      const nextDental: BiologicalDentistryData = {
+        ...dentalData,
+        ...specData,
+        odontograma: specData.odontograma
+          ? {
+              ...(dentalData.odontograma || {}),
+              ...specData.odontograma,
+              teeth: {
+                ...(dentalData.odontograma?.teeth || {}),
+                ...(specData.odontograma?.teeth || {})
               }
-            : dentalData.odontograma
-        };
-        setDentalData(nextDental);
-      } else if (activeSpecialty === 'nutrology') {
-        nextNutro = {
-          ...nutrologyData,
-          ...specData,
-          suplementacao_prescrita:
-            specData.suplementacao_prescrita || parsed.prescricao || nutrologyData.suplementacao_prescrita,
-          plano_alimentar_orientacoes:
-            specData.plano_alimentar_orientacoes ||
-            parsed.conduta_plano_terapeutico ||
-            nutrologyData.plano_alimentar_orientacoes,
-          observacoes_clinicas:
-            parsed.resumo_formatado || nutrologyData.observacoes_clinicas,
-          radar_metabolico: parsed.radar_metabolico
-            ? {
-                energia: parsed.radar_metabolico.disposicao_energia ?? nutrologyData.radar_metabolico?.energia ?? 6,
-                sono: parsed.radar_metabolico.sono ?? nutrologyData.radar_metabolico?.sono ?? 6,
-                intestino: parsed.radar_metabolico.nutricao_digestao ?? nutrologyData.radar_metabolico?.intestino ?? 6,
-                glicemia: nutrologyData.radar_metabolico?.glicemia ?? 6,
-                imunidade: parsed.radar_metabolico.imunidade ?? nutrologyData.radar_metabolico?.imunidade ?? 6
-              }
-            : nutrologyData.radar_metabolico
-        };
-        setNutrologyData(nextNutro);
-      } else if (activeSpecialty === 'dermatology') {
-        nextDerma = {
-          ...dermatologyData,
-          ...specData,
-          observacoes_dermato:
-            parsed.resumo_formatado || dermatologyData.observacoes_dermato
-        };
-        setDermatologyData(nextDerma);
-      }
+            }
+          : dentalData.odontograma
+      };
+      setDentalData(nextDental);
 
       handleSaveConsultation(
         {
-          specialty: activeSpecialty,
+          specialty: 'biological_dentistry',
           patientName: nextName,
           patientDob: nextDob,
           patientPhone,
           clinicalInput,
           clinicalSummary: nextSummary,
           prescriptionText: nextPrescription,
-          dentalData: nextDental,
-          nutrologyData: nextNutro,
-          dermatologyData: nextDerma
+          dentalData: nextDental
         },
         true
       );
@@ -423,57 +374,6 @@ export default function App() {
       addSection('Observações Odontológicas', dentalData.observacoes_odonto_biologica);
     }
 
-    if (activeSpecialty === 'nutrology') {
-      const metricsLine = [
-        nutrologyData.peso_kg ? `Peso: ${nutrologyData.peso_kg} kg` : '',
-        nutrologyData.altura_cm ? `Altura: ${nutrologyData.altura_cm} cm` : '',
-        nutrologyData.gordura_corporal_pct ? `% Gordura: ${nutrologyData.gordura_corporal_pct}%` : '',
-        nutrologyData.massa_muscular_kg ? `Massa Muscular: ${nutrologyData.massa_muscular_kg} kg` : '',
-        nutrologyData.gordura_visceral ? `Gordura Visceral: ${nutrologyData.gordura_visceral}` : ''
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      addSection('Bioimpedância & Composição Corporal', metricsLine);
-
-      const markers = nutrologyData.labAnalysis?.biomarkers || [];
-      if (markers.length > 0) {
-        autoTable(doc, {
-          startY: cursorY,
-          head: [['Biomarcador', 'Resultado', 'Ref. Comum', 'Faixa Ótima', 'Conduta']],
-          body: markers.map((m) => [
-            m.name,
-            `${m.value} ${m.unit}`,
-            m.labRange,
-            m.optimalRange,
-            m.clinicalAction
-          ]),
-          styles: { fontSize: 8, cellPadding: 2.2 },
-          headStyles: { fillColor: [5, 150, 105] }
-        });
-        cursorY = (doc as any).lastAutoTable.finalY + 8;
-      }
-      addSection('Prescrição Nutrológica & Suplementação', nutrologyData.suplementacao_prescrita);
-      addSection('Conduta Alimentar & Estilo de Vida', nutrologyData.plano_alimentar_orientacoes);
-      addSection('Observações Clínicas', nutrologyData.observacoes_clinicas);
-    }
-
-    if (activeSpecialty === 'dermatology') {
-      const skinHeader = [
-        dermatologyData.fototipo_fitzpatrick ? `Fitzpatrick: Tipo ${dermatologyData.fototipo_fitzpatrick}` : '',
-        dermatologyData.escala_glogau ? `Glogau: Grau ${dermatologyData.escala_glogau}` : '',
-        dermatologyData.skinHealthScore ? `Qualidade Cutânea: ${dermatologyData.skinHealthScore}/100` : ''
-      ]
-        .filter(Boolean)
-        .join(' · ');
-      addSection('Avaliação Cutânea & Escalas', skinHeader);
-      addSection('Resumo Visual', dermatologyData.patientSummary || dermatologyData.clinicalSummary);
-      addSection('Skincare Diurno (Manhã)', dermatologyData.rotina_manha);
-      addSection('Tratamento Noturno', dermatologyData.rotina_noite);
-      addSection('Procedimentos em Consultório', dermatologyData.procedimentos_consultorio);
-      addSection('Suplementação Oral (In)', dermatologyData.suplementacao_oral_in);
-      addSection('Observações Dermatológicas', dermatologyData.observacoes_dermato);
-    }
-
     if (prescriptionText) addSection('Prescrição Adicional', prescriptionText);
 
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -481,48 +381,27 @@ export default function App() {
     doc.setTextColor(100, 116, 139);
     doc.text(brand.cityFooter || '', 14, pageHeight - 12);
 
-    const fileName = `protocolo_${activeSpecialty}_${(patientName || 'paciente').replace(/[^a-z0-9]/gi, '_')}.pdf`;
+    const fileName = `protocolo_odonto_${(patientName || 'paciente').replace(/[^a-z0-9]/gi, '_')}.pdf`;
     doc.save(fileName);
     toast.success('Laudo e protocolo em PDF gerados!');
   };
 
   // Envio leve pelo WhatsApp Web/App (zero necessidade de API paga ou QR Code)
   const handleSendWhatsApp = () => {
-    const specMeta = STUDIO_SPECIALTIES.find((s) => s.id === activeSpecialty)!;
+    const specMeta = STUDIO_SPECIALTIES[0];
     const parts: string[] = [
       `*${brand.clinicName}* — ${specMeta.title}`,
       patientName ? `Paciente: *${patientName}*` : '',
       ''
     ];
 
-    if (activeSpecialty === 'biological_dentistry') {
-      if (clinicalSummary) parts.push(`*Resumo:*\n${clinicalSummary}`);
-      if (dentalData.observacoes_odonto_biologica) {
-        parts.push(`*Plano Odontológico:*\n${dentalData.observacoes_odonto_biologica}`);
-      }
-    } else if (activeSpecialty === 'nutrology') {
-      if (nutrologyData.labAnalysis?.patientSummary) {
-        parts.push(`*Análise Metabólica:*\n${nutrologyData.labAnalysis.patientSummary}`);
-      }
-      if (nutrologyData.suplementacao_prescrita) {
-        parts.push(`*Suplementação:*\n${nutrologyData.suplementacao_prescrita}`);
-      }
-      if (nutrologyData.plano_alimentar_orientacoes) {
-        parts.push(`*Orientações:*\n${nutrologyData.plano_alimentar_orientacoes}`);
-      }
-    } else if (activeSpecialty === 'dermatology') {
-      if (dermatologyData.patientSummary) {
-        parts.push(`*Avaliação Visual:*\n${dermatologyData.patientSummary}`);
-      }
-      if (dermatologyData.rotina_manha) parts.push(`*Manhã:*\n${dermatologyData.rotina_manha}`);
-      if (dermatologyData.rotina_noite) parts.push(`*Noite:*\n${dermatologyData.rotina_noite}`);
-      if (dermatologyData.suplementacao_oral_in) {
-        parts.push(`*Oral (In):*\n${dermatologyData.suplementacao_oral_in}`);
-      }
+    if (clinicalSummary) parts.push(`*Resumo:*\n${clinicalSummary}`);
+    if (dentalData.observacoes_odonto_biologica) {
+      parts.push(`*Plano Odontológico:*\n${dentalData.observacoes_odonto_biologica}`);
     }
 
     if (parts.filter(Boolean).length <= 2) {
-      parts.push('Segue o resumo do seu atendimento clínico visual.');
+      parts.push('Segue o resumo do seu planejamento odontológico visual.');
     }
 
     const cleanPhone = patientPhone.replace(/\D/g, '');
@@ -553,8 +432,6 @@ export default function App() {
     setClinicalSummary('');
     setPrescriptionText('');
     setDentalData({});
-    setNutrologyData({});
-    setDermatologyData({});
     toast.success('Nova consulta pronta.');
   };
 
@@ -576,27 +453,10 @@ export default function App() {
             {brand.clinicName}
           </span>
 
-          {/* Zona 2: 3 Especialidades */}
-          <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-            {STUDIO_SPECIALTIES.map((spec) => {
-              const isActive = activeSpecialty === spec.id;
-              return (
-                <button
-                  key={spec.id}
-                  type="button"
-                  onClick={() => setActiveSpecialty(spec.id)}
-                  className={cn(
-                    'px-3.5 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer',
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  )}
-                >
-                  {spec.shortLabel}
-                </button>
-              );
-            })}
-          </nav>
+          {/* Zona 2: Identificador focado em Odontologia Visual IA */}
+          <span className="hidden md:inline-block text-xs font-semibold text-slate-500 tracking-wide whitespace-nowrap">
+            Odontologia Visual IA · Scanner Radiográfico &amp; Odontograma 3D
+          </span>
 
           {/* Zona 3: 1 Ação Primária */}
           <div className="shrink-0">
@@ -766,13 +626,7 @@ export default function App() {
               rows={2}
               value={clinicalInput}
               onChange={(e) => setClinicalInput(e.target.value)}
-              placeholder={
-                activeSpecialty === 'biological_dentistry'
-                  ? 'Ex: Paciente com amálgamas extensos nos dentes 16 e 46 para protocolo SMART, indicação de implante zircônia no 36 e foco cavitacional NICO no 38...'
-                  : activeSpecialty === 'nutrology'
-                  ? 'Ex: Queixa de fadiga vespertina, peso 78kg, altura 1,72m, gordura 26%, insulina basal 14, vitamina D 23. Prescrever D3 10.000 UI, Berberina 500mg...'
-                  : 'Ex: Fototipo III, melasma misto em região malar bilateral há 3 anos, iniciar rotina com protetor com cor FPS 60, ácido tranexâmico noturno e Polypodium oral...'
-              }
+              placeholder="Ex: Paciente com amálgamas extensos nos dentes 16 e 46 para protocolo SMART, indicação de implante zircônia no 36 e foco cavitacional NICO no 38..."
               className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
             />
 
@@ -785,45 +639,35 @@ export default function App() {
           </div>
         </section>
 
-        {/* MÓDULO ATIVO POR ESPECIALIDADE */}
-        {activeSpecialty === 'biological_dentistry' && (
-          <div className="space-y-6">
-            <PatientMediaGallery
-              patientName={patientName || 'Paciente Demonstração'}
-              initialOdontogram={dentalData.odontograma}
-              onOdontogramChange={handleOdontogramUpdateFromGallery}
-              hideEmbeddedOdontogram={true}
-            />
-            <BiologicalDentistryForm
-              data={dentalData}
-              onChange={setDentalData}
-              patientName={patientName}
-              patientPhone={patientPhone}
-              patientDob={patientDob}
-              clinicInfo={{
-                name: brand.clinicName,
-                address: brand.address,
-                phone: brand.phone
-              }}
-            />
-          </div>
-        )}
-
-        {activeSpecialty === 'nutrology' && (
-          <NutrologyModule
-            data={nutrologyData}
-            onChange={setNutrologyData}
-            patientName={patientName}
+        {/* MÓDULO ÚNICO: ODONTOLOGIA BIOLÓGICA & VISUAL IA */}
+        <div className="space-y-6">
+          <PatientMediaGallery
+            patientName={patientName || 'Paciente Demonstração'}
+            initialOdontogram={dentalData.odontograma}
+            onOdontogramChange={handleOdontogramUpdateFromGallery}
+            hideEmbeddedOdontogram={true}
           />
-        )}
-
-        {activeSpecialty === 'dermatology' && (
-          <DermatologyModule
-            data={dermatologyData}
-            onChange={setDermatologyData}
+          <BiologicalDentistryForm
+            data={dentalData}
+            onChange={setDentalData}
             patientName={patientName}
+            patientPhone={patientPhone}
+            patientDob={patientDob}
+            clinicInfo={{
+              name: brand.clinicName,
+              address: brand.address,
+              phone: brand.phone
+            }}
           />
-        )}
+          <IntegrativePresentationSuite
+            dentalData={dentalData}
+            onUpdateDentalData={setDentalData}
+            patientName={patientName}
+            patientDob={patientDob}
+            patientPhone={patientPhone}
+            brand={brand}
+          />
+        </div>
       </main>
 
       {/* Modal Minha Clínica (Personalização White-Label para demonstrações e uso real) */}

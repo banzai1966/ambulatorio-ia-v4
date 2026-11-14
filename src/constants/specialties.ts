@@ -1,4 +1,4 @@
-export type StudioSpecialtyId = 'biological_dentistry' | 'nutrology' | 'dermatology';
+export type StudioSpecialtyId = 'biological_dentistry';
 
 export interface SpecialtyConfig {
   id: StudioSpecialtyId;
@@ -15,19 +15,5 @@ export const STUDIO_SPECIALTIES: SpecialtyConfig[] = [
     shortLabel: 'Odontologia IA',
     tagline: 'Scanner Radiológico Modo TV · Implante 360° · Odontograma 3D & Protocolo SMART',
     accentHex: '#0284c7'
-  },
-  {
-    id: 'nutrology',
-    title: 'Nutrologia & Medicina Metabólica IA',
-    shortLabel: 'Nutrologia IA',
-    tagline: 'Leitor Visual de Exames · Faixas Ótimas Funcionais · Bioimpedância & Radar Metabólico',
-    accentHex: '#059669'
-  },
-  {
-    id: 'dermatology',
-    title: 'Dermatologia & Tricologia Visual IA',
-    shortLabel: 'Dermatologia IA',
-    tagline: 'Mapeamento Facial/Capilar em Tela · Fitzpatrick & Glogau · Protocolo In & Out',
-    accentHex: '#e11d48'
   }
 ];

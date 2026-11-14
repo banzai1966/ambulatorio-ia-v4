@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "short_name": "Studio Clínico IA",
-  "name": "Studio Clínico IA - Diagnóstico Visual & Copiloto",
-  "description": "Plataforma clínica visual com Inteligência Artificial para Odontologia Biológica, Nutrologia Metabólica e Dermatologia.",
+  "short_name": "Odonto Visual IA",
+  "name": "Odonto Studio Visual IA — Scanner & Odontograma",
+  "description": "Plataforma visual odontológica com Inteligência Artificial para leitura de panorâmicas, CBCT, implante 360° e odontograma 3D.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
