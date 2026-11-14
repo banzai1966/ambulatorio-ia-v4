@@ -28,12 +28,10 @@ import {
   Layers,
   Activity,
   ChevronLeft,
-  ChevronRight,
-  ArrowDown
+  ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
-import SmileSimulationModal from './SmileSimulationModal';
 import CbctAiScannerModal, { CbctDetectedTooth } from './CbctAiScannerModal';
 
 interface MediaItem {
@@ -45,37 +43,35 @@ interface MediaItem {
   description?: string;
 }
 
-const DEFAULT_SAMPLE_MEDIA: MediaItem[] = [
-  {
-    id: 'tc_cbct_1',
-    title: 'Tomografia Computadorizada Cone Beam (CBCT) - Maxilofacial',
-    type: 'tomography',
-    url: '/sample_cbct_scan.jpg',
-    date: '04/08/2026',
-    description: 'Documentação Tomográfica CBCT - Cortes Maxilares, Cavitações Ósseas NICO e Seios Maxilares'
-  },
-  {
-    id: 'rx_panoramica_1',
-    title: 'Radiografia Panorâmica Digital & Periapical',
-    type: 'radiograph',
-    url: '/sample_panoramic_rx.jpg',
-    date: '16/06/2026',
-    description: 'Radiografia Panorâmica Digital - Avaliação de estruturas dentais, condutos e crista óssea'
-  },
-  {
-    id: 'foto_extraoral_1',
-    title: 'Fotografia Clínica Extraoral & Análise Facial',
-    type: 'photo',
-    url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=1000',
-    date: '04/08/2026',
-    description: 'Registro Fotográfico Clínico Extraoral e Facial'
-  }
-];
-
 // Helper para obter chave de persistência de anexos do paciente
 function getPatientMediaStorageKey(patientName: string): string {
   const clean = (patientName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
   return `ambulatorio_media_gallery_${clean || 'geral'}`;
+}
+
+const LEGACY_SEEDED_IDS = new Set(['tc_cbct_1', 'rx_panoramica_1', 'foto_extraoral_1']);
+
+function cleanStoredMediaItems(parsed: any[]): MediaItem[] {
+  return parsed.filter((item: any) => {
+    if (!item || typeof item !== 'object') return false;
+    const id = String(item.id || '');
+    const title = String(item.title || '').toLowerCase();
+    const desc = String(item.description || '').toLowerCase();
+    const url = String(item.url || '');
+
+    if (id.startsWith('dsd_') || title.includes('simulação dsd') || desc.includes('planejamento digital do sorriso')) {
+      return false;
+    }
+    if (
+      LEGACY_SEEDED_IDS.has(id) ||
+      url.includes('1544005313-94ddf0286df2') ||
+      url.includes('516549655169-df83a0774514') ||
+      url.includes('588776814546-1ffcf47267a5')
+    ) {
+      return false;
+    }
+    return true;
+  });
 }
 
 // Compressão inteligente de imagem para não estourar o limite de armazenamento
@@ -132,43 +128,25 @@ export default function PatientMediaGallery({
 }) {
   const storageKey = getPatientMediaStorageKey(patientName);
 
-  // Inicializa com dados persistidos do paciente se existirem (filtrando duplicidades acidentais de simulações DSD)
+  // Inicializa apenas com exames reais persistidos do paciente (sem arquivos fictícios pré-populados)
   const [items, setItems] = useState<MediaItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            // Remove registros indevidos de simulação DSD e atualiza URLs antigas de amostra para os exames locais
-            const cleaned = parsed
-              .filter((item: any) => 
-                !item.id?.startsWith('dsd_') && 
-                !item.title?.toLowerCase().includes('simulação dsd') &&
-                !item.description?.toLowerCase().includes('planejamento digital do sorriso')
-              )
-              .map((item: any) => {
-                if (item.url && item.url.includes('516549655169-df83a0774514')) {
-                  return { ...item, url: '/sample_cbct_scan.jpg' };
-                }
-                if (item.url && item.url.includes('588776814546-1ffcf47267a5')) {
-                  return { ...item, url: '/sample_panoramic_rx.jpg' };
-                }
-                return item;
-              });
-            if (cleaned.length > 0) {
-              return cleaned;
-            }
+          if (Array.isArray(parsed)) {
+            return cleanStoredMediaItems(parsed);
           }
         }
       } catch (err) {
         console.warn('Erro ao carregar galeria salva:', err);
       }
     }
-    return DEFAULT_SAMPLE_MEDIA;
+    return [];
   });
 
-  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(() => items[0] || DEFAULT_SAMPLE_MEDIA[0]);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(() => items[0] || null);
   const [activeTab, setActiveTab] = useState<'all' | 'tomography' | 'radiograph' | 'photo'>('all');
 
   // Troca de Aba com sincronização estrita do item selecionado correspondente
@@ -196,8 +174,8 @@ export default function PatientMediaGallery({
   const [itemToDelete, setItemToDelete] = useState<MediaItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAnnotateModal, setShowAnnotateModal] = useState(false);
-  const [showSmileSimulation, setShowSmileSimulation] = useState(false);
   const [showCbctScannerModal, setShowCbctScannerModal] = useState(false);
+  const [forceDemoScanner, setForceDemoScanner] = useState(false);
   const [showOdontogram, setShowOdontogram] = useState<boolean>(false);
   const [localOdontogram, setLocalOdontogram] = useState<OdontogramData>(initialOdontogram || {
     teeth: {
@@ -234,45 +212,32 @@ export default function PatientMediaGallery({
     if (onOdontogramChange) {
       onOdontogramChange(updatedOdontogram);
     }
-    // Abre automaticamente a visualização do odontograma para a Dra. Lucy
+    // Abre automaticamente a visualização do odontograma após aplicar achados
     setShowOdontogram(true);
   };
 
-  // Recarrega galeria quando o paciente selecionado mudar e purga duplicatas de simulação DSD
+  // Recarrega galeria quando o paciente selecionado mudar e limpa eventuais itens de amostra antigos
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const cleaned = parsed
-              .filter((item: any) => 
-                !item.id?.startsWith('dsd_') && 
-                !item.title?.toLowerCase().includes('simulação dsd') &&
-                !item.description?.toLowerCase().includes('planejamento digital do sorriso')
-              )
-              .map((item: any) => {
-                if (item.url && item.url.includes('516549655169-df83a0774514')) {
-                  return { ...item, url: '/sample_cbct_scan.jpg' };
-                }
-                if (item.url && item.url.includes('588776814546-1ffcf47267a5')) {
-                  return { ...item, url: '/sample_panoramic_rx.jpg' };
-                }
-                return item;
-              });
-            localStorage.setItem(storageKey, JSON.stringify(cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA));
-            const finalItems = cleaned.length > 0 ? cleaned : DEFAULT_SAMPLE_MEDIA;
-            setItems(finalItems);
-            setSelectedItem(finalItems[0] || null);
+          if (Array.isArray(parsed)) {
+            const cleaned = cleanStoredMediaItems(parsed);
+            if (cleaned.length !== parsed.length) {
+              localStorage.setItem(storageKey, JSON.stringify(cleaned));
+            }
+            setItems(cleaned);
+            setSelectedItem(cleaned[0] || null);
             return;
           }
         }
       } catch (err) {
         console.warn('Erro ao sincronizar galeria do paciente:', err);
       }
-      setItems(DEFAULT_SAMPLE_MEDIA);
-      setSelectedItem(DEFAULT_SAMPLE_MEDIA[0]);
+      setItems([]);
+      setSelectedItem(null);
     }
   }, [patientName, storageKey]);
 
@@ -359,7 +324,11 @@ export default function PatientMediaGallery({
 
   const handleAddMedia = async (e: React.FormEvent) => {
     e.preventDefault();
-    const rawUrl = uploadedFileDataUrl || newUrl || 'https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&q=80&w=1000';
+    const rawUrl = uploadedFileDataUrl || newUrl.trim();
+    if (!rawUrl) {
+      toast.error('Selecione uma imagem do computador ou celular antes de salvar.');
+      return;
+    }
     if (!newTitle) {
       toast.error('Informe o título do anexo');
       return;
@@ -656,9 +625,9 @@ export default function PatientMediaGallery({
           };
 
           return (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Main Large Image Display */}
-              <div className="lg:col-span-2 bg-slate-950 rounded-2xl p-4 flex flex-col justify-between min-h-[460px] relative group overflow-hidden border border-slate-800 shadow-xl">
+            <div className="space-y-3">
+              {/* Full-Width Radiographic Image Display */}
+              <div className="w-full bg-slate-950 rounded-2xl p-4 flex flex-col justify-between min-h-[480px] relative group overflow-hidden border border-slate-800 shadow-xl">
                 <div className="flex items-center justify-between text-white text-xs z-10 bg-slate-900/80 backdrop-blur-md p-3 rounded-xl border border-white/10 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <ImageIcon size={16} className="text-sky-400 shrink-0" />
@@ -736,7 +705,7 @@ export default function PatientMediaGallery({
                   <span className="text-slate-400 text-[11px]">{selectedItem.date}</span>
                 </div>
 
-                <div className="my-auto py-4 flex items-center justify-center overflow-auto relative max-h-[420px] custom-scrollbar-emerald">
+                <div className="my-auto py-4 flex items-center justify-center overflow-auto relative max-h-[460px] custom-scrollbar-emerald">
                   {/* Navegação por Setas Flutuantes Sobre a Imagem */}
                   {filteredItems.length > 1 && (
                     <>
@@ -774,7 +743,7 @@ export default function PatientMediaGallery({
                     <img 
                       src={selectedItem.url} 
                       alt={selectedItem.title} 
-                      className="max-h-[380px] w-auto object-contain rounded-lg shadow-2xl block"
+                      className="max-h-[430px] w-auto object-contain rounded-lg shadow-2xl block"
                       referrerPolicy="no-referrer"
                     />
                   </div>
@@ -784,15 +753,15 @@ export default function PatientMediaGallery({
                   <p className="text-slate-300 italic text-[11px] truncate max-w-[240px] sm:max-w-[280px]">{selectedItem.description}</p>
                   
                   <div className="flex items-center flex-wrap gap-2">
-                    {/* AI CBCT Tomography / X-Ray Scanner Button */}
+                    {/* AI Visual Radiology & CBCT Studio Button */}
                     <button
                       type="button"
                       onClick={() => setShowCbctScannerModal(true)}
-                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/30 cursor-pointer active:scale-95 animate-pulse"
-                      title="Escanear e Laudar Tomografia/Raio-X com Inteligência Artificial Biológica"
+                      className="px-3 py-1.5 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+                      title="Abrir Estúdio Radiológico Visual IA (Modo TV, Marcações Coloridas e Simulador de Implante)"
                     >
-                      <Sparkles size={14} className="text-amber-300" />
-                      <span>Scanner IA (Laudo CBCT)</span>
+                      <Sparkles size={14} className="text-pink-200" />
+                      <span>Scanner Visual IA (Modo TV)</span>
                     </button>
 
                     {/* Fullscreen Lightbox Button */}
@@ -855,132 +824,85 @@ export default function PatientMediaGallery({
                 </div>
               </div>
 
-              {/* Thumbnail List With Scroll and Arrow Controls */}
-              <div className="space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                      <FolderOpen size={14} className="text-blue-500" />
-                      Documentos na Pasta ({filteredItems.length})
-                    </h3>
-                    {filteredItems.length > 3 && (
-                      <span className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                        <ArrowDown size={11} className="text-slate-400 animate-bounce" />
-                        Role para ver mais
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar-blue mt-2">
-                    {filteredItems.map((item, idx) => (
-                      <div
-                        key={item.id}
-                        onClick={() => setSelectedItem(item)}
-                        className={`p-3 rounded-2xl border cursor-pointer transition-all flex items-center justify-between gap-3 group relative ${
-                          selectedItem.id === item.id
-                            ? 'bg-blue-50/90 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
-                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-16 h-16 rounded-xl bg-slate-900 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center relative">
-                            <img 
-                              src={item.url} 
-                              alt={item.title} 
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            <span className="absolute top-1 left-1 bg-black/70 backdrop-blur-sm text-white text-[9px] font-mono font-bold px-1 rounded">
-                              #{idx + 1}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-slate-800 line-clamp-1">{item.title}</p>
-                            <p className="text-[10px] text-slate-500 mt-0.5">{item.date}</p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-200 text-slate-700">
-                                {item.type}
-                              </span>
-                              {selectedItem.id === item.id && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-600 text-white">
-                                  Visualizando
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-center gap-1">
-                          {/* Quick Download Button directly on thumbnail */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              downloadHighResImage(item.url, item.title);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
-                            title="Baixar este exame em HD"
-                          >
-                            <Download size={14} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteItem(item);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
-                            title="Excluir este exame"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+              {/* Faixa horizontal enxuta de miniaturas apenas quando houver 2 ou mais exames */}
+              {filteredItems.length > 1 && (
+                <div className="flex items-center gap-2.5 overflow-x-auto pb-1 no-scrollbar">
+                  {filteredItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedItem(item)}
+                      className={`shrink-0 flex items-center gap-2.5 p-2 pr-2.5 rounded-xl border cursor-pointer transition-all group max-w-[260px] ${
+                        selectedItem.id === item.id
+                          ? 'bg-sky-50 border-sky-500 shadow-xs'
+                          : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <div className="w-12 h-10 rounded-lg bg-slate-900 overflow-hidden shrink-0 border border-slate-200 relative">
+                        <img
+                          src={item.url}
+                          alt={item.title}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <span className="absolute top-0.5 left-0.5 bg-black/70 text-white text-[9px] font-mono tabular-nums font-bold px-1 rounded">
+                          {idx + 1}
+                        </span>
                       </div>
-                    ))}
-                  </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-slate-800 truncate">{item.title}</p>
+                        <p className="text-[11px] text-slate-500 font-mono tabular-nums truncate">{item.date}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteItem(item);
+                        }}
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer shrink-0"
+                        title="Excluir exame"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-
-                {/* Footer Fast Controls: Previous / Next Navigation */}
-                {filteredItems.length > 1 && (
-                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={handlePrevItem}
-                      disabled={!hasPrevItem}
-                      className={`flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
-                        hasPrevItem 
-                          ? 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300 shadow-sm cursor-pointer' 
-                          : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                      }`}
-                    >
-                      <ChevronLeft size={14} />
-                      <span>Anterior</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNextItem}
-                      disabled={!hasNextItem}
-                      className={`flex-1 py-1.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
-                        hasNextItem 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm cursor-pointer' 
-                          : 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
-                      }`}
-                    >
-                      <span>Próximo</span>
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           );
         })()
       ) : (
-        <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-          <FolderOpen size={40} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-sm font-bold text-slate-500">Nenhum exame cadastrado</p>
-          <p className="text-xs text-slate-400">Clique em "Anexar Nova Imagem" para subir a tomografia ou foto do paciente.</p>
+        <div className="text-center py-14 px-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mx-auto text-slate-400">
+            <FolderOpen size={24} />
+          </div>
+          <div className="space-y-1 max-w-md mx-auto">
+            <p className="text-sm font-bold text-slate-700">Nenhum exame anexado neste prontuário</p>
+            <p className="text-xs text-slate-500">
+              Suba a radiografia panorâmica, tomografia Cone Beam ou foto do paciente para analisar em tela cheia ou com a IA.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowUploadModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+            >
+              <Upload size={14} />
+              <span>+ Anexar Novo Exame / RX</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setForceDemoScanner(true);
+                setShowCbctScannerModal(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-xl text-xs font-bold transition-colors shadow-sm cursor-pointer whitespace-nowrap"
+              title="Abrir o Estúdio Radiológico Visual IA usando uma imagem de amostra para demonstração na TV"
+            >
+              <Sparkles size={14} className="text-pink-100" />
+              <span>Abrir Scanner Visual IA (Amostra Teste)</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -1405,17 +1327,24 @@ export default function PatientMediaGallery({
         </div>
       )}
 
-      <SmileSimulationModal
-        isOpen={showSmileSimulation}
-        onClose={() => setShowSmileSimulation(false)}
-        patientName={patientName}
-      />
-
       {/* Modal de Scanner Tomográfico com IA Biológica */}
       <CbctAiScannerModal
         isOpen={showCbctScannerModal}
-        onClose={() => setShowCbctScannerModal(false)}
-        mediaItem={selectedItem}
+        onClose={() => {
+          setShowCbctScannerModal(false);
+          setForceDemoScanner(false);
+        }}
+        mediaItem={
+          selectedItem ||
+          (forceDemoScanner
+            ? {
+                id: 'demo_cbct',
+                title: 'Exame de Demonstração (CBCT / Panorâmica)',
+                url: '/sample_cbct_scan.jpg',
+                type: 'tomography'
+              }
+            : null)
+        }
         patientName={patientName}
         onApplyFindings={handleApplyCbctFindings}
       />

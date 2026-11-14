@@ -1,14 +1,14 @@
 {
   "id": "/",
-  "short_name": "Ambulatório",
-  "name": "Ambulatório IA - Prontuário Médico Inteligente",
-  "description": "Sistema de Prontuário Médico Eletrônico Inteligente com Suporte Offline Completo e Copiloto Clínico.",
+  "short_name": "Studio Clínico IA",
+  "name": "Studio Clínico IA - Diagnóstico Visual & Copiloto",
+  "description": "Plataforma clínica visual com Inteligência Artificial para Odontologia Biológica, Nutrologia Metabólica e Dermatologia.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "theme_color": "#0284c7",
   "icons": [
     {
       "src": "/pwa-192x192.png",

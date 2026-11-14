@@ -561,7 +561,7 @@ export default function Dental3DViewer({
           </div>
 
           {/* Upload do Arquivo STL do Scanner Intraoral */}
-          <label className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer" title="Importar arquivo 3D real exportado pelo scanner da Dra. Lucy (.STL)">
+          <label className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer" title="Importar arquivo 3D real exportado pelo scanner intraoral (.STL)">
             <UploadCloud size={13} className="text-sky-400" />
             <span className="hidden sm:inline">Importar .STL</span>
             <input 
@@ -608,7 +608,7 @@ export default function Dental3DViewer({
                   Carregador de Scanner Intraoral 3D (.STL)
                 </h4>
                 <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                  O scanner odontológico da Dra. Lucy (iTero, Trios, Medit) gera um arquivo <strong>.STL</strong> com a malha 3D real da boca do paciente. Arraste o arquivo aqui para inspecionar com rotação em 360°.
+                  O scanner odontológico intraoral (iTero, Trios, Medit) gera um arquivo <strong>.STL</strong> com a malha 3D real da boca do paciente. Arraste o arquivo aqui para inspecionar com rotação em 360°.
                 </p>
                 <label className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white rounded-2xl text-xs font-bold transition-all shadow-lg shadow-sky-600/30 cursor-pointer flex items-center gap-2">
                   <UploadCloud size={16} />

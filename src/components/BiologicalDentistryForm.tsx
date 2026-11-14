@@ -59,7 +59,7 @@ export interface BiologicalDentistryData {
   atm_sintomas?: string[];
   atm_conduta?: string;
 
-  // Suplementação Pré/Pós Cirúrgica (Dra. Lucy Protocol)
+  // Suplementação Pré/Pós Cirúrgica (Protocolo Integrativo)
   suplemento_vit_d3_k2?: boolean;
   suplemento_vit_c?: boolean;
   suplemento_zinco_mg?: boolean;
@@ -184,10 +184,16 @@ export default function BiologicalDentistryForm({
     });
   };
 
+  const [confirmClear, setConfirmClear] = React.useState(false);
+
   const resetForm = () => {
-    if (window.confirm('Deseja limpar os campos de Odontologia Biológica?')) {
-      onChange({});
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 3500);
+      return;
     }
+    setConfirmClear(false);
+    onChange({});
   };
 
   // Handler ao selecionar/atualizar dentes no Odontograma
@@ -207,12 +213,12 @@ export default function BiologicalDentistryForm({
 
   return (
     <div className="bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 p-5 md:p-6 rounded-3xl border border-blue-100 space-y-6 shadow-xs animate-in fade-in duration-300">
-      {/* Header do Módulo Dra. Lucy */}
+      {/* Header do Módulo Odontologia Biológica */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-blue-100 pb-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider rounded-lg shadow-xs flex items-center gap-1">
-              <Sparkles size={12} /> Dra. Lucy
+              <Sparkles size={12} /> Protocolo IAOMT
             </span>
             <h3 className="text-base font-extrabold text-slate-900">
               Odontologia Biológica
@@ -252,10 +258,16 @@ export default function BiologicalDentistryForm({
           <button
             type="button"
             onClick={resetForm}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-xl transition-all"
+            className={cn(
+              "px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer",
+              confirmClear
+                ? "bg-rose-600 text-white shadow-xs"
+                : "text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
+            )}
             title="Limpar formulário"
           >
             <RefreshCw size={14} />
+            {confirmClear && <span>Confirmar limpeza</span>}
           </button>
         </div>
       </div>
@@ -698,7 +710,7 @@ export default function BiologicalDentistryForm({
       <div className="space-y-1.5">
         <label className="text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5">
           <FileText size={14} className="text-blue-600" />
-          Observações & Conduta do Módulo Dra. Lucy
+          Observações & Conduta Cirúrgica / Integrativa
         </label>
         <textarea
           rows={3}

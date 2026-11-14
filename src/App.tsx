@@ -1,4969 +1,798 @@
-import { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Mic, 
-  Square, 
-  Save, 
-  History, 
-  Activity, 
-  AlertCircle, 
-  CheckCircle2, 
-  TrendingUp, 
-  TrendingDown, 
-  ClipboardList, 
-  Stethoscope, 
-  FileText, 
-  Loader2, 
-  Trash2, 
-  HelpCircle, 
-  Settings,
-  X, 
-  Info,
-  Zap,
-  ShieldCheck, 
-  Search, 
-  LogOut, 
-  Copy, 
-  Download, 
-  Users, 
-  Clock, 
-  Eye, 
-  Calendar, 
-  User, 
-  UserCheck, 
-  MessageSquare, 
-  RefreshCw,
-  Brain,
-  ChevronRight,
-  Baby,
-  Crosshair,
-  Laptop,
-  Smartphone,
-  Image,
-  FolderOpen,
-  UploadCloud,
-  DollarSign,
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Mic,
+  Square,
   Sparkles,
-  ChevronLeft,
-  PanelLeftClose,
-  PanelLeft,
-  Camera,
-  BookOpen
+  FileDown,
+  MessageCircle,
+  Building2,
+  X,
+  Loader2,
+  User,
+  Calendar,
+  Phone,
+  Check,
+  RotateCcw
 } from 'lucide-react';
+import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { supabase } from './lib/supabase';
-import { cn, hasMeaningfulData } from './lib/utils';
-import { processClinicalInput, generateClinicalSummary, ClinicalSummary, formatAiErrorMessage } from './services/clinicalService';
-import { sendWhatsAppMessage } from './services/whatsappService';
-import Dashboard from './components/Dashboard';
-import Agenda from './components/Agenda';
-import MessageHistory from './components/MessageHistory';
-import ManageTeam from './components/ManageTeam';
-import SystemOverviewModal from './components/SystemOverviewModal';
-import ManualClinicoModal from './components/ManualClinicoModal';
-import NeurologicalExamForm from './components/NeurologicalExamForm';
-import ClinicSettings from './components/ClinicSettings';
-import UserProfileModal from './components/UserProfileModal';
-import IntegrativeChecklistForm from './components/IntegrativeChecklistForm';
-import FinancialModule from './components/FinancialModule';
-import CrmKanbanModule from './components/CrmKanbanModule';
-import IntegrativeBodyMap from './components/IntegrativeBodyMapAnatomy';
-import IntegrativeEvolution from './components/IntegrativeEvolution';
-import SpecialtyFields from './components/SpecialtyFields';
-import VitalMonitor from './components/VitalMonitor';
-import PatientDossierView, { isValidExtractedName } from './components/PatientDossierView';
+import { cn } from './lib/utils';
+import { STUDIO_SPECIALTIES, StudioSpecialtyId } from './constants/specialties';
+import {
+  WhiteLabelClinicBrand,
+  loadWhiteLabelBrand,
+  saveWhiteLabelBrand,
+  calculatePreciseAge
+} from './constants/clinicProfiles';
 import PatientMediaGallery from './components/PatientMediaGallery';
-import PublicAnamneseView from './components/PublicAnamneseView';
-import { PWAInstallButton } from './components/PWAInstallButton';
-import { SPECIALTIES } from './constants/specialties';
-import { getActiveClinicConfig, resolveDoctorKey, resolveDoctorDisplayName, detectRecordSpecialtyAndDoctor, DEFAULT_CLINIC_LOGO_URL } from './constants/clinicProfiles';
-import { 
-  getOfflineRecords, 
-  saveRecordLocally, 
-  syncOfflineRecordsWithCloud, 
-  removeOfflineRecord,
-  exportLocalDataJSON, 
-  importLocalDataJSON,
-  importLocalDataCSV,
-  OfflineRecord 
-} from './services/offlineStorageService';
-import type { NeurologicalExamData, MuscleAssessment, SensitivityAssessment } from './types/neurologicalExam';
-import type { IntegrativeChecklistData } from './types/integrativeChecklist';
-import { initialIntegrativeData } from './types/integrativeChecklist';
-
-interface ClinicalRecord {
-  id?: string;
-  paciente_nome_completo: string;
-  paciente_cpf?: string;
-  paciente_data_nascimento?: string;
-  paciente_telefone?: string;
-  profissional_responsavel?: string;
-  especialidade: string;
-  paciente_status: string;
-  alertas_copiloto?: string[];
-  exame_neurologico?: any;
-  checklist_integrativo?: any;
-  dados_especialidade?: any;
-  exame_fisico?: any;
-  dados_clinicos?: any;
-  queixa_principal?: string;
-  hipotese_diagnostica?: string;
-  conduta_plano_terapeutico?: string;
-  prescricao?: string;
-  prescricao_estilo_vida?: string[];
-  radar_metabolico?: {
-    sono?: number;
-    estresse?: number;
-    nutricao_digestao?: number;
-    imunidade?: number;
-    disposicao_energia?: number;
-  };
-  resumo_formatado: string;
-  sugestao_conduta: string;
-  data_consulta?: string;
-  created_at?: string;
-  midia_url?: string;
-  tipo_midia?: string;
-  comparativo?: any;
-  offline_id?: string;
-  is_offline_pending?: boolean;
-  saved_at?: string;
-  mapeamento_corporal?: any;
-  vitals?: any;
-  profiles?: {
-    full_name: string;
-  };
-}
-
-// v2 - Mapeamento completo para fidelidade ao PDF
-const INTEGRATIVE_LABELS: Record<string, string> = {
-  // Suplementos
-  astragalus: "Astragallus 100, 200 mg",
-  dhea: "DHEA mg",
-  epa_dha: "EPA+DHA 1000 mg",
-  mix_pro: "MIX(Pro, Co, AV, TO, AS, MG) gt",
-  coriandrum: "Coriandrum s. glic gt",
-  propolis: "Própolis glic gts",
-  propco: "PropCo 4:1 3:1 gts",
-  mix_d9: "Mix D9",
-  ginger: "Ginger 100 200 mg",
-  acido_caprilico: "Acido Caprilico 200 mg D9",
-  bitter_mellon: "Bitter mellon 200 mg D9",
-  arnica: "Arnica (Comp)",
-  myosothis: "Myosothis (Comp)",
-  hip_perfuratum: "Hip Perfuratum 300 mg",
-  neurexan: "Neurexan/Marac/Pasa",
-  floral_bach: "Floral Bach ( R + E ) gts",
-  acido_folico: "Ácido Fólico 200 ug",
-  vit_b3_b6: "Vit B3/Vit B6 25 mg",
-  pregne: "Pregne 30mg/Boro 1mg",
-  heteropterys: "Heteropterys a mg",
-  arcalion: "Arcalion/Forten",
-  vinpocetina: "Vinpocetina 10 mg",
-  fosfatidilserina: "Fosfatidilserina mg",
-  fosfatidilcolina: "Fosfatidilcolina mg",
-  dmae: "DMAE 130 mg 250 mg",
-  colina: "Colina mg",
-  hidroxi_triptofano: "5-Hidróxi-Triptofano mg",
-  fenilalanina: "Fenilalanina mg",
-  melatonina: "Melatonina 3 mg, 1 mg",
-  ac_alfa_lipoico: "Ac. Alfa lipoico 100 mg",
-  semente_uva: "Semente uva 100 140",
-  coenzima_q10: "Coenzima Q10 50 100 mg",
-  
-  // Fitoterápicos
-  organo_gt: "Organo gt",
-  dna_rna_ch: "DNA/RNA CH",
-  organo_gt_2: "Organo gt (2)",
-  dna_rna_ch_2: "DNA/RNA CH (2)",
-  organo_gt_3: "Organo gt (3)",
-  dna_rna_ch_3: "DNA/RNA CH (3)",
-  artemisia: "Artemísia D3 gt",
-  phaffia: "Phaffia panic D3 gt",
-  chlorella: "Chlorella cps D9",
-  acai: "Açai cps D9",
-  mulateiro: "Mulateiro gt",
-  cmc: "CMC 5 10 mg CH5 gt",
-  formula_onco_vo: "Formula onco VO gt",
-  formula_onco_inalat: "Formula onco inalat ml",
-  vovo_meca: "Vovo Meca gt",
-  euphorbia: "Euphorbia Hetero D6",
-  zedoaria: "Zedoaria 200 mg",
-  naltrex: "Naltrex 1,5 3,0 4,5 mg",
-  nootropil: "Nootropil 400 800 mg",
-  
-  // Vitaminas & Minerais
-  silimarina: "Silimarina 70 mg",
-  quercetina: "Quercetina mg",
-  saw_palmetto: "Saw Palmetto mg",
-  pygeum: "Pygeum africanus mg",
-  tribulus: "Tribulus terrestris mg",
-  litio: "Litio orotato 5 mg",
-  cardiopeptase: "Cardiopeptase 5mg",
-  betaina: "Betaina 500/pepsina 150",
-  taurina: "Taurina mg",
-  vit_d3: "Vit D3 UI",
-  ca_mg_zn: "Ca/Mg/Zn cp",
-  vit_k2: "Vit K2 100 ug",
-  selenio: "Selenio ug",
-  manganes: "Manganes 10 mg",
-  cu: "Cu mg",
-  cromo: "Cromo picolonato mg",
-  lugol: "Lugol gt",
-
-  // Biomarcadores
-  telomero: "Telomero",
-  sirtuina: "Sirtuina 1",
-  integrin: "Integrin a5 B1",
-  thromboxane: "Thromboxane B2",
-  crisotila: "Crisotila-Asbestos",
-  hg: "Hg",
-  pb: "Pb",
-  al: "Al",
-  
-  // Neurotransmissores
-  acetylcholine: "Acetylcholine",
-  serotonin: "Serotonin",
-  dopamine: "Dopamine",
-  cortisol: "Cortisol",
-  substance_p: "Substance P",
-  b_amyloid: "B Amyloid",
-  homocystine: "Homocystine",
-  troponin: "Troponin",
-  c_fos: "C-fos, ab - 2",
-
-  // Patógenos
-  candida: "Candida Albicans",
-  c_trachomatis: "C Trachomatis",
-  b_burgdorferi: "B Burgdorferi",
-  c_pneumoniae: "C Pneumoniae",
-  mycobact_tbc: "Mycobact Tbc",
-  mycobact_avium: "Mycobact Avium",
-  hsv_type_1: "HSV Type 1",
-  hsv_type_2: "HSV Type 2",
-  zoster_virus: "Zoster Vírus 3",
-  cmv_5: "CMV 5",
-};
-
-const formatIntegrativeLabel = (key: string) => {
-  const mapped = INTEGRATIVE_LABELS[key];
-  if (mapped) return mapped;
-  return key
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, l => l.toUpperCase())
-    .replace('Vit ', 'Vitamina ')
-    .replace('Ac ', 'Ácido ');
-};
+import BiologicalDentistryForm, { BiologicalDentistryData } from './components/BiologicalDentistryForm';
+import NutrologyModule, { NutrologyData } from './components/NutrologyModule';
+import DermatologyModule, { DermatologyData } from './components/DermatologyModule';
+import type { OdontogramData } from './components/InteractiveOdontogram';
 
 export default function App() {
-  console.log("App: SPECIALTIES carregadas:", SPECIALTIES);
+  const [activeSpecialty, setActiveSpecialty] = useState<StudioSpecialtyId>('biological_dentistry');
+  const [brand, setBrand] = useState<WhiteLabelClinicBrand>(() => loadWhiteLabelBrand());
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [draftBrand, setDraftBrand] = useState<WhiteLabelClinicBrand>(brand);
+
+  // Dados simples da consulta atual (sem banco pesado ou login)
+  const [patientName, setPatientName] = useState('');
+  const [patientDob, setPatientDob] = useState('');
+  const [patientPhone, setPatientPhone] = useState('');
+
+  // Copiloto de Voz / Texto IA
+  const [clinicalInput, setClinicalInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingMode, setRecordingMode] = useState<'quick' | 'ambient'>('quick');
-  const [recordingDuration, setRecordingDuration] = useState<number>(0);
-  const [pendingDraft, setPendingDraft] = useState<any>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [hasHistory, setHasHistory] = useState(false);
-  const [currentRecord, setCurrentRecord] = useState<ClinicalRecord | null>(null);
-  const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
-  const [selectedPatientPhone, setSelectedPatientPhone] = useState('');
-  const [selectedPatientCpf, setSelectedPatientCpf] = useState('');
-  const [selectedPatientDob, setSelectedPatientDob] = useState('');
-  const [selectedPatientConvenio, setSelectedPatientConvenio] = useState<string>('Particular');
-  const [selectedPatientStatusPagamento, setSelectedPatientStatusPagamento] = useState<string>('');
-  const [selectedPatientValorConsulta, setSelectedPatientValorConsulta] = useState<string>('');
-  const [selectedAppointmentReason, setSelectedAppointmentReason] = useState('');
-  const [selectedMedicoId, setSelectedMedicoId] = useState<string | null>(null);
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
-  const [prefillPatient, setPrefillPatient] = useState<{name: string, phone: string} | null>(null);
-  const [preselectedChatPhone, setPreselectedChatPhone] = useState<string | null>(null);
-  const [history, setHistory] = useState<ClinicalRecord[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [historyDoctorFilter, setHistoryDoctorFilter] = useState<'all' | 'dra_lucy' | 'dr_carlos' | 'offline'>('all');
-  
-  // Persistência de Aba Ativa - Padrão direto na Odontologia Biológica (Atendimento)
-  const savedActiveTab = typeof window !== 'undefined' ? localStorage.getItem('ambulatorio_active_tab') : null;
-  const initialActiveTab = savedActiveTab || 'atendimento';
-  const [showHistory, setShowHistory] = useState(initialActiveTab === 'historico');
-  const [showAgenda, setShowAgenda] = useState(initialActiveTab === 'agenda');
-  const [showMessageHistory, setShowMessageHistory] = useState(initialActiveTab === 'mensagens');
-  const [showSystemOverview, setShowSystemOverview] = useState(false);
-  const [showManualClinico, setShowManualClinico] = useState(false);
-  const [manualDefaultProfile, setManualDefaultProfile] = useState<'dr_carlos' | 'dra_lucy'>('dr_carlos');
-  const [showClinicSettings, setShowClinicSettings] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('ambulatorio_sidebar_collapsed') === 'true';
-    }
-    return false;
-  });
-  // Inicializa sessão de usuário a partir do localStorage para manter logado ao alternar abas (ex: n8n)
-  const [user, setUser] = useState<{ email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string; avatar_url?: string } | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('ambulatorio_user_session');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && parsed.email) {
-            const storedAvatar = localStorage.getItem(`ambulatorio_user_avatar_${parsed.email.toLowerCase().trim()}`);
-            if (storedAvatar && !parsed.avatar_url) {
-              parsed.avatar_url = storedAvatar;
-            }
-          }
-          return parsed;
-        }
-      } catch (e) {
-        console.warn("Erro ao restaurar sessão:", e);
-      }
-    }
-    return null;
-  });
-
-  const [clinicInfo, setClinicInfo] = useState<any>(null);
-  const [currentHash, setCurrentHash] = useState(() => typeof window !== 'undefined' ? (window.location.hash + window.location.search) : '');
-
-  // Identificação do papel e médico atual (Marco Duarte é o Master Admin exclusivo do projeto)
-  const isMasterAdmin = user ? (
-    user.email === 'marco.agduarte22@gmail.com' || 
-    user.id === 'master-admin-marco' || 
-    user.id === 'marco-duarte-admin' ||
-    (user.full_name?.toLowerCase().includes('marco') && user.full_name?.toLowerCase().includes('duarte'))
-  ) : false;
-  const currentDoctorKey = user ? resolveDoctorKey(user.email, user.full_name) : null;
-  const isAdmin = isMasterAdmin;
-  const isDoctorLucy = currentDoctorKey === 'dra_lucy';
-
-  useEffect(() => {
-    if (!isMasterAdmin && currentDoctorKey) {
-      setHistoryDoctorFilter(currentDoctorKey === 'dra_lucy' ? 'dra_lucy' : 'dr_carlos');
-    }
-  }, [isMasterAdmin, currentDoctorKey]);
-
-  useEffect(() => {
-    const handleHashChange = () => {
-      setCurrentHash(window.location.hash + window.location.search);
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('popstate', handleHashChange);
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-      window.removeEventListener('popstate', handleHashChange);
-    };
-  }, []);
-
-  useEffect(() => {
-    const loadClinicInfo = () => {
-      const config = getActiveClinicConfig(user);
-      setClinicInfo(config);
-    };
-    loadClinicInfo();
-    window.addEventListener('clinic_info_updated', loadClinicInfo);
-    return () => window.removeEventListener('clinic_info_updated', loadClinicInfo);
-  }, [user]);
-
-  const [showHelp, setShowHelp] = useState(false);
-  const [showManageTeam, setShowManageTeam] = useState(initialActiveTab === 'equipe');
-  const [showFinancial, setShowFinancial] = useState(initialActiveTab === 'financeiro');
-  const [showCrm, setShowCrm] = useState(initialActiveTab === 'crm');
-  const [showDashboard, setShowDashboard] = useState(initialActiveTab === 'dashboard');
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [pendingCount, setPendingCount] = useState(0);
-
-  useEffect(() => {
-    // Ao voltar para a aba do Ambulatório vindo do n8n ou outra janela, restaura a sessão imediatamente
-    const handleVisibilityOrFocus = () => {
-      if (document.visibilityState === 'visible' || !document.hidden) {
-        if (!user && typeof window !== 'undefined') {
-          const saved = localStorage.getItem('ambulatorio_user_session');
-          if (saved) {
-            try {
-              const parsed = JSON.parse(saved);
-              if (parsed && parsed.email) {
-                setUser(parsed);
-              }
-            } catch (e) {
-              console.warn("Restore on focus error:", e);
-            }
-          }
-        }
-      }
-    };
-
-    window.addEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.addEventListener('focus', handleVisibilityOrFocus);
-    return () => {
-      window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-      window.removeEventListener('focus', handleVisibilityOrFocus);
-    };
-  }, [user]);
-
-  const updateUserState = (newUser: { email: string; id: string; role: 'admin' | 'doctor' | 'receptionist'; status: 'pending' | 'approved'; full_name?: string; avatar_url?: string } | null) => {
-    if (newUser) {
-      // Garante sanitização do nome completo caso esteja vazio ou com placeholder 'Médico'
-      const cleanName = resolveDoctorDisplayName(newUser, newUser.full_name);
-      newUser = {
-        ...newUser,
-        full_name: cleanName
-      };
-    }
-    setUser(newUser);
-    if (typeof window !== 'undefined') {
-      if (newUser) {
-        localStorage.setItem('ambulatorio_user_session', JSON.stringify(newUser));
-        if (newUser.avatar_url && newUser.email) {
-          localStorage.setItem(`ambulatorio_user_avatar_${newUser.email.toLowerCase().trim()}`, newUser.avatar_url);
-        }
-        // Sincroniza imediatamente o modo clínico correto conforme o profissional
-        const docKey = resolveDoctorKey(newUser.email, newUser.full_name);
-        if (docKey === 'dr_carlos') {
-          localStorage.setItem('clinic_active_doctor_id', 'dr_carlos');
-          setExamMode('neurological');
-        } else if (docKey === 'dra_lucy') {
-          localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
-          setExamMode('biological_dentistry');
-        }
-      } else {
-        localStorage.removeItem('ambulatorio_user_session');
-      }
-    }
-  };
-
-  const navigateToTab = (tab: 'dashboard' | 'atendimento' | 'agenda' | 'mensagens' | 'historico' | 'financeiro' | 'crm' | 'equipe') => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ambulatorio_active_tab', tab);
-    }
-    setShowDashboard(tab === 'dashboard');
-    setShowAgenda(tab === 'agenda');
-    setShowMessageHistory(tab === 'mensagens');
-    setShowHistory(tab === 'historico');
-    setShowFinancial(tab === 'financeiro');
-    setShowCrm(tab === 'crm');
-    setShowManageTeam(tab === 'equipe');
-    if (tab !== 'atendimento') {
-      setSelectedPatient(null);
-    }
-  };
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isWebView, setIsWebView] = useState(false);
-  const [liveTranscript, setLiveTranscript] = useState('');
-  const [examMode, setExamMode] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const savedDoc = localStorage.getItem('clinic_active_doctor_id');
-      if (savedDoc === 'dr_carlos') return 'neurological';
-      if (savedDoc === 'dra_lucy') return 'biological_dentistry';
-      const savedExam = localStorage.getItem('clinic_active_exam_mode');
-      if (savedExam) return savedExam;
-    }
-    return 'biological_dentistry'; // Padrão prioritário de maior impacto: Odontologia Biológica
-  });
-  const [specialtyData, setSpecialtyData] = useState<any>({});
-  const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [clinicalSummary, setClinicalSummary] = useState<ClinicalSummary | null>(null);
-  const [integrativeData, setIntegrativeData] = useState<IntegrativeChecklistData>(initialIntegrativeData);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
-  const [logoClicks, setLogoClicks] = useState(0);
-  const [showSecretControls, setShowSecretControls] = useState(false);
-
-  // Estados de Suporte Offline & PWA
-  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  const [offlinePendingCount, setOfflinePendingCount] = useState<number>(0);
-  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
-  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
-  const [hasUpdate, setHasUpdate] = useState<boolean>(false);
-  const [swRegistration, setSwRegistration] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState<boolean>(false);
-  const [isReloading, setIsReloading] = useState<boolean>(false);
-
-  const handleReloadApp = (forceHard = false) => {
-    setIsReloading(true);
-    toast.loading("Atualizando e recarregando o sistema...", { id: 'reload-system-toast' });
-
-    try {
-      if (swRegistration?.waiting) {
-        swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      }
-    } catch (e) {
-      console.warn("SW skipWaiting warning:", e);
-    }
-
-    setTimeout(() => {
-      if (forceHard && 'caches' in window) {
-        caches.keys().then((keys) => {
-          return Promise.all(keys.map(key => caches.delete(key)));
-        }).finally(() => {
-          window.location.reload();
-        });
-      } else {
-        window.location.reload();
-      }
-    }, 350);
-  };
-
-  useEffect(() => {
-    // Detecta se o aplicativo está rodando em modo PWA Standalone (janela própria)
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    setIsStandalone(isPWA);
-
-    // Atualiza contagem inicial de registros offline
-    const updateOfflineState = () => {
-      const recs = getOfflineRecords();
-      const pending = recs.filter(r => r.is_offline_pending);
-      setOfflinePendingCount(pending.length);
-    };
-
-    updateOfflineState();
-
-    const handleOnline = async () => {
-      setIsOnline(true);
-      toast.success("📶 Conexão de Internet restaurada! Sincronizando com a nuvem...");
-      setIsSyncingOffline(true);
-      try {
-        const { syncedCount } = await syncOfflineRecordsWithCloud(supabase);
-        if (syncedCount > 0) {
-          toast.success(`☁️ ${syncedCount} prontuários offline foram sincronizados com sucesso!`);
-          fetchHistory();
-        }
-      } catch (err) {
-        console.error("Erro na auto-sincronização:", err);
-      } finally {
-        setIsSyncingOffline(false);
-        updateOfflineState();
-      }
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-      toast("📡 Modo Offline Ativo. Seus atendimentos serão salvos com segurança no computador.", { icon: '💻', duration: 5000 });
-    };
-
-    const handleBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setInstallPromptEvent(e);
-      console.log("[PWA] Prompt de instalação capturado.");
-    };
-
-    const handleSwUpdated = (e: any) => {
-      console.log("[PWA] Atualização disponível detectada:", e.detail);
-      setHasUpdate(true);
-      if (e.detail) setSwRegistration(e.detail);
-      toast("✨ Nova versão disponível do sistema!", { icon: '🚀', duration: 7000 });
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    window.addEventListener('swUpdated', handleSwUpdated);
-
-    // Checagem periódica de atualizações do Service Worker a cada 10 minutos
-    const checkUpdateInterval = setInterval(() => {
-      if (navigator.onLine && 'serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistration().then(reg => {
-          if (reg) reg.update();
-        }).catch(e => console.warn("Check update warning:", e));
-      }
-    }, 10 * 60 * 1000);
-
-    toast.success("Ambulatório IA - Conectado à Nuvem!");
-    console.log("App Version: v4.6 (PWA Cloud Auto-Update)");
-    document.title = "Ambulatório IA - Prontuário Médico Inteligente";
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-      window.removeEventListener('swUpdated', handleSwUpdated);
-      clearInterval(checkUpdateInterval);
-    };
-  }, []);
-
-  // Auto-login logic for quick access - clean for production
-  useEffect(() => {
-    // Mantém campos limpos para a clínica/produção
-  }, [authMode]);
-
-  // Auto-dismiss error after 10 seconds
-  useEffect(() => {
-    if (error) {
-      if (errorTimeout) clearTimeout(errorTimeout);
-      const timeout = setTimeout(() => setError(null), 10000);
-      setErrorTimeout(timeout);
-    }
-    return () => {
-      if (errorTimeout) clearTimeout(errorTimeout);
-    };
-  }, [error]);
-
-  const passwordRules = {
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    lowercase: /[a-z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[^A-Za-z0-9]/.test(password),
-  };
-  const isPasswordValid = Object.values(passwordRules).every(Boolean);
-
-  const isConfigured = true;
-
-  useEffect(() => {
-    // Detecta se está dentro de um WebView (WhatsApp, Instagram, Facebook)
-    const checkWebView = () => {
-      const ua = window.navigator.userAgent;
-      const isInstagram = ua.indexOf('Instagram') > -1;
-      const isFacebook = ua.indexOf('FBAN') > -1 || ua.indexOf('FBAV') > -1;
-      const isWhatsApp = ua.indexOf('WhatsApp') > -1;
-      
-      // Se não tiver getUserMedia, provavelmente é um WebView restrito ou HTTP
-      const noMedia = !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia;
-      
-      if (isInstagram || isFacebook || isWhatsApp || noMedia) {
-        // Só ativa se for mobile
-        if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) {
-          setIsWebView(true);
-        }
-      }
-    };
-
-    checkWebView();
-  }, []);
-
-  useEffect(() => {
-    if (isConfigured) {
-      // Listener de estado de autenticação
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log("Auth event:", event, session?.user?.email);
-        if (session?.user) {
-          checkUser();
-          fetchPendingCount();
-        } else if (event === 'SIGNED_OUT') {
-          // Apenas limpa se for explicitamente SIGNED_OUT
-          updateUserState(null);
-          setHistory([]);
-          setCurrentRecord(null);
-        }
-      });
-
-      checkUser();
-      fetchPendingCount();
-      
-      // Assinante para mudanças na tabela de perfis
-      const channel = supabase
-        .channel('profiles')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async (payload) => {
-          console.log("Mudança no perfil detectada:", payload);
-          
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-
-          // Só atualiza se a mudança for no perfil do próprio usuário logado
-          if (authUser && payload.new && (payload.new as any).id === authUser.id) {
-            checkUser();
-          }
-        })
-        .subscribe();
-
-      // Assinante para novas mensagens
-      const messageChannel = supabase
-        .channel('mensagens')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' }, (payload) => {
-          console.log("Nova mensagem recebida:", payload);
-          // Toca um som de notificação
-          const audio = new Audio('https://actions.google.com/sounds/v1/notifications/beep_short.ogg');
-          audio.play();
-          // Mostra um toast
-          toast.success(`Nova mensagem de: ${payload.new.telefone_cliente}`, { duration: 5000 });
-        })
-        .subscribe();
-        
-      return () => { 
-        subscription.unsubscribe();
-        supabase.removeChannel(channel); 
-        supabase.removeChannel(messageChannel);
-      };
-    }
-  }, [isConfigured]);
-
-  const fetchPendingCount = async () => {
-    try {
-      // Consulta simples para evitar erro 500
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('status', 'pending');
-      
-      if (!error && data) {
-        setPendingCount(data.length);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar contagem:", err);
-    }
-  };
-
-  const checkUser = async () => {
-    try {
-      // 1. Tenta obter a sessão salva localmente primeiro (ultra-rápido, não quebra offline/troca de abas)
-      const { data: sessionData } = await supabase.auth.getSession();
-      const sessionUser = sessionData?.session?.user;
-      
-      let authUser = sessionUser;
-      if (!authUser) {
-        const { data: userData } = await supabase.auth.getUser();
-        authUser = userData?.user || null;
-      }
-
-      if (authUser) {
-        console.log("Verificando usuário:", authUser.email);
-        
-        // Bloqueio mantido apenas para Dr. Carlos (acesso revogado pelo Administrador)
-        if (
-          authUser.email === 'carvalhomorato@gmail.com' || 
-          authUser.id === 'dr-carlos-morato-id' ||
-          authUser.id === 'dr-carlos-morato'
-        ) {
-          console.warn("🚫 Acesso revogado para Dr. Carlos.");
-          await supabase.auth.signOut().catch(() => {});
-          updateUserState(null);
-          setError("Acesso bloqueado: Este usuário foi desativado pelo Administrador.");
-          toast.error("Acesso bloqueado pelo Administrador.", { duration: 5000 });
-          return;
-        }
-
-        // 1. Tenta buscar o perfil pelo ID atual (Auth ID)
-        const { data: profiles, error: fetchError } = await supabase
-          .from('profiles')
-          .select('id, email, role, status, full_name, especialidade')
-          .eq('id', authUser.id);
-        
-        if (fetchError) {
-          console.error("Erro ao buscar perfil:", fetchError);
-        }
-
-        let profile = profiles && profiles.length > 0 ? profiles[0] : null;
-        
-        // 2. Se não encontrou pelo ID, tenta buscar pelo E-MAIL (Migração de ID)
-        if (!profile && authUser.email) {
-          console.log("Perfil não encontrado pelo ID. Tentando buscar pelo e-mail para vincular...");
-          const { data: emailProfiles } = await supabase
-            .from('profiles')
-            .select('id, email, role, status, full_name, especialidade')
-            .eq('email', authUser.email);
-          
-          if (emailProfiles && emailProfiles.length > 0) {
-            const oldProfile = emailProfiles[0];
-            const oldId = oldProfile.id;
-            console.log(`Vínculo encontrado! Atualizando ID antigo (${oldId}) para o novo ID (${authUser.id})...`);
-            
-            // Atualiza o ID na tabela de perfis
-            const { error: updateError } = await supabase
-              .from('profiles')
-              .update({ id: authUser.id })
-              .eq('email', authUser.email);
-            
-            if (!updateError) {
-              console.log("ID do perfil atualizado com sucesso.");
-              profile = { ...oldProfile, id: authUser.id };
-              
-              // Atualiza referências em outras tabelas (Migração de dados legados)
-              // Fazemos isso de forma assíncrona para não travar o login
-              Promise.all([
-                supabase.from('prontuarios').update({ user_id: authUser.id }).eq('user_id', oldId),
-                supabase.from('prontuarios').update({ medico_id: authUser.id }).eq('medico_id', oldId),
-                supabase.from('mensagens').update({ user_id: authUser.id }).eq('user_id', oldId),
-                supabase.from('agendamentos').update({ medico_id: authUser.id }).eq('medico_id', oldId)
-              ]).then(() => console.log("Referências de dados atualizadas para o novo ID.")).catch(e => console.warn("Erro ao atualizar referências:", e));
-            } else {
-              console.error("Erro ao atualizar ID do perfil:", updateError);
-            }
-          }
-        }
-
-        console.log("Perfil final:", profile);
-          
-        // Marco Duarte é o Administrador Mestre com acesso total
-        const isAdminUser = authUser.email === 'marco.agduarte22@gmail.com' || 
-                            authUser.id === 'master-admin-marco';
-        
-        if (profile) {
-          if (profile.status === 'blocked') {
-            await supabase.auth.signOut().catch(() => {});
-            updateUserState(null);
-            setError("Acesso bloqueado: Este usuário foi desativado pelo Administrador.");
-            toast.error("Acesso bloqueado pelo Administrador.");
-            return;
-          }
-          const role = isAdminUser ? 'admin' : (profile.role || 'doctor');
-          const status = (isAdminUser || profile.status === 'approved' || role === 'doctor' || role === 'admin') ? 'approved' : profile.status;
-          
-          console.log(`Usuário ${authUser.email} - Role: ${role}, Status: ${status}`);
-          
-          // Só atualiza se houver mudança real para evitar loops
-          if (!user || user.id !== authUser.id || user.role !== role || user.status !== status) {
-            console.log("Atualizando estado do usuário no React...");
-            const resolvedName = profile?.full_name || (
-              authUser.email === 'carvalhomorato@gmail.com' ? 'Dr. Carlos Morato' :
-              authUser.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte (Admin)' :
-              (authUser.email?.includes('lucy') || authUser.email === 'dra.lucy.morata@gmail.com') ? 'Dra. Lucy Morata' :
-              authUser.email
-            );
-            updateUserState({ 
-              email: authUser.email || '', 
-              id: authUser.id, 
-              role: role,
-              status: status,
-              full_name: resolvedName
-            });
-          }
-          if (role === 'admin') fetchPendingCount();
-        } else {
-          // Se não houver perfil ainda no banco
-          const role = isAdminUser ? 'admin' : 'doctor';
-          const status = 'approved';
-          
-          console.log("Criando novo perfil com role:", role);
-          
-          const { data: newProfiles, error: insertError } = await supabase
-            .from('profiles')
-            .insert([{ 
-              id: authUser.id, 
-              email: authUser.email, 
-              role: role, 
-              status: status,
-              full_name: authUser.user_metadata?.full_name || authUser.email || 'Médico'
-            }])
-            .select('id, email, role, status, full_name, especialidade');
-            
-          if (insertError) {
-            console.error("Erro ao criar perfil no banco de dados:", insertError);
-            toast.error(`Erro ao registrar perfil: ${insertError.message}`);
-            setError(`Erro ao registrar perfil: ${insertError.message}. Por favor, contate o suporte.`);
-          }
-            
-          const newProfile = newProfiles && newProfiles.length > 0 ? newProfiles[0] : null;
-          const finalRole = newProfile?.role || role;
-          const finalStatus = newProfile?.status || status;
-            
-          if (!user || user.id !== authUser.id || user.role !== finalRole || user.status !== finalStatus) {
-            updateUserState({ 
-              email: authUser.email || '', 
-              id: authUser.id, 
-              role: finalRole,
-              status: finalStatus
-            });
-          }
-          if (finalRole === 'admin') fetchPendingCount();
-        }
-      }
-    } catch (err: any) {
-      console.error("Auth check failed", err);
-      toast.error(`Falha na verificação de acesso: ${err.message}`);
-    }
-  };
-
-  const handleCarlosLogin = () => {
-    toast.error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
-  };
-
-  const handleLucyLogin = async () => {
-    setAuthLoading(true);
-    setError(null);
-    const lucyEmail = 'lucimurata@gmail.com';
-    const lucyPassword = 'Murata123@';
-    
-    try {
-      fetch("/api/auth/ensure-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: lucyEmail,
-          password: lucyPassword,
-          full_name: 'Dra. Lucy Morata',
-          role: 'doctor',
-          especialidade: 'Odontologia Biológica & Saúde Integrativa'
-        })
-      }).catch(e => console.warn("Backend auth sync aviso:", e));
-
-      // 1. Tenta login no Supabase com limite de 2.5s para nunca prender a tela
-      let { data, error: sErr } = await Promise.race([
-        supabase.auth.signInWithPassword({ email: lucyEmail, password: lucyPassword }),
-        new Promise<{ data: any; error: any }>(resolve => 
-          setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2500)
-        )
-      ]);
-
-      // 2. Tenta com senha alternativa se necessário
-      if (sErr && sErr.message !== 'Timeout') {
-        const altTry = await Promise.race([
-          supabase.auth.signInWithPassword({ email: lucyEmail, password: 'murata123' }),
-          new Promise<{ data: any; error: any }>(resolve => 
-            setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 2000)
-          )
-        ]);
-        if (!altTry.error && altTry.data) {
-          data = altTry.data;
-          sErr = null;
-        }
-      }
-
-      if (data?.user) {
-        try {
-          await supabase.from('profiles').upsert({
-            id: data.user.id,
-            email: lucyEmail,
-            role: 'doctor',
-            status: 'approved',
-            full_name: 'Dra. Lucy Morata',
-            especialidade: 'Odontologia Biológica & Saúde Integrativa'
-          }, { onConflict: 'email' });
-        } catch (upErr) {
-          console.warn("Aviso ao atualizar perfil Dra. Lucy:", upErr);
-        }
-
-        updateUserState({
-          email: lucyEmail,
-          id: data.user.id,
-          role: 'doctor',
-          status: 'approved',
-          full_name: 'Dra. Lucy Morata'
-        });
-        localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
-        setExamMode('biological_dentistry');
-        navigateToTab('atendimento');
-        toast.success("Bem-vinda, Dra. Lucy Morata! (Odontologia Biológica)");
-        return;
-      }
-
-      // Fallback seguro direto para Dra. Lucy
-      updateUserState({
-        email: lucyEmail,
-        id: 'dra-lucy-morata-id',
-        role: 'doctor',
-        status: 'approved',
-        full_name: 'Dra. Lucy Morata'
-      });
-      localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
-      setExamMode('biological_dentistry');
-      navigateToTab('atendimento');
-      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata (Odontologia Biológica)");
-    } catch (err: any) {
-      console.warn("Acesso Dra. Lucy Fallback ativado:", err);
-      updateUserState({
-        email: lucyEmail,
-        id: 'dra-lucy-morata-id',
-        role: 'doctor',
-        status: 'approved',
-        full_name: 'Dra. Lucy Morata'
-      });
-      localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
-      setExamMode('biological_dentistry');
-      navigateToTab('atendimento');
-      toast.success("🦷 Acesso Liberado: Dra. Lucy Morata (Odontologia Biológica)");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleMarcoLogin = async () => {
-    setAuthLoading(true);
-    setError(null);
-    const marcoEmail = 'marco.agduarte22@gmail.com';
-    const marcoPassword = 'Duarte2026!';
-    
-    try {
-      // 1. Tenta sincronizar via backend se disponível
-      fetch("/api/auth/ensure-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: marcoEmail,
-          password: marcoPassword,
-          full_name: 'Dr. Marco Duarte (Admin)',
-          role: 'admin'
-        })
-      }).catch(e => console.warn("Backend auth sync aviso:", e));
-
-      // 2. Faz login no Supabase
-      const { data, error: sErr } = await supabase.auth.signInWithPassword({
-        email: marcoEmail,
-        password: marcoPassword
-      });
-
-      if (data?.user) {
-        updateUserState({
-          email: marcoEmail,
-          id: data.user.id,
-          role: 'admin',
-          status: 'approved',
-          full_name: 'Dr. Marco Duarte (Admin)'
-        });
-        toast.success("Bem-vindo, Dr. Marco Duarte!");
-        return;
-      }
-
-      // Fallback Master imediato para garantir acesso sem bloqueios
-      updateUserState({
-        email: marcoEmail,
-        id: 'master-admin-marco',
-        role: 'admin',
-        status: 'approved',
-        full_name: 'Dr. Marco Duarte (Admin)'
-      });
-      toast.success("🔑 Acesso Master Dr. Marco Duarte Liberado!");
-    } catch (err: any) {
-      console.warn("Acesso Master Fallback ativado:", err);
-      updateUserState({
-        email: marcoEmail,
-        id: 'master-admin-marco',
-        role: 'admin',
-        status: 'approved',
-        full_name: 'Dr. Marco Duarte (Admin)'
-      });
-      toast.success("🔑 Acesso Master Dr. Marco Duarte Liberado!");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // Atalho de Teclado Secreto para o Dr. Marco (F2, F8, Alt+M ou Ctrl+Shift+M)
-  useEffect(() => {
-    if (user) return;
-    const handleSecretShortcut = (e: KeyboardEvent) => {
-      const isAltM = e.altKey && (e.key === 'm' || e.key === 'M' || e.code === 'KeyM');
-      const isCtrlShiftM = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'm' || e.key === 'M' || e.code === 'KeyM');
-      const isFKey = e.key === 'F2' || e.key === 'F8' || e.code === 'F2' || e.code === 'F8';
-      
-      if (isAltM || isCtrlShiftM || isFKey) {
-        e.preventDefault();
-        toast("⚡ Atalho Master Detectado! Conectando...", { icon: "🔑" });
-        handleMarcoLogin();
-      }
-    };
-
-    window.addEventListener('keydown', handleSecretShortcut);
-    return () => window.removeEventListener('keydown', handleSecretShortcut);
-  }, [user]);
-
-  const handleDemoLogin = async () => {
-    setAuthLoading(true);
-    setError(null);
-    const demoEmail = 'demo@ambulatorio.ia';
-    const demoPassword = 'Demo1234!';
-    
-    try {
-      // Tenta fazer login primeiro
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: demoEmail,
-        password: demoPassword,
-      });
-
-      // Se o erro for "Invalid login credentials", significa que o usuário não existe no Auth
-      if (signInError && signInError.message.includes('Invalid login credentials')) {
-        console.log("Usuário demo não encontrado. Criando agora...");
-        
-        // Tenta criar o usuário no Auth
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: demoEmail,
-          password: demoPassword,
-          options: {
-            data: {
-              full_name: 'Médico de Demonstração'
-            }
-          }
-        });
-
-        if (signUpError) throw signUpError;
-
-        if (signUpData.user) {
-          // Garante que o perfil seja criado como 'admin' e 'approved' para acesso irrestrito
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({ 
-              role: 'admin', 
-              status: 'approved',
-              full_name: 'Dr. Marco Duarte (Admin)'
-            })
-            .eq('id', signUpData.user.id);
-            
-          if (profileError) {
-            await supabase.from('profiles').upsert({
-              id: signUpData.user.id,
-              email: demoEmail,
-              role: 'admin',
-              status: 'approved',
-              full_name: 'Dr. Marco Duarte (Admin)'
-            });
-          }
-          
-          toast.success("Acesso de Administrador liberado!");
-          return;
-        }
-      } else if (signInError) {
-        throw signInError;
-      }
-
-      // Se o login der certo, garantimos que o perfil seja admin e esteja aprovado
-      if (signInData.user) {
-        await supabase.from('profiles').upsert({
-          id: signInData.user.id,
-          email: demoEmail,
-          role: 'admin',
-          status: 'approved',
-          full_name: 'Dr. Marco Duarte (Admin)'
-        });
-      }
-
-      await checkUser();
-      toast.success("Login de Administrador realizado com sucesso!");
-    } catch (err: any) {
-      console.error("Erro no login demo:", err);
-      setError(err.message || "Falha no login de demonstração.");
-      toast.error("Erro ao acessar conta demo.");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleTestDentistLogin = async () => {
-    setAuthLoading(true);
-    setError(null);
-    const testEmail = 'dentista.teste@ambulatorio.ia';
-    const testPassword = 'TesteDentista123!';
-    
-    try {
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: testEmail,
-        password: testPassword,
-      });
-
-      if (signInError && signInError.message.includes('Invalid login credentials')) {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: testEmail,
-          password: testPassword,
-          options: {
-            data: {
-              full_name: 'Dr(a). Dentista Convidado (Teste)'
-            }
-          }
-        });
-
-        if (signUpError) throw signUpError;
-
-        if (signUpData.user) {
-          await supabase.from('profiles').upsert({
-            id: signUpData.user.id,
-            email: testEmail,
-            role: 'doctor',
-            status: 'approved',
-            full_name: 'Dr(a). Dentista Convidado (Teste)'
-          });
-          
-          toast.success("Acesso de Dentista Convidado liberado!");
-          await checkUser();
-          return;
-        }
-      } else if (signInError) {
-        throw signInError;
-      }
-
-      if (signInData.user) {
-        await supabase.from('profiles').upsert({
-          id: signInData.user.id,
-          email: testEmail,
-          role: 'doctor',
-          status: 'approved',
-          full_name: 'Dr(a). Dentista Convidado (Teste)'
-        });
-      }
-
-      await checkUser();
-      toast.success("Login como Dentista Convidado realizado com sucesso!");
-    } catch (err: any) {
-      console.error("Erro no login de teste:", err);
-      setError(err.message || "Falha no login de teste.");
-      toast.error("Erro ao acessar conta de teste.");
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setError(null);
-    try {
-      if (authMode === 'login') {
-        let normInputEmail = email.toLowerCase().trim();
-        if (normInputEmail.endsWith('@gmail.com.br')) {
-          normInputEmail = normInputEmail.replace('@gmail.com.br', '@gmail.com');
-        }
-        if (normInputEmail.includes('lucimurata') || normInputEmail.includes('lucy.morata')) {
-          normInputEmail = 'lucimurata@gmail.com';
-        }
-
-        if (normInputEmail === 'carvalhomorato@gmail.com' || normInputEmail.includes('carvalhomorato')) {
-          throw new Error("Acesso bloqueado: Este perfil foi desativado pelo Administrador.");
-        }
-
-        if (typeof window !== 'undefined') {
-          (window as any).__isExplicitlyLoggedOut = false;
-        }
-
-        // Se for o login da Dra. Lucy ou do Dr. Marco, aciona diretamente o fluxo dedicado com contingência instantânea
-        if (normInputEmail === 'lucimurata@gmail.com' || normInputEmail.includes('lucimurata') || normInputEmail.includes('lucy')) {
-          await handleLucyLogin();
-          return;
-        }
-
-        if (normInputEmail === 'marco.agduarte22@gmail.com' || normInputEmail.includes('marco.agduarte')) {
-          await handleMarcoLogin();
-          return;
-        }
-
-        const primaryPassword = password;
-        const altPassword = password;
-
-        // Tenta sincronização rápida em segundo plano sem bloquear a interface
-        try {
-          const syncCtrl = new AbortController();
-          const syncTimeout = setTimeout(() => syncCtrl.abort(), 2000);
-          fetch("/api/auth/ensure-user", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: normInputEmail, password: primaryPassword }),
-            signal: syncCtrl.signal
-          }).catch(() => {}).finally(() => clearTimeout(syncTimeout));
-        } catch (e) {}
-
-        let { data, error } = await supabase.auth.signInWithPassword({ email: normInputEmail, password: primaryPassword });
-
-        if (error && altPassword !== primaryPassword) {
-          const altTry = await supabase.auth.signInWithPassword({ email: normInputEmail, password: altPassword });
-          if (!altTry.error && altTry.data?.user) {
-            data = altTry.data;
-            error = null;
-          }
-        }
-
-        const isLucyUser = normInputEmail === 'lucimurata@gmail.com' || normInputEmail.includes('lucimurata') || normInputEmail.includes('lucy');
-        const isMarcoUser = normInputEmail === 'marco.agduarte22@gmail.com';
-
-        // Contingência imediata de alta confiabilidade para Dra. Lucy e Dr. Marco (evita travar na VPS)
-        if (isLucyUser && (error || !data?.user)) {
-          console.log("Contingência direta ativada para Dra. Lucy Morata.");
-          updateUserState({
-            email: 'lucimurata@gmail.com',
-            id: 'dra-lucy-morata-id',
-            role: 'doctor',
-            status: 'approved',
-            full_name: 'Dra. Lucy Morata'
-          });
-          localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
-          setExamMode('biological_dentistry');
-          navigateToTab('atendimento');
-          toast.success("Bem-vinda, Dra. Lucy Morata! (Odontologia Biológica)");
-          return;
-        }
-
-        if (isMarcoUser && (error || !data?.user)) {
-          console.log("Contingência direta ativada para Dr. Marco Duarte.");
-          updateUserState({
-            email: 'marco.agduarte22@gmail.com',
-            id: 'master-admin-marco',
-            role: 'admin',
-            status: 'approved',
-            full_name: 'Dr. Marco Duarte (Admin)'
-          });
-          navigateToTab('atendimento');
-          toast.success("Bem-vindo, Dr. Marco Duarte!");
-          return;
-        }
-
-        if (error) {
-          if (error.message.includes('Failed to fetch') || error.message.includes('timeout')) {
-            throw new Error('Não foi possível conectar ao servidor. Verifique sua internet ou tente novamente mais tarde.');
-          }
-          if (error.message.includes('Invalid login credentials')) {
-            throw new Error('E-mail ou senha incorretos.');
-          }
-          throw error;
-        }
-
-        if (data?.user) {
-          if (data.user.email === 'carvalhomorato@gmail.com') {
-            await supabase.auth.signOut().catch(() => {});
-            throw new Error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
-          }
-
-          const isAdminEmail = data.user.email === 'marco.agduarte22@gmail.com' || data.user.email?.includes('admin') || data.user.email === 'demo@ambulatorio.ia';
-          
-          let profile: any = null;
-          try {
-            const { data: profiles } = await supabase
-              .from('profiles')
-              .select('id, email, role, status, full_name, especialidade')
-              .eq('id', data.user.id);
-            profile = profiles && profiles.length > 0 ? profiles[0] : null;
-          } catch (pErr) {
-            console.warn("Aviso ao carregar perfil:", pErr);
-          }
-
-          if (profile?.status === 'blocked') {
-            await supabase.auth.signOut().catch(() => {});
-            throw new Error("Acesso revogado: Este perfil foi desativado pelo Administrador.");
-          }
-          
-          const resolvedName = profile?.full_name || (
-            data.user.email === 'marco.agduarte22@gmail.com' ? 'Dr. Marco Duarte (Admin)' :
-            (data.user.email?.includes('lucy') || data.user.email === 'dra.lucy.morata@gmail.com' || data.user.email === 'lucimurata@gmail.com') ? 'Dra. Lucy Morata' :
-            data.user.email
-          );
-
-          updateUserState({ 
-            email: data.user.email || '', 
-            id: data.user.id, 
-            role: isAdminEmail ? 'admin' : (profile?.role || 'doctor'),
-            status: 'approved',
-            full_name: resolvedName
-          });
-
-          if (data.user.email?.includes('lucy') || data.user.email === 'lucimurata@gmail.com') {
-            localStorage.setItem('clinic_active_doctor_id', 'dra_lucy');
-            setExamMode('biological_dentistry');
-            navigateToTab('atendimento');
-            toast.success("Bem-vinda, Dra. Lucy Morata! (Odontologia Biológica)");
-          } else {
-            navigateToTab('atendimento');
-            toast.success(`Bem-vindo(a), ${resolvedName}!`);
-          }
-        }
-      } else {
-        if (!name.trim()) {
-          throw new Error("Por favor, preencha seu nome completo.");
-        }
-        if (!isPasswordValid) {
-          throw new Error("A senha não atende a todos os requisitos de segurança.");
-        }
-
-        const { data, error } = await supabase.auth.signUp({ 
-          email, 
-          password,
-          options: {
-            data: {
-              full_name: name
-            }
-          }
-        });
-        
-        console.log("Auth SignUp Result:", { data, error });
-        
-        if (error) {
-          console.error("Auth SignUp Error Details:", error);
-          throw error;
-        }
-        
-        // Cria ou atualiza perfil como aprovado
-        if (data.user && data.session) {
-          await supabase.from('profiles').upsert({
-            id: data.user.id,
-            email: data.user.email,
-            role: 'doctor',
-            status: 'approved',
-            full_name: name
-          });
-
-          updateUserState({ 
-            email: data.user.email || '', 
-            id: data.user.id, 
-            role: 'doctor',
-            status: 'approved',
-            full_name: name
-          });
-          navigateToTab('dashboard');
-        } else if (data.user && !data.session) {
-          setError("Cadastro realizado! Verifique a caixa de entrada do seu e-mail para confirmar a conta antes de entrar.");
-          setAuthMode('login'); // Volta para a tela de login
-        }
-      }
-    } catch (err: any) {
-      if (err.message === "Invalid login credentials") {
-        setError("E-mail ou senha incorretos. (Ou seu e-mail ainda não foi confirmado)");
-      } else {
-        setError(err.message || 'Falha na autenticação');
-      }
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      // 1. Zera imediatamente o estado no React para exibir a tela de login na hora
-      setUser(null);
-
-      // 2. Limpeza profunda de tokens e sessão no localStorage e sessionStorage
-      if (typeof window !== 'undefined') {
-        try {
-          (window as any).__isExplicitlyLoggedOut = true;
-          localStorage.removeItem('ambulatorio_user_session');
-          localStorage.removeItem('ambulatorio_active_tab');
-          localStorage.removeItem('clinic_active_doctor_id');
-          localStorage.removeItem('clinic_active_exam_mode');
-          
-          // Remove todos os tokens do Supabase (sb-*-auth-token) para impedir auto-restauração imediata na VPS
-          const keysToRemove: string[] = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.startsWith('sb-') || key.includes('supabase') || key.includes('auth-token') || key.includes('ambulatorio_user_session'))) {
-              keysToRemove.push(key);
-            }
-          }
-          keysToRemove.forEach(k => localStorage.removeItem(k));
-          sessionStorage.clear();
-        } catch (storageErr) {
-          console.warn("Aviso ao limpar storage de autenticação:", storageErr);
-        }
-      }
-
-      // 3. Reseta estados de visualização
-      setShowDashboard(false);
-      setShowHistory(false);
-      setShowAgenda(false);
-      setShowMessageHistory(false);
-      setShowFinancial(false);
-      setShowManageTeam(false);
-      setShowCrm(false);
-      setHistory([]);
-      setCurrentRecord(null);
-      setSelectedPatient(null);
-      setShowSecretControls(false);
-      setLogoClicks(0);
-      setEmail('');
-      setPassword('');
-
-      // 4. Executa signOut do Supabase em paralelo com timeout de 600ms (nunca trava a UI na VPS)
-      try {
-        await Promise.race([
-          supabase.auth.signOut({ scope: 'local' }).catch(() => {}).then(() => supabase.auth.signOut().catch(() => {})),
-          new Promise(resolve => setTimeout(resolve, 600))
-        ]);
-      } catch (e) {
-        console.warn("Aviso no signOut remoto:", e);
-      }
-
-      toast.success("Desconectado com sucesso!");
-    } catch (err: any) {
-      console.error("Erro ao deslogar:", err);
-      setUser(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('ambulatorio_user_session');
-      }
-    }
-  };
-  
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const [isProcessingAi, setIsProcessingAi] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const transcriptRef = useRef('');
-  const isRecordingRef = useRef<boolean>(false);
-  const recordingDurationRef = useRef<number>(0);
-  const lastActivityTimeRef = useRef<number>(Date.now());
-  const recordingTimerRef = useRef<any>(null);
-  const accumulatedTranscriptRef = useRef<string>('');
+
+  // Resumo geral estruturado pela IA (opcional / complementar)
+  const [clinicalSummary, setClinicalSummary] = useState('');
+  const [prescriptionText, setPrescriptionText] = useState('');
+
+  // Estados independentes por pilar clínico (isolamento total entre especialidades)
+  const [dentalData, setDentalData] = useState<BiologicalDentistryData>({});
+  const [nutrologyData, setNutrologyData] = useState<NutrologyData>({});
+  const [dermatologyData, setDermatologyData] = useState<DermatologyData>({});
+
+  const calculatedAge = calculatePreciseAge(patientDob);
 
   useEffect(() => {
-    try {
-      const savedDraft = localStorage.getItem('ambulatorio_draft_consultation');
-      if (savedDraft) {
-        const parsed = JSON.parse(savedDraft);
-        if (parsed && parsed.transcript && parsed.transcript.trim().length > 15) {
-          setPendingDraft(parsed);
-        }
-      }
-    } catch (e) {
-      console.warn("Draft restore error:", e);
-    }
-  }, []);
+    setDraftBrand(brand);
+  }, [brand]);
 
-  useEffect(() => {
-    fetchHistory();
-    const hasSeenOverview = localStorage.getItem('hasSeenSystemOverview');
-    if (!hasSeenOverview) {
-      setShowSystemOverview(true);
-      localStorage.setItem('hasSeenSystemOverview', 'true');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      fetchHistory();
-      if (user.role === 'admin') {
-        fetchPendingCount();
-      }
-    }
-  }, [user]);
-
-  const fetchHistory = async (name?: string) => {
-    if (!user) return;
-    
-    // Lista conservadora de colunas que sabemos que existem
-    const baseColumns = "id, paciente_nome_completo, paciente_cpf, paciente_data_nascimento, paciente_status, data_consulta, especialidade, resumo_formatado, sugestao_conduta, user_id, medico_id, profissional_responsavel, created_at";
-    // Colunas extras confirmadas
-    const extraColumns = "exame_neurologico, exame_fisico, checklist_integrativo, queixa_principal, hipotese_diagnostica, conduta_plano_terapeutico, prescricao, dados_clinicos, paciente_telefone, comparativo, dados_especialidade";
-    const allColumns = `${baseColumns}, ${extraColumns}`;
-
-    try {
-      // Tenta buscar de forma resiliente
-      const tryFetchHistory = async (columns: string, useFilter: boolean = true, attempt: number = 1): Promise<any> => {
-        if (attempt > 15) throw new Error("Muitas tentativas de busca falharam devido a erros de schema.");
-        
-        console.log(`fetchHistory (Tentativa ${attempt}): Colunas: ${columns.substring(0, 40)}... (Filtro: ${useFilter})`);
-        
-        try {
-          let query = supabase.from('prontuarios').select(columns);
-
-          if (useFilter && user.role !== 'admin' && !name) {
-            query = query.or(`medico_id.eq.${user.id},user_id.eq.${user.id}`);
-          }
-
-          // Ordenação
-          if (columns.includes('created_at')) {
-            query = query.order('created_at', { ascending: false });
-          } else if (columns.includes('data_consulta')) {
-            query = query.order('data_consulta', { ascending: false });
-          }
-
-          // Filtro de busca
-          if (name) {
-            const cleanSearch = name.trim();
-            if (cleanSearch.length >= 3) {
-              const searchFilters = [];
-              if (columns.includes('paciente_nome_completo')) searchFilters.push(`paciente_nome_completo.ilike.%${cleanSearch}%`);
-              if (columns.includes('paciente_cpf')) searchFilters.push(`paciente_cpf.ilike.%${cleanSearch}%`);
-              if (columns.includes('paciente_telefone')) searchFilters.push(`paciente_telefone.ilike.%${cleanSearch}%`);
-              if (searchFilters.length > 0) query = query.or(searchFilters.join(','));
-            }
-          }
-
-          const { data, error } = await query;
-          
-          if (error) {
-            console.warn(`fetchHistory (Erro ${attempt}):`, error.message);
-            
-            const isColumnError = error.message.toLowerCase().includes('column') || 
-                                 error.message.toLowerCase().includes('find the') ||
-                                 error.message.toLowerCase().includes('not found') ||
-                                 error.message.toLowerCase().includes('schema');
-
-            if (isColumnError) {
-              // Tenta identificar a coluna faltante de várias formas
-              const missingColumn = 
-                error.message.match(/column "([^"]+)"/)?.[1] || 
-                error.message.match(/find the '([^']+)' column/)?.[1] ||
-                error.message.match(/column '([^']+)'/)?.[1] ||
-                error.message.match(/column ([^ ]+) does not exist/)?.[1];
-              
-              if (missingColumn) {
-                console.log(`fetchHistory: Removendo '${missingColumn}' e tentando novamente...`);
-                if (missingColumn === 'medico_id' || missingColumn === 'user_id' || missingColumn === 'paciente_telefone') {
-                  return tryFetchHistory(columns, false, attempt + 1);
-                }
-                const newColumns = columns.split(',').map(c => c.trim()).filter(c => c !== missingColumn).join(', ');
-                if (newColumns && newColumns !== columns) return tryFetchHistory(newColumns, useFilter, attempt + 1);
-              }
-              
-              // Se não identificou a coluna mas é erro de schema, tenta sem filtro
-              if (useFilter) return tryFetchHistory(columns, false, attempt + 1);
-              
-              // Fallback para busca mínima absoluta
-              if (columns !== 'id, paciente_nome_completo, resumo_formatado') {
-                return tryFetchHistory('id, paciente_nome_completo, resumo_formatado', false, attempt + 1);
-              }
-            }
-            throw error;
-          }
-          return data;
-        } catch (e: any) {
-          if (attempt < 5 && (e.message?.includes('column') || e.message?.includes('schema'))) {
-            return tryFetchHistory('id, paciente_nome_completo, resumo_formatado', false, attempt + 1);
-          }
-          throw e;
-        }
-      };
-
-      const data = await tryFetchHistory(allColumns);
-      
-      // Se houver dados, tenta buscar os nomes dos perfis separadamente para evitar erro de relacionamento
-      let recordsWithProfiles = data || [];
-      if (recordsWithProfiles.length > 0) {
-        try {
-          const userIds = [...new Set(recordsWithProfiles.map((r: any) => r.user_id).filter(Boolean))];
-          if (userIds.length > 0) {
-            const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', userIds);
-            if (profiles) {
-              const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]));
-              recordsWithProfiles = recordsWithProfiles.map((r: any) => ({
-                ...r,
-                profiles: profileMap[r.user_id] || null
-              }));
-            }
-          }
-        } catch (pErr) {
-          console.warn("Erro ao buscar perfis:", pErr);
-        }
-      }
-      
-      const offlineRecords = getOfflineRecords();
-
-      const serverHistory = recordsWithProfiles.map((r: any) => {
-        let dados = r.dados_clinicos || {};
-        if (typeof r.dados_clinicos === 'string') {
-          try {
-            dados = JSON.parse(r.dados_clinicos);
-          } catch (e) {
-            dados = { observacoes: r.dados_clinicos };
-          }
-        }
-        let spec = r.dados_especialidade || {};
-        if (typeof r.dados_especialidade === 'string') {
-          try {
-            spec = JSON.parse(r.dados_especialidade);
-          } catch (e) {
-            spec = {};
-          }
-        }
-        return {
-          ...r,
-          dados_clinicos: dados,
-          dados_especialidade: spec,
-          antecedentes: r.antecedentes || dados.antecedentes || spec.antecedentes || '',
-          alertas_clinicos: r.alertas_clinicos || dados.alertas_clinicos || spec.alertas_clinicos || [],
-          vitals: r.vitals || dados.vitals || spec.vitals || undefined,
-          prescricao: r.prescricao || dados.prescricao || r.conduta_plano_terapeutico || '',
-          conduta_plano_terapeutico: r.conduta_plano_terapeutico || dados.conduta || r.prescricao || '',
-          resumo_formatado: r.resumo_formatado || dados.resumo_formatado || '',
-          sugestao_conduta: r.sugestao_conduta || dados.sugestao_conduta || ''
-        };
-      });
-
-      // Mescla registros do servidor com registros offline ainda não sincronizados
-      const pendingOffline = offlineRecords.filter(off => off.is_offline_pending);
-      const merged = [...pendingOffline, ...serverHistory];
-
-      // Remove eventuais duplicatas por id ou offline_id
-      const uniqueMap = new Map();
-      merged.forEach(item => {
-        const key = item.id || item.offline_id || `${item.paciente_nome_completo}_${item.created_at}`;
-        if (!uniqueMap.has(key)) {
-          uniqueMap.set(key, item);
-        }
-      });
-
-      setHistory(Array.from(uniqueMap.values()));
-    } catch (err) {
-      console.error("Failed to fetch history from cloud, loading local offline records", err);
-      const offlineRecords = getOfflineRecords();
-      if (offlineRecords.length > 0) {
-        setHistory(offlineRecords);
-        toast("Exibindo prontuários salvos localmente no computador.", { icon: '💻' });
-      }
-    }
+  const handleSaveBrand = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveWhiteLabelBrand(draftBrand);
+    setBrand(draftBrand);
+    setShowBrandModal(false);
+    toast.success('Identidade da clínica atualizada!');
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    // Confirmação segura
-    const toastId = toast.loading("Excluindo prontuário...");
-
-    try {
-      // 1. Remove do Supabase caso seja registro remoto
-      if (!id.startsWith('OFFLINE_') && !id.startsWith('imp_csv_')) {
-        const { error } = await supabase
-          .from('prontuarios')
-          .delete()
-          .eq('id', id);
-        
-        if (error) {
-          console.warn("Aviso na exclusão remota do Supabase:", error.message);
-        }
+  // Ditado por Voz em Português (Web Speech API)
+  const toggleRecording = () => {
+    if (isRecording) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
       }
-
-      // 2. Remove do armazenamento offline/local se existir
-      removeOfflineRecord(id);
-
-      // 3. Atualização otimista e instantânea da lista em tela
-      setHistory(prev => prev.filter(r => r.id !== id && (r as any).offline_id !== id));
-      if (currentRecord && (currentRecord.id === id || (currentRecord as any).offline_id === id)) {
-        setCurrentRecord(null);
-      }
-
-      toast.success("Prontuário excluído com sucesso!", { id: toastId });
-      fetchHistory(searchTerm);
-    } catch (err: any) {
-      console.error("Erro ao excluir registro", err);
-      toast.error(`Falha ao excluir o registro: ${err.message || 'Erro de permissão'}`, { id: toastId });
-    }
-  };
-
-  const exportToCSV = () => {
-    if (!history || history.length === 0) {
-      toast.error("Nenhum registro para exportar.");
+      setIsRecording(false);
       return;
     }
 
-    const headers = ["Data da Consulta", "Nome do Paciente", "CPF", "Data de Nascimento", "Especialidade", "Status", "Resumo Formatado", "Sugestão de Conduta"];
-    
-    const rows = history.map(record => {
-      const data = formatDateBR(record.data_consulta || record.created_at);
-      const nome = record.paciente_nome_completo || '';
-      const cpf = record.paciente_cpf || '';
-      const nascimento = record.paciente_data_nascimento || '';
-      const especialidade = record.especialidade || '';
-      const status = record.paciente_status || '';
-      const resumo = record.resumo_formatado || '';
-      const conduta = record.sugestao_conduta || '';
-
-      return [data, nome, cpf, nascimento, especialidade, status, resumo, conduta].map(field => {
-        const stringField = String(field);
-        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
-          return `"${stringField.replace(/"/g, '""')}"`;
-        }
-        return stringField;
-      }).join(',');
-    });
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    // Adiciona BOM para o Excel reconhecer os acentos (UTF-8)
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `prontuarios_export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (showHistory) fetchHistory(searchTerm);
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, showHistory]);
-
-  const startRecording = async (mode: 'quick' | 'ambient' = 'quick') => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("WEBVIEW_ERROR");
-      }
-
-      setRecordingMode(mode);
-      setRecordingDuration(0);
-      recordingDurationRef.current = 0;
-      lastActivityTimeRef.current = Date.now();
-      accumulatedTranscriptRef.current = '';
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        if (mediaRecorderRef.current && mediaRecorderRef.current.stream) {
-          mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-        }
-        await handleAudioProcess(audioBlob);
-      };
-
-      mediaRecorder.start(mode === 'ambient' ? 5000 : undefined);
-      setIsRecording(true);
-      isRecordingRef.current = true;
-      setError(null);
-      setLiveTranscript('');
-      transcriptRef.current = '';
-
-      // Configuração de Timer & Fail-safes (Keep-Alive, Limite Máximo e Auto-Stop por Silêncio)
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = setInterval(() => {
-        if (!isRecordingRef.current) {
-          clearInterval(recordingTimerRef.current);
-          return;
-        }
-
-        recordingDurationRef.current += 1;
-        setRecordingDuration(recordingDurationRef.current);
-
-        // Salva rascunho de segurança a cada 10 segundos localmente
-        if (recordingDurationRef.current % 10 === 0 && transcriptRef.current.trim().length > 10) {
-          try {
-            localStorage.setItem('ambulatorio_draft_consultation', JSON.stringify({
-              transcript: transcriptRef.current,
-              duration: recordingDurationRef.current,
-              date: new Date().toISOString(),
-              patientName: selectedPatient || currentRecord?.paciente_nome_completo || 'Paciente em Atendimento',
-              mode: examMode
-            }));
-          } catch (e) {
-            console.warn("Auto-draft save error:", e);
-          }
-        }
-
-        // Auto-stop de segurança 1: Limite máximo de consulta de 60 minutos (3600 segundos)
-        if (recordingDurationRef.current >= 3600) {
-          toast("⏱️ Limite máximo de consulta atingido (60 min). Finalizando e processando prontuário...");
-          stopRecording();
-        }
-
-        // Auto-stop de segurança 2: Detecção de sala vazia / silêncio prolongado (> 7 minutos sem novas palavras no modo ambiente)
-        if (mode === 'ambient' && Date.now() - lastActivityTimeRef.current > 7 * 60 * 1000 && transcriptRef.current.trim().length > 50) {
-          toast("🔇 Silêncio prolongado detectado. Finalizando consulta automaticamente...");
-          stopRecording();
-        }
-      }, 1000);
-
-      // Web Speech API com Reconexão Contínua (Keep-Alive)
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        try {
-          if ((window as any).currentRecognition) {
-            try { (window as any).currentRecognition.stop(); } catch (e) {}
-          }
-          
-          const initRecognition = () => {
-            if (!isRecordingRef.current) return;
-            const recognition = new SpeechRecognition();
-            (window as any).currentRecognition = recognition;
-            recognition.lang = 'pt-BR';
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            
-            recognition.onresult = (event: any) => {
-              lastActivityTimeRef.current = Date.now();
-              let sessionTranscript = '';
-              for (let i = 0; i < event.results.length; i++) {
-                sessionTranscript += event.results[i][0].transcript;
-              }
-              
-              const fullText = (accumulatedTranscriptRef.current ? accumulatedTranscriptRef.current + ' ' : '') + sessionTranscript;
-              setLiveTranscript(fullText);
-              transcriptRef.current = fullText;
-            };
-            
-            recognition.onerror = (e: any) => {
-              console.log("Speech recognition error:", e);
-            };
-
-            recognition.onend = () => {
-              // Se ainda estiver gravando (especialmente no modo ambiente), reconecta imediatamente!
-              if (isRecordingRef.current) {
-                if (transcriptRef.current) {
-                  accumulatedTranscriptRef.current = transcriptRef.current;
-                }
-                setTimeout(() => {
-                  if (isRecordingRef.current) {
-                    try { initRecognition(); } catch (err) { console.log("Recognition restart err:", err); }
-                  }
-                }, 200);
-              }
-            };
-            
-            recognition.start();
-            recognitionRef.current = recognition;
-          };
-
-          initRecognition();
-        } catch (e) {
-          console.log("Speech recognition init failed", e);
-        }
-      }
-
-    } catch (err: any) {
-      console.error("Erro ao acessar microfone:", err);
-      setIsRecording(false);
-      isRecordingRef.current = false;
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      const errorName = err.name || '';
-      const errorMessage = err.message || '';
-      
-      const isIframe = window.self !== window.top;
-      
-      if (errorMessage === "WEBVIEW_ERROR") {
-        setError("Microfone Bloqueado! Você está no navegador interno (WhatsApp/Instagram). Copie o link e cole diretamente no Chrome ou Safari para gravar áudios.");
-      } else if (
-        errorName === 'NotAllowedError' || 
-        errorName === 'PermissionDeniedError' || 
-        errorMessage.toLowerCase().includes('permission denied') ||
-        errorMessage.toLowerCase().includes('permissão negada')
-      ) {
-        if (isIframe) {
-          setError("O microfone está bloqueado pelo ambiente de teste. \n\nSOLUÇÃO: Clique no ícone de 'Abrir em nova aba' (quadrado com seta) no topo da tela para usar o microfone corretamente.");
-        } else {
-          setError("Permissão de microfone negada. \n\n1. Clique no cadeado (🔒) na barra de endereços.\n2. Ative o Microfone.\n3. Recarregue a página.");
-        }
-      } else if (errorName === 'NotFoundError' || errorName === 'DevicesNotFoundError') {
-        setError("Nenhum microfone encontrado no seu dispositivo.");
-      } else if (errorName === 'NotReadableError' || errorName === 'TrackStartError') {
-        setError("O microfone já está sendo usado por outro aplicativo.");
-      } else {
-        setError(`Erro ao acessar microfone: ${errorMessage || 'Erro desconhecido'}`);
-      }
-    }
-  };
-
-  const stopRecording = () => {
-    isRecordingRef.current = false;
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    } else {
-      setIsRecording(false);
-    }
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-    }
-  };
-
-  const handleGenerateSummary = async (phone: string, providedMessages?: any[]) => {
-    if (!phone) {
-      toast.error("Selecione um paciente primeiro.");
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error('Ditado por voz não suportado neste navegador. Digite ou cole o relato no campo.');
       return;
     }
-    
-    setIsGeneratingSummary(true);
-    setShowSummary(true);
-    try {
-      let messagesToProcess = providedMessages || [];
-      
-      if (messagesToProcess.length === 0) {
-        const { data, error } = await supabase
-          .from('mensagens')
-          .select('*')
-          .eq('telefone_cliente', phone)
-          .order('created_at', { ascending: true });
-          
-        if (error) throw error;
-        messagesToProcess = data || [];
-      }
-      
-      if (messagesToProcess.length === 0) {
-        toast.error("Nenhuma mensagem encontrada para este paciente.");
-        setIsGeneratingSummary(false);
-        setShowSummary(false);
-        return;
-      }
-      
-      const filteredMessages = messagesToProcess.filter(m => m.telefone_cliente === phone);
-      
-      const messagesWithMedia = await Promise.all(filteredMessages.map(async (m) => {
-        const url = m.midia_url;
-        const isAudio = (m.tipo_midia || m.tipo || '').toLowerCase().includes('audio') || 
-                        (url && (url.includes('audio') || url.includes('ogg') || (url.length > 100 && !url.includes('.'))));
-        
-        if (isAudio && url) {
-          if (url.startsWith('data:audio')) {
-            return { ...m, audioData: url.split(',')[1], mimeType: url.split(';')[0].split(':')[1] };
-          } else if (url.length > 100 && !url.includes('.')) {
-            return { ...m, audioData: url, mimeType: 'audio/ogg' };
-          }
-        }
-        return m;
-      }));
 
-      const summary = await generateClinicalSummary(messagesWithMedia);
-      setClinicalSummary(summary);
-      toast.success("Resumo clínico gerado com sucesso!");
-    } catch (err: any) {
-      console.error("Erro ao gerar resumo:", err);
-      toast.error("Falha ao gerar resumo clínico.");
-      setShowSummary(false);
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-BR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
-  const handleAudioProcess = async (blobOrText?: Blob | string) => {
-    setIsProcessing(true);
-    const toastId = toast.loading("🎙️ Processando conversa da consulta com IA...");
-    try {
-      let result;
-      const isDirectText = typeof blobOrText === 'string';
-      const finalTranscript = isDirectText ? blobOrText.trim() : transcriptRef.current.trim();
-      
-      // Se a transcrição em tempo real funcionou bem (mais de 15 caracteres), usamos ela!
-      // É muito mais rápido e barato processar texto do que áudio no Gemini.
-      if (finalTranscript.length > 15) {
-        console.log("Usando transcrição em texto (mais rápido/barato):", finalTranscript);
-        const currentSpecialty = SPECIALTIES.find(s => s.id === examMode);
-        result = await processClinicalInput(
-          finalTranscript, 
-          examMode, 
-          selectedAppointmentReason,
-          currentSpecialty?.promptContext
-        );
-      } else if (blobOrText instanceof Blob) {
-        // Fallback de segurança: se a transcrição falhou, processamos o áudio original
-        console.log("Usando processamento de áudio (fallback de segurança)");
-        const base64Data = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(blobOrText);
-          reader.onloadend = () => {
-            resolve((reader.result as string).split(',')[1]);
-          };
-        });
-        const currentSpecialty = SPECIALTIES.find(s => s.id === examMode);
-        result = await processClinicalInput({
-          data: base64Data,
-          mimeType: 'audio/webm'
-        }, examMode, selectedAppointmentReason, currentSpecialty?.promptContext);
-      } else {
-        throw new Error("Nenhum áudio ou texto de consulta detectado para processar.");
-      }
-      
-      // Busca automática por histórico via CPF
-        if (result.paciente_cpf && user) {
-          try {
-            const tryFetchHistoryCheck = async (columns: string): Promise<any> => {
-              const { data, error } = await supabase
-                .from("prontuarios")
-                .select(columns)
-                .eq("paciente_cpf", result.paciente_cpf)
-                .eq("user_id", user.id)
-                .order("data_consulta", { ascending: false })
-                .limit(1);
+    const baseText = clinicalInput ? `${clinicalInput.trim()} ` : '';
+    let finalTranscript = '';
 
-              if (error) {
-                console.warn("handleAudioProcess: Erro ao buscar histórico:", error.message);
-                if (error.message.includes('column') && error.message.includes('does not exist')) {
-                  const match = error.message.match(/column "([^"]+)"/);
-                  if (match && match[1]) {
-                    const missing = match[1];
-                    const newCols = columns.split(',').map(c => c.trim()).filter(c => c !== missing).join(', ');
-                    if (newCols) return tryFetchHistoryCheck(newCols);
-                  }
-                }
-                // Se falhar tudo, tenta uma busca mínima
-                if (columns !== 'id') return tryFetchHistoryCheck('id');
-                throw error;
-              }
-              return data;
-            };
-
-            const data = await tryFetchHistoryCheck("id, paciente_nome_completo, paciente_cpf, paciente_data_nascimento, profissional_responsavel, especialidade, paciente_status, dados_clinicos, exame_neurologico, checklist_integrativo, dados_especialidade, resumo_formatado, sugestao_conduta, data_consulta, created_at");
-            
-            if (data && data.length > 0) {
-              setHasHistory(true);
-              console.log("Histórico encontrado para o paciente:", data[0]);
-            } else {
-              setHasHistory(false);
-            }
-          } catch (hErr) {
-            setHasHistory(false);
-            console.error("Erro ao buscar histórico", hErr);
-          }
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const piece = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += `${piece} `;
         } else {
-          setHasHistory(false);
+          interim += piece;
         }
-        
-        if (!result || typeof result !== 'object') {
-          throw new Error("Resposta da IA inválida ou vazia.");
-        }
-
-        console.log("[IA] Resultado bruto processado:", result);
-        
-        // Garantir que a estrutura de dados esteja correta antes de salvar (Mesclagem Inteligente)
-        const sanitizeSpecialtyData = (aiData: any) => {
-          const baseData = currentRecord?.dados_especialidade || {};
-          if (!aiData || typeof aiData !== 'object') return baseData;
-          
-          const sanitized: any = { ...baseData };
-          Object.entries(aiData).forEach(([key, val]) => {
-            if (key === 'odontograma' && typeof val === 'object' && val !== null) {
-              sanitized.odontograma = {
-                ...(baseData.odontograma || {}),
-                ...val,
-                teeth: {
-                  ...(baseData.odontograma?.teeth || {}),
-                  ...((val as any)?.teeth || {})
-                }
-              };
-              return;
-            }
-            
-            if (typeof val === 'boolean') {
-              sanitized[key] = sanitized[key] || val;
-            } else if (Array.isArray(val)) {
-              sanitized[key] = val;
-            } else if (typeof val === 'object' && val !== null) {
-              sanitized[key] = { ...(sanitized[key] || {}), ...val };
-            } else {
-              sanitized[key] = val;
-            }
-          });
-          return sanitized;
-        };
-
-        console.log("[DEBUG AI RESULT]", result);
-
-        const rawClinicalText = `${finalTranscript} ${result?.resumo_formatado || ''} ${result?.conduta_plano_terapeutico || ''} ${result?.prescricao || ''} ${result?.queixa_principal || ''}`;
-
-        const normalizeStr = (s: string) => 
-          s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        const KEY_SYNONYMS: Record<string, string[]> = {
-          colina: ["colina"],
-          hidroxi_triptofano: ["hidroxi", "triptofano", "5-htp", "5htp"],
-          fenilalanina: ["fenilalanina"],
-          melatonina: ["melatonina"],
-          ac_alfa_lipoico: ["alfa lipoico", "lipoico", "ala"],
-          semente_uva: ["semente de uva", "semente uva"],
-          coenzima_q10: ["coenzima", "q10", "coq10"],
-          astragalus: ["astragalus", "astragallus"],
-          dhea: ["dhea"],
-          epa_dha: ["epa", "dha", "omega 3", "omega-3", "omega"],
-          mix_pro: ["mix pro", "probiotico"],
-          coriandrum: ["coriandrum", "coentro"],
-          propolis: ["propolis", "propolis verde"],
-          propco: ["propco"],
-          mix_d9: ["mix d9", "d9"],
-          ginger: ["ginger", "gengibre"],
-          acido_caprilico: ["caprilico"],
-          bitter_mellon: ["bitter mellon", "bitter melon"],
-          arnica: ["arnica"],
-          myosothis: ["myosothis", "miosotis"],
-          hip_perfuratum: ["hip perfuratum", "hypericum", "hiperico"],
-          neurexan: ["neurexan", "passiflora"],
-          floral_bach: ["floral", "florais", "bach"],
-          acido_folico: ["folico", "metilfolato"],
-          vit_b3_b6: ["b3", "b6", "vitamina b", "complexo b"],
-          pregne: ["pregne", "pregnenolona"],
-          heteropterys: ["heteropterys"],
-          arcalion: ["arcalion"],
-          vinpocetina: ["vinpocetina"],
-          fosfatidilserina: ["fosfatidilserina"],
-          fosfatidilcolina: ["fosfatidilcolina"],
-          dmae: ["dmae"],
-
-          organo_gt: ["organo gt", "organo"],
-          dna_rna_ch: ["dna", "rna"],
-          organo_gt_2: ["organo gt 2"],
-          dna_rna_ch_2: ["dna rna 2"],
-          organo_gt_3: ["organo gt 3"],
-          dna_rna_ch_3: ["dna rna 3"],
-          artemisia: ["artemisia", "artemisina"],
-          phaffia: ["phaffia"],
-          chlorella: ["chlorella", "clorela"],
-          acai: ["acai", "açai"],
-          mulateiro: ["mulateiro"],
-          cmc: ["cmc"],
-          formula_onco_vo: ["formula onco", "onco vo"],
-          formula_onco_inalat: ["onco inalat"],
-          vovo_meca: ["vovo meca"],
-          euphorbia: ["euphorbia"],
-          zedoaria: ["zedoaria"],
-          naltrex: ["naltrex", "naltrexona"],
-          nootropil: ["nootropil", "piracetam"],
-
-          silimarina: ["silimarina"],
-          quercetina: ["quercetina"],
-          saw_palmetto: ["saw palmetto", "saw_palmetto", "palmetto"],
-          pygeum: ["pygeum", "africanus"],
-          tribulus: ["tribulus", "terrestris"],
-          litio: ["litio", "orotato"],
-          cardiopeptase: ["cardiopeptase"],
-          betaina: ["betaina", "pepsina"],
-          taurina: ["taurina"],
-          vit_d3: ["vitamina d", "vit d", "d3", "cholecalciferol"],
-          ca_mg_zn: ["calcio", "magnesio", "zinco", "ca/mg/zn", "ca mg zn"],
-          vit_k2: ["vitamina k", "vit k", "k2"],
-          selenio: ["selenio"],
-          manganes: ["manganes"],
-          cu: ["cobre"],
-          cromo: ["cromo", "picolinato"],
-          lugol: ["lugol", "iodo"],
-
-          telomero: ["telomero"],
-          sirtuina: ["sirtuina"],
-          integrin: ["integrin"],
-          thromboxane: ["thromboxane", "tromboxano"],
-          crisotila: ["crisotila", "asbestos"],
-          hg: ["hg", "mercurio"],
-          pb: ["pb", "chumbo"],
-          al: ["al", "aluminio"],
-
-          acetylcholine: ["acetilcolina", "acetylcholine"],
-          serotonin: ["serotonina", "serotonin"],
-          dopamine: ["dopamina", "dopamine"],
-          cortisol: ["cortisol"],
-          substance_p: ["substancia p", "substance p"],
-          b_amyloid: ["beta amiloide", "b amyloid"],
-          homocystine: ["homocisteina", "homocystine"],
-          troponin: ["troponina", "troponin"],
-          c_fos: ["c-fos", "cfos"],
-
-          candida: ["candida", "candidiasi", "disbiose"],
-          c_trachomatis: ["trachomatis", "chlamydia"],
-          b_burgdorferi: ["burgdorferi", "lyme"],
-          c_pneumoniae: ["c pneumoniae", "chlamydia pneumoniae"],
-          mycobact_tbc: ["tbc", "tuberculose", "mycobact"],
-          mycobact_avium: ["avium"],
-          hsv_type_1: ["hsv 1", "hsv1", "herpes 1", "herpes tipo 1"],
-          hsv_type_2: ["hsv 2", "hsv2", "herpes 2", "herpes tipo 2"],
-          zoster_virus: ["zoster", "herpes zoster", "zoster virus"],
-          cmv_5: ["cmv", "citomegalovirus"]
-        };
-
-        const isItemMentionedInText = (key: string, rawText: string): boolean => {
-          if (!rawText || typeof rawText !== 'string' || !rawText.trim()) return true;
-          const normText = normalizeStr(rawText);
-          const terms = KEY_SYNONYMS[key] || [key.replace(/_/g, " ")];
-          return terms.some(term => {
-            const normTerm = normalizeStr(term);
-            if (!normTerm) return false;
-            return normText.includes(normTerm);
-          });
-        };
-
-        const sanitizeChecklist = (aiData: any) => {
-          // Começa a partir de uma estrutura limpa para que itens não citados fiquem vazios
-          const sanitized: any = JSON.parse(JSON.stringify(initialIntegrativeData));
-          if (!aiData || typeof aiData !== 'object') return sanitized;
-          
-          const flatInput: Record<string, string> = {};
-          
-          const flatten = (obj: any) => {
-            if (!obj || typeof obj !== 'object') return;
-            Object.entries(obj).forEach(([k, v]) => {
-              if (typeof v === 'object' && v !== null) {
-                flatten(v);
-              } else if (v !== undefined && v !== null && v !== false) {
-                const strV = String(v).trim();
-                const lowV = strV.toLowerCase();
-                // Filtro rigoroso contra lixo da IA
-                if (lowV !== '' && lowV !== 'null' && lowV !== 'undefined' && lowV !== 'false' && lowV !== 'nan' && lowV !== 'rejeitado' && lowV !== 'não citado' && lowV !== 'pendente') {
-                  flatInput[k.toLowerCase()] = strV;
-                }
-              }
-            });
-          };
-          flatten(aiData);
-
-          for (const section in initialIntegrativeData) {
-            if (!sanitized[section]) sanitized[section] = {};
-            for (const key in initialIntegrativeData[section as keyof IntegrativeChecklistData]) {
-              const aiNestedVal = aiData[section] && typeof aiData[section] === 'object' ? aiData[section][key] : undefined;
-              const aiFlatVal = flatInput[key.toLowerCase()];
-              
-              let detectedValue = aiNestedVal !== undefined ? String(aiNestedVal) : (aiFlatVal !== undefined ? aiFlatVal : '');
-              
-              // Sanitização final do valor detectado
-              const lowVal = detectedValue.trim().toLowerCase();
-              if (lowVal === 'null' || lowVal === 'undefined' || lowVal === 'false' || lowVal === 'nan' || lowVal === 'rejeitado' || lowVal === 'não citado' || lowVal === 'pendente') {
-                detectedValue = '';
-              }
-              
-              // Filtro rigoroso: Se a IA sugeriu um valor/sinalização, mas o item NUNCA foi citado na transcrição/relato, limpa o item!
-              if (detectedValue !== '' && rawClinicalText.trim().length > 10) {
-                if (!isItemMentionedInText(key, rawClinicalText)) {
-                  console.log(`[CHECKLIST SANITIZATION] Item '${key}' purgado pois não foi citado no relato. (IA sugeriu: ${detectedValue})`);
-                  detectedValue = '';
-                }
-              }
-              
-              sanitized[section][key] = detectedValue;
-            }
-          }
-          return sanitized;
-        };
-
-        const hasIntegrativeData = result.checklist_integrativo && 
-                                 typeof result.checklist_integrativo === 'object' && 
-                                 Object.values(result.checklist_integrativo).some(section => 
-                                   section && typeof section === 'object' && 
-                                   Object.values(section).some(v => v === true || (typeof v === 'string' && v.trim() !== ''))
-                                 );
-        
-        const detectedSpec = result.especialidade ? SPECIALTIES.find(s => 
-          stripEmojis(s.name).toLowerCase() === stripEmojis(result.especialidade).toLowerCase() ||
-          s.id.toLowerCase() === result.especialidade.toLowerCase()
-        ) : undefined;
-
-        if (hasIntegrativeData && examMode === 'standard') {
-          setExamMode('integrative');
-          toast.success("Modo Integrativo ativado automaticamente.");
-        } else if (result.especialidade && examMode === 'standard') {
-          if (detectedSpec && examMode !== detectedSpec.id) {
-            setExamMode(detectedSpec.id);
-            toast.success(`Modo ${stripEmojis(detectedSpec.name)} ativado.`);
-          }
-        }
-
-        // If examMode is NOT standard, we force currentSpecialty to use the examMode, completely ignoring detectedSpec
-        const currentSpecialty = examMode !== 'standard' ? SPECIALTIES.find(s => s.id === examMode) : (detectedSpec || SPECIALTIES.find(s => s.id === examMode));
-        const existingName = currentRecord?.paciente_nome_completo || selectedPatient || '';
-        const validAiName = isValidExtractedName(result.paciente_nome_completo) ? result.paciente_nome_completo : '';
-        const finalPatientName = existingName || validAiName || 'PACIENTE';
-
-        const newRecord: ClinicalRecord = {
-          ...(currentRecord || {}),
-          id: currentRecord?.id,
-          paciente_nome_completo: finalPatientName,
-          paciente_cpf: currentRecord?.paciente_cpf || result.paciente_cpf || '',
-          paciente_data_nascimento: currentRecord?.paciente_data_nascimento || result.paciente_data_nascimento || '',
-          paciente_telefone: currentRecord?.paciente_telefone || selectedPatientPhone || result.paciente_telefone || '',
-          especialidade: stripEmojis(currentSpecialty?.name || result.especialidade || selectedAppointmentReason || 'Geral'),
-          paciente_status: result.paciente_status || currentRecord?.paciente_status || 'Estável',
-          dados_clinicos: (() => {
-            let dados = result.dados_clinicos || {};
-            if (typeof result.dados_clinicos === 'string') {
-              try {
-                dados = JSON.parse(result.dados_clinicos);
-              } catch (e) {
-                dados = { observacoes: result.dados_clinicos };
-              }
-            }
-            return dados;
-          })(),
-          alertas_copiloto: Array.isArray(result.alertas_copiloto) ? result.alertas_copiloto : [],
-          exame_neurologico: (examMode === 'neurological' || (result.exame_neurologico && hasMeaningfulData(result.exame_neurologico))) ? (result.exame_neurologico || {}) : undefined,
-          checklist_integrativo: (examMode === 'integrative' || hasIntegrativeData) ? sanitizeChecklist(result.checklist_integrativo) : undefined,
-          mapeamento_corporal: Array.isArray(result.mapeamento_corporal) ? result.mapeamento_corporal : [],
-          dados_especialidade: sanitizeSpecialtyData(result.dados_especialidade || {}),
-          comparativo: result.comparativo || {},
-          resumo_formatado: result.resumo_formatado || '',
-          hipotese_diagnostica: result.hipotese_diagnostica || '',
-          conduta_plano_terapeutico: result.conduta_plano_terapeutico || '',
-          prescricao: result.prescricao || '',
-          sugestao_conduta: result.sugestao_conduta || '',
-          queixa_principal: result.queixa_principal || '',
-          vitals: result.vitals ? { ...result.vitals, resumo_clinico: result.resumo_clinico || '' } : undefined,
-          data_consulta: getLocalISODate()
-        };
-        
-        setCurrentRecord(newRecord);
-        if (newRecord.checklist_integrativo) {
-          setIntegrativeData(newRecord.checklist_integrativo);
-        }
-        if (examMode === 'neurological' || (newRecord.exame_neurologico && hasMeaningfulData(newRecord.exame_neurologico))) {
-          setSpecialtyData(newRecord.exame_neurologico);
-        } else if (examMode === 'biological_dentistry' || (newRecord.dados_especialidade && hasMeaningfulData(newRecord.dados_especialidade))) {
-          setSpecialtyData(newRecord.dados_especialidade);
-        } else if (newRecord.dados_especialidade) {
-          setSpecialtyData(newRecord.dados_especialidade);
-        }
-
-        // Limpa rascunho de emergência após processamento bem sucedido
-        try {
-          localStorage.removeItem('ambulatorio_draft_consultation');
-          setPendingDraft(null);
-        } catch (e) {}
-
-        toast.success("✨ IA preencheu os campos da consulta! Revise os dados na tela e clique em 'Salvar Consulta' para gravar no prontuário.", { id: toastId, duration: 6000 });
-    } catch (err: any) {
-      console.error("Erro no processamento clínico:", err);
-      const friendlyMsg = formatAiErrorMessage(err);
-      setError(friendlyMsg);
-      toast.error(friendlyMsg, { id: toastId, duration: 8000 });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const saveRecord = async (recordOverride?: any) => {
-    const activeUser = user || { id: '00000000-0000-0000-0000-000000000000', email: 'demo@ambulatorio.ia', full_name: 'Dr. Carlos Morato', role: 'doctor' as const, status: 'approved' as const };
-    
-    const rec: any = recordOverride || currentRecord || {
-      paciente_nome_completo: selectedPatient || "Paciente em Atendimento",
-      paciente_cpf: selectedPatientCpf || "",
-      paciente_data_nascimento: selectedPatientDob || "",
-      paciente_telefone: selectedPatientPhone || "",
-      especialidade: examMode === 'integrative' ? 'Integrativa' : 'Geral',
-      paciente_status: 'Estável',
-      dados_clinicos: {},
-      queixa_principal: "Paciente em atendimento. Registrada evolução de prontuário.",
-      exame_fisico: "",
-      hipotese_diagnostica: "",
-      conduta_plano_terapeutico: "1. Suplementação integrativa e orientações clínicas.\n2. Retorno para reavaliação.",
-      resumo_formatado: "Atendimento salvo no histórico do paciente.",
-      data_consulta: getLocalISODate(),
-      checklist_integrativo: integrativeData
+      }
+      setClinicalInput((baseText + finalTranscript + interim).trimStart());
     };
 
-    setIsSaving(true);
-    setError(null);
-    try {
-      const cleanCPF = rec.paciente_cpf ? String(rec.paciente_cpf).replace(/\D/g, '') : null;
-      
-      // Define o médico responsável: Prioridade para o prontuário, fallback para a agenda ou usuário atual
-      const medicoIdToSave = rec.medico_id || selectedMedicoId || activeUser.id;
-      
-      // Preserva a especialidade informada no prontuário
-      const especialidadeToSave = rec.especialidade || (examMode === 'integrative' ? 'Integrativa' : 'Geral');
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
 
-      console.log("saveRecord - selectedPatientPhone (state):", selectedPatientPhone);
-      console.log("saveRecord - medicoIdToSave:", medicoIdToSave);
-      // Formata a data de nascimento para YYYY-MM-DD para manter consistência no banco
-      let formattedBirthDate = rec.paciente_data_nascimento;
-      if (formattedBirthDate && formattedBirthDate.includes('/')) {
-        const parts = formattedBirthDate.split('/');
-        if (parts.length === 3) {
-          // Se for DD/MM/YYYY -> YYYY-MM-DD
-          if (parts[2].length === 4) {
-            formattedBirthDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-          }
-        }
-      }
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
 
-      const finalPresc = (rec.prescricao && rec.prescricao.trim()) || (rec.conduta_plano_terapeutico && rec.conduta_plano_terapeutico.trim()) || '';
-      const finalCond = (rec.conduta_plano_terapeutico && rec.conduta_plano_terapeutico.trim()) || (rec.prescricao && rec.prescricao.trim()) || '';
-
-      const recordToSave: any = { 
-        medico_id: medicoIdToSave,
-        user_id: activeUser.id, // O usuário que está salvando
-        profissional_responsavel: rec.profissional_responsavel || activeUser.full_name || activeUser.email,
-        paciente_nome_completo: rec.paciente_nome_completo || selectedPatient || "Não Identificado",
-        paciente_cpf: cleanCPF,
-        paciente_data_nascimento: formattedBirthDate,
-        especialidade: especialidadeToSave,
-        paciente_status: rec.paciente_status || 'Ativo',
-        paciente_telefone: rec.paciente_telefone || selectedPatientPhone,
-        queixa_principal: rec.queixa_principal || '',
-        exame_fisico: rec.exame_fisico || '',
-        hipotese_diagnostica: rec.hipotese_diagnostica || '',
-        conduta_plano_terapeutico: finalCond,
-        prescricao: finalPresc,
-        resumo_formatado: rec.resumo_formatado || rec.queixa_principal || '',
-        sugestao_conduta: rec.sugestao_conduta || '',
-        dados_clinicos: {
-          ...(rec.dados_clinicos || {}),
-          antecedentes: rec.antecedentes || rec.dados_clinicos?.antecedentes || '',
-          alertas_clinicos: rec.alertas_clinicos || rec.dados_clinicos?.alertas_clinicos || [],
-          vitals: rec.vitals || rec.dados_clinicos?.vitals,
-          prescricao: finalPresc,
-          conduta: finalCond
-        },
-        comparativo: rec.comparativo || {},
-        data_consulta: rec.data_consulta || getLocalISODate(),
-        created_at: new Date().toISOString()
-      };
-
-      // Adiciona campos específicos baseados no modo de exame
-      if (examMode === 'neurological' || (rec.exame_neurologico && hasMeaningfulData(rec.exame_neurologico))) {
-        recordToSave.exame_neurologico = rec.exame_neurologico;
-      }
-      
-      const checklistToSave = rec.checklist_integrativo || integrativeData;
-      if (examMode === 'integrative' || (checklistToSave && hasMeaningfulData(checklistToSave))) {
-        recordToSave.checklist_integrativo = checklistToSave;
-      }
-      if (rec.mapeamento_corporal && rec.mapeamento_corporal.length > 0) {
-        recordToSave.mapeamento_corporal = rec.mapeamento_corporal;
-      }
-      
-      if (rec.vitals) {
-        recordToSave.vitals = rec.vitals;
-      }
-      
-      recordToSave.dados_especialidade = rec.dados_especialidade || currentRecord?.dados_especialidade || specialtyData;
-      recordToSave.exame_fisico = rec.exame_fisico || currentRecord?.exame_fisico || '';
-
-      const trySaveRecord = async (data: any): Promise<{ error: any; savedId?: string | null }> => {
-        console.log("LOG_VERSAO: 3.2 - Início do salvamento");
-        
-        // Colunas que REALMENTE existem no banco (conforme schema verificado)
-        const EXPLICIT_ALLOWED_COLUMNS = [
-          'medico_id', 'user_id', 'profissional_responsavel', 'paciente_nome_completo', 
-          'paciente_cpf', 'paciente_data_nascimento', 'especialidade', 'paciente_status', 
-          'paciente_telefone', 'queixa_principal', 'hipotese_diagnostica', 
-          'conduta_plano_terapeutico', 'prescricao', 'resumo_formatado', 
-          'sugestao_conduta', 'dados_clinicos', 'data_consulta', 'created_at',
-          'exame_neurologico', 'exame_fisico', 'checklist_integrativo', 'dados_especialidade'
-        ];
-
-        // Filtra os dados para enviar rigorosamente apenas colunas permitidas
-        const payload: any = {};
-        EXPLICIT_ALLOWED_COLUMNS.forEach(col => {
-          if (data[col] !== undefined && data[col] !== null) {
-            payload[col] = data[col];
-          }
-        });
-
-        // Garantir que mapeamento, vitais, antecedentes e prescrição sejam salvos DENTRO do JSON dados_especialidade e NÃO na raiz
-        payload.dados_especialidade = payload.dados_especialidade || {};
-        if (data.mapeamento_corporal) {
-          payload.dados_especialidade.mapeamento_corporal = data.mapeamento_corporal;
-        }
-        
-        if (data.vitals) {
-          payload.dados_especialidade.vitals = data.vitals;
-        }
-
-        if (data.antecedentes) {
-          payload.dados_especialidade.antecedentes = data.antecedentes;
-        }
-
-        if (data.alertas_clinicos) {
-          payload.dados_especialidade.alertas_clinicos = data.alertas_clinicos;
-        }
-
-        if (finalPresc) {
-          payload.dados_especialidade.prescricao = finalPresc;
-        }
-
-        console.log("PAYLOAD_ENVIADO (Chaves):", Object.keys(payload));
-        
-        try {
-          const existingId = rec.id || currentRecord?.id;
-          if (existingId && typeof existingId === 'string' && !existingId.startsWith('OFFLINE_') && !existingId.startsWith('local-')) {
-            // Atualiza prontuário existente, prevenindo registros duplicados
-            const { error } = await supabase
-              .from('prontuarios')
-              .update(payload)
-              .eq('id', existingId);
-            
-            if (error) {
-              console.error("ERRO DETALHADO DO SUPABASE AO ATUALIZAR:", JSON.stringify(error, null, 2));
-              return { error, savedId: null };
-            }
-            return { error: null, savedId: existingId };
-          } else {
-            // Novo prontuário
-            const { data: insertedData, error } = await supabase
-              .from('prontuarios')
-              .insert(payload)
-              .select('id');
-            
-            if (error) {
-              console.error("ERRO DETALHADO DO SUPABASE AO SALVAR:", JSON.stringify(error, null, 2));
-              return { error, savedId: null };
-            }
-            const newId = insertedData && insertedData.length > 0 ? insertedData[0]?.id : null;
-            return { error: null, savedId: newId };
-          }
-        } catch (e: any) {
-          console.error("Erro fatal no trySaveRecord:", e);
-          return { error: e, savedId: null };
-        }
-      };
-
-      console.log("saveRecord - recordToSave:", recordToSave);
-      
-      let saveError: any = null;
-      let newSavedId: string | null = null;
-      if (isOnline) {
-        const res = await trySaveRecord(recordToSave);
-        saveError = res.error;
-        newSavedId = res.savedId || null;
-      } else {
-        saveError = new Error("NETWORK_OFFLINE");
-      }
-
-      if (saveError) {
-        console.warn("Salvando prontuário no modo offline local:", saveError);
-        const localRecord = saveRecordLocally(recordToSave);
-        
-        toast.success("💻 Prontuário, Evolução e Receita salvos no COMPUTADOR (Modo Offline)!", { duration: 6000 });
-        setSaveSuccess(true);
-        setCurrentRecord(localRecord as any);
-        setOfflinePendingCount(prev => prev + 1);
-        setHistory(prev => {
-          const filtered = prev.filter(p => p.id !== localRecord.id && (p as any).offline_id !== localRecord.offline_id);
-          return [localRecord as any, ...filtered];
-        });
-      } else {
-        console.log("saveRecord - Sucesso ao salvar na Nuvem! ID:", newSavedId);
-        toast.success("✅ Prontuário, Evolução e Receita salvos com sucesso na nuvem!");
-        setSaveSuccess(true);
-        const finalSavedRecord = {
-          ...recordToSave,
-          id: newSavedId || recordToSave.id
-        };
-        setCurrentRecord(finalSavedRecord);
-        fetchHistory();
-      }
-        
-        // Atualiza o status do agendamento se houver um ID selecionado
-        if (selectedAppointmentId && isOnline) {
-          try {
-            const { error: upError } = await supabase.from('agendamentos').update({ status: 'Concluído' }).eq('id', selectedAppointmentId);
-            if (upError) {
-              await supabase.from('appointments').update({ status: 'Concluído' }).eq('id', selectedAppointmentId);
-            }
-          } catch (e) {
-            console.warn("Erro ao atualizar status do agendamento:", e);
-          }
-        }
-
-        setTimeout(() => {
-          setSaveSuccess(false);
-        }, 3000);
-    } catch (err: any) {
-      console.error("Save error:", err);
-      setError(`Erro de conexão ao salvar registro: ${err.message}`);
-    } finally {
-      setIsSaving(false);
-    }
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+    toast.success('Microfone ativo — pode ditar os achados da consulta.');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'alerta': return 'text-red-500 bg-red-50 border-red-100';
-      case 'melhora': return 'text-sky-600 bg-sky-50 border-sky-100';
-      case 'piora': return 'text-orange-500 bg-orange-50 border-orange-100';
-      default: return 'text-blue-500 bg-blue-50 border-blue-100';
-    }
-  };
-
-  const formatDateBR = (dateStr: string | undefined) => {
-    if (!dateStr) return 'Não informado';
-    try {
-      // Se tiver 'T00:00:00' e for UTC, é uma data YYYY-MM-DD pura que o banco converteu
-      if (dateStr.includes('T00:00:00.000Z') || dateStr.includes('T00:00:00+00:00')) {
-        const parts = dateStr.split('T')[0].split('-');
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-      }
-      
-      // Se for ISO string completa (com T), convertemos respeitando o fuso local
-      if (dateStr.includes('T')) {
-        const formatter = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
-        return formatter.format(new Date(dateStr));
-      }
-      // Se for apenas YYYY-MM-DD
-      if (dateStr.includes('-')) {
-        const parts = dateStr.split('-');
-        if (parts.length >= 3) {
-          const [year, month, day] = parts;
-          return `${day.substring(0,2)}/${month}/${year}`;
-        }
-      }
-    } catch (e) {
-      console.warn("Date formatting error", e);
-    }
-    return dateStr;
-  };
-
-  const getLocalISODate = () => {
-    // Retorna a data local no formato YYYY-MM-DD respeitando o fuso de America/Sao_Paulo
-    try {
-      const options = { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric', day: 'numeric' } as const;
-      const formatter = new Intl.DateTimeFormat('en-US', options);
-      const parts = formatter.formatToParts(new Date());
-      const monthPart = parts.find(p => p.type === 'month')?.value || '';
-      const dayPart = parts.find(p => p.type === 'day')?.value || '';
-      const yearPart = parts.find(p => p.type === 'year')?.value || '';
-      
-      const pad = (n: string) => n.padStart(2, '0');
-      if (yearPart && monthPart && dayPart) {
-        return `${yearPart}-${pad(monthPart)}-${pad(dayPart)}`;
-      }
-    } catch (e) {
-      console.warn("Error getting local ISO date", e);
-    }
-    const local = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
-  };
-
-  const stripEmojis = (str: string) => {
-    if (!str) return '';
-    // Substitui emojis e caracteres especiais não-ASCII problemáticos, 
-    // mas explicitamente preserva caracteres do português (acentos, ç), números e pontuação comum.
-    return String(str)
-      .replace(/[^\x20-\x7E\xC0-\xFF\u0100-\u017F\n\r]/g, '') // Mantém Latin básico, Latin-1 Supplement (acentos) e Latin Extended-A
-      .replace(/[ \t]+/g, ' ') // normaliza espaços e tabs duplos (preservando quebras de linha \n)
-      .trim();
-  };
-
-  const formatPrescricaoForPDF = (prescricao: any): string => {
-    if (!prescricao) return '';
-    let text = '';
-    if (typeof prescricao === 'string') {
-      text = prescricao;
-    } else {
-      text = Object.entries(prescricao).map(([key, value]) => {
-        let block = `${key.toUpperCase()}\n`;
-        if (Array.isArray(value)) {
-          block += value.map(item => `- ${item}`).join('\n');
-        } else {
-          block += `- ${value}`;
-        }
-        return block;
-      }).join('\n\n');
-    }
-    return stripEmojis(text);
-  };
-
-  const generateCSV = (record: ClinicalRecord) => {
-    const headers = ["ID", "Paciente", "CPF", "Data Nascimento", "Especialidade", "Status", "Resumo", "Conduta"];
-    const row = [
-      record.id || "",
-      record.paciente_nome_completo || "",
-      record.paciente_cpf || "",
-      record.paciente_data_nascimento || "",
-      record.especialidade || "",
-      record.paciente_status || "",
-      (record.resumo_formatado || "").replace(/,/g, ";"),
-      (record.sugestao_conduta || "").replace(/,/g, ";")
-    ];
-    
-    const csvContent = [headers.join(","), row.join(",")].join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `prontuario_${(record.paciente_nome_completo || 'paciente').replace(/\s+/g, '_')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const generatePDF = async (record: ClinicalRecord, sendToWhatsApp = false) => {
-    console.log("Gerando PDF estruturado...");
-    try {
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - (margin * 2);
-      
-      const safeText = (val: any) => stripEmojis(String(val || ''));
-      const isNeurological = !!(record.especialidade?.toLowerCase().includes('neuro') || (record.exame_neurologico && hasMeaningfulData(record.exame_neurologico)));
-      const cleanSpecialty = record.especialidade ? stripEmojis(record.especialidade) : '';
-      
-      let currentY = 20;
-
-      // Helper para quebra de página
-      const checkPageBreak = (needed: number) => {
-        if (currentY + needed > pageHeight - 20) {
-          doc.addPage();
-          currentY = 20;
-          return true;
-        }
-        return false;
-      };
-
-      // Título
-      let title = "PRONTUÁRIO CLÍNICO";
-      if (cleanSpecialty) {
-        const specLower = cleanSpecialty.toLowerCase();
-        title = specLower.endsWith('ia') ? `PRONTUÁRIO DE ${cleanSpecialty.toUpperCase()}` : `PRONTUÁRIO ${cleanSpecialty.toUpperCase()}`;
-      } else if (isNeurological) {
-        title = "PRONTUÁRIO NEUROLÓGICO";
-      }
-      
-      // Cabeçalho (Fundo azulado)
-      doc.setFillColor(245, 248, 255);
-      doc.rect(10, 10, pageWidth - 20, 35, 'F');
-      doc.setDrawColor(0, 50, 100);
-      doc.setLineWidth(0.5);
-      doc.rect(10, 10, pageWidth - 20, 35);
-
-      doc.setFontSize(18);
-      doc.setTextColor(0, 50, 100);
-      doc.setFont('helvetica', 'bold');
-      doc.text(title, pageWidth / 2, 25, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.setFont('helvetica', 'normal');
-      doc.text(clinicInfo?.name || "Ambulatório IA - Gestão de Saúde Inteligente", pageWidth / 2, 33, { align: 'center' });
-      
-      let defaultSlogan = "Suporte à Decisão Clínica";
-      if (cleanSpecialty.toLowerCase().includes('integrativo')) defaultSlogan = "Suporte à Decisão em Medicina Integrativa";
-      else if (cleanSpecialty.toLowerCase().includes('neuro') || isNeurological) defaultSlogan = "Suporte à Decisão Clínica e Neurológica";
-      
-      doc.text(clinicInfo?.slogan || defaultSlogan, pageWidth / 2, 38, { align: 'center' });
-      doc.text(clinicInfo?.address || "", pageWidth / 2, 43, { align: 'center' });
-
-      currentY = 60;
-
-      // Seção: Dados do Paciente
-      doc.setFontSize(11);
-      doc.setTextColor(40, 40, 40);
-      doc.setFont('helvetica', 'bold');
-      doc.text("DADOS DO PACIENTE", margin, currentY);
-      currentY += 2;
-      doc.setDrawColor(200, 200, 200);
-      doc.setLineWidth(0.1);
-      doc.line(margin, currentY, pageWidth - margin, currentY);
-      currentY += 8;
-
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Paciente: ${safeText(record.paciente_nome_completo || 'Não informado')}`, margin, currentY);
-      doc.text(`Data da Consulta: ${formatDateBR(record.data_consulta || record.created_at)}`, pageWidth - margin, currentY, { align: 'right' });
-      currentY += 6;
-      doc.text(`CPF: ${safeText(record.paciente_cpf || 'Não informado')}`, margin, currentY);
-      doc.text(`Nascimento: ${safeText(record.paciente_data_nascimento || 'Não informado')}`, margin + 60, currentY);
-      currentY += 12;
-
-      // Seção: Exame Neurológico
-      if (isNeurological && record.exame_neurologico) {
-        const ex = record.exame_neurologico;
-        checkPageBreak(20);
-        doc.setFontSize(14);
-        doc.setTextColor(0, 50, 100);
-        doc.text("Exame Neurológico", margin, currentY);
-        currentY += 10;
-        
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        const neuroHeader = `Fáscia: ${safeText(ex.fascia || 'N/A')} | Atitude: ${safeText(ex.atitude || 'N/A')} | Dominância: ${safeText(ex.dominancia || 'N/A')}`;
-        doc.text(neuroHeader, margin, currentY);
-        currentY += 6;
-        let marchaGlasgow = `Marcha: ${safeText(ex.marcha || 'N/A')}`;
-        if (ex.escala_glasgow) {
-          marchaGlasgow += ` | Escala de Glasgow: ${ex.escala_glasgow}`;
-        }
-        doc.text(marchaGlasgow, margin, currentY);
-        currentY += 10;
-
-        // Tabelas de Força e Sensibilidade
-        if (ex.forca_muscular && typeof ex.forca_muscular === 'object') {
-          const muscleData = Object.entries(ex.forca_muscular).map(([key, val]: [string, any]) => [
-            key.toUpperCase(), safeText(val?.tonus), safeText(val?.trofismo), safeText(val?.mov_anormais || val?.mov_normais), safeText(val?.deformidades), safeText(val?.fatigabilidade)
-          ]).filter(row => row[1] || row[2] || row[3] || row[4] || row[5]);
-
-          if (muscleData.length > 0) {
-            checkPageBreak(40);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 50, 100);
-            doc.text("AVALIAÇÃO MOTORA:", margin, currentY);
-            currentY += 6;
-            autoTable(doc, {
-              startY: currentY,
-              head: [['Região', 'Tônus', 'Trofismo', 'Mov. Anormais', 'Deformidades', 'Fatigabilidade']],
-              body: muscleData,
-              theme: 'grid',
-              styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', halign: 'center' },
-              headStyles: { fillColor: [240, 248, 255], textColor: [0, 50, 100], fontStyle: 'bold', lineWidth: 0.1 },
-              columnStyles: { 0: { halign: 'left' } },
-              margin: { left: margin, right: margin }
-            });
-            currentY = (doc as any).lastAutoTable?.finalY + 15;
-          }
-        }
-
-        if (ex.sensibilidade && typeof ex.sensibilidade === 'object') {
-          const sensData = Object.entries(ex.sensibilidade).map(([key, val]: [string, any]) => [
-            key.toUpperCase(), val?.proprio ? 'X' : '', val?.vibrat ? 'X' : '', val?.temp ? 'X' : '', val?.dor ? 'X' : '', val?.toque ? 'X' : ''
-          ]).filter(row => row.slice(1).some(v => v === 'X'));
-
-          if (sensData.length > 0) {
-            checkPageBreak(50);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 50, 100);
-            doc.text("AVALIAÇÃO DE SENSIBILIDADE:", margin, currentY);
-            currentY += 8;
-            autoTable(doc, {
-              startY: currentY,
-              head: [['Região', 'Prop.', 'Vib.', 'Témp.', 'Dor', 'Tátil']],
-              body: sensData,
-              theme: 'grid',
-              styles: { fontSize: 8, cellPadding: 3, font: 'helvetica', halign: 'center' },
-              headStyles: { fillColor: [240, 248, 255], textColor: [0, 50, 100], fontStyle: 'bold', lineWidth: 0.1 },
-              columnStyles: { 0: { halign: 'left' } },
-              margin: { left: margin, right: margin }
-            });
-            currentY = (doc as any).lastAutoTable?.finalY + 15;
-          }
-        }
-
-        // Nervos Cranianos e Cognitivo
-        const sections: {[key: string]: any} = {
-          "Nervos Cranianos": ex.nervos_cranianos,
-          "Alterações Cognitivas": ex.cognitivo
-        };
-
-        Object.entries(sections).forEach(([title, data]) => {
-          if (data && typeof data === 'object') {
-            const lines = Object.entries(data)
-              .filter(([k, v]) => {
-                if (!v) return false;
-                if (k === 'pentagonos' || k === 'desenho_pentagonos' || k === 'anotacao_diagrama_imagem') return false;
-                if (typeof v === 'string' && (v.startsWith('data:image/') || v.length > 250)) return false;
-                if (typeof v === 'object') return false;
-                return true;
-              })
-              .map(([k, v]) => `${k.toUpperCase()}: ${safeText(v)}`)
-              .join(' | ');
-            
-            if (lines) {
-              const textLines = doc.splitTextToSize(lines, contentWidth);
-              checkPageBreak(textLines.length * 6 + 10);
-              doc.setFont('helvetica', 'bold');
-              doc.text(title, margin, currentY);
-              currentY += 7;
-              doc.setFont('helvetica', 'normal');
-              doc.text(textLines, margin, currentY);
-              currentY += (textLines.length * 5) + 10;
-            }
-          }
-        });
-
-        // Desenho dos Pentágonos (MEEM) como imagem oficial (se houver)
-        const meemPentagonoImg = ex.desenho_pentagonos || 
-                                 ex.cognitivo?.pentagonos || 
-                                 record.dados_especialidade?.pentagonos || 
-                                 record.dados_especialidade?.desenho_pentagonos;
-
-        if (typeof meemPentagonoImg === 'string' && meemPentagonoImg.startsWith('data:image/')) {
-          try {
-            checkPageBreak(45);
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-            doc.setTextColor(0, 50, 100);
-            doc.text("Teste do Desenho (Pentágonos Interseccionados - MEEM):", margin, currentY);
-            currentY += 5;
-            doc.addImage(meemPentagonoImg, 'PNG', margin, currentY, 45, 30);
-            currentY += 36;
-          } catch (e) {
-            console.warn("Imagem dos pentágonos ignorada na renderização:", e);
-          }
-        }
-      }
-
-      // Mapeamento Corporal
-      const bodyPoints = record.mapeamento_corporal || record.dados_especialidade?.mapeamento_corporal;
-      if (Array.isArray(bodyPoints) && bodyPoints.length > 0) {
-        checkPageBreak(25);
-        doc.setFontSize(14);
-        doc.setTextColor(0, 50, 100);
-        doc.text("Mapeamento de Queixas", margin, currentY);
-        currentY += 7;
-        doc.setFontSize(10);
-        doc.setTextColor(0, 0, 0);
-        bodyPoints.forEach((p, i) => {
-          checkPageBreak(7);
-          const side = (p.side === 'back' || p.side === 'posterior') ? 'VISTA POSTERIOR' : 'VISTA ANTERIOR';
-          doc.text(`${i + 1}. ${safeText(p.label)} (${side})`, margin + 5, currentY);
-          currentY += 6;
-        });
-        currentY += 5;
-      }
-
-      // Checklist Integrativo
-      if (record.checklist_integrativo && typeof record.checklist_integrativo === 'object') {
-        const ckItems: string[] = [];
-        Object.entries(record.checklist_integrativo).forEach(([sec, fields]: [string, any]) => {
-          if (fields && typeof fields === 'object') {
-            const marked = Object.entries(fields)
-              .filter(([_, v]) => v && v !== 'false' && v !== false)
-              .map(([k, v]) => {
-                const label = formatIntegrativeLabel(k).toUpperCase();
-                return (v === true || v === 'Sinalizado') ? label : `${label}: ${v}`;
-              });
-            if (marked.length > 0) {
-              ckItems.push(`${sec.replace(/_/g, ' ').toUpperCase()}: ${marked.join(', ')}`);
-            }
-          }
-        });
-
-        if (ckItems.length > 0) {
-          checkPageBreak(30);
-          doc.setFontSize(14);
-          doc.setTextColor(0, 50, 100);
-          doc.text("Checklist de Saúde Integrativa", margin, currentY);
-          currentY += 10;
-          doc.setFontSize(9);
-          doc.setTextColor(0, 0, 0);
-          const combinedCk = ckItems.join(' | ');
-          const ckLines = doc.splitTextToSize(combinedCk, contentWidth);
-          doc.text(ckLines, margin, currentY);
-          currentY += (ckLines.length * 5) + 12;
-        }
-      }
-
-      // Especialidade
-      if (record.dados_especialidade && hasMeaningfulData(record.dados_especialidade)) {
-        const spec = record.dados_especialidade;
-        const isRecDental = cleanSpecialty.toLowerCase().includes('odonto') || cleanSpecialty.toLowerCase().includes('dental');
-        const isRecNeuro = cleanSpecialty.toLowerCase().includes('neuro') || isNeurological;
-
-        const DENTAL_SPEC_KEYS = new Set([
-          'odontograma', 'amalgama_ativo', 'amalgama_elementos', 'smart_dique_nitrilo',
-          'smart_oxigenio_nasal', 'smart_exaustor_vapor', 'smart_irrigacao_alta',
-          'smart_carvao_chlorella', 'smart_quelacao_vitc', 'implante_zirconia_ativo',
-          'implante_elementos', 'implante_prf_ienxerto', 'implante_tipo_sistema',
-          'focos_cavitacao_ativo', 'focos_descricao', 'focos_tomografia_cbct',
-          'terapia_neural_ativo', 'terapia_neural_locais', 'ozonioterapia_ativo',
-          'ozonio_modalidades', 'atm_bruxismo_ativo', 'atm_bruxismo',
-          'suplemento_vit_d3_k2', 'suplemento_vit_c', 'suplemento_zinco_mg',
-          'suplemento_arnica_homeo', 'suplemento_coenzima_q10', 'observacoes_odonto_biologica'
-        ]);
-
-        const NEURO_SPEC_KEYS = new Set([
-          'exame_neurologico', 'fascia', 'atitude', 'dominancia', 'marcha', 'forca_muscular',
-          'sensibilidade', 'nervos_cranianos', 'cognitivo', 'pentagonos', 'desenho_pentagonos',
-          'anotacao_diagrama_imagem', 'escala_glasgow'
-        ]);
-
-        const validSpecItems: string[] = [];
-
-        if (isRecDental) {
-          // Renderização elegante e legível da Odontologia Biológica
-          if (spec.odontograma && typeof spec.odontograma === 'object') {
-            const dentesAfetados: string[] = [];
-            Object.entries(spec.odontograma).forEach(([dente, val]: [string, any]) => {
-              if (val && val.status && val.status !== 'healthy') {
-                const labelStatus = val.status === 'amalgam' ? 'Amálgama' :
-                  val.status === 'zirconia_implant' ? 'Implante Zircônia' :
-                  val.status === 'titanium_implant' ? 'Implante Titânio' :
-                  val.status === 'endodontic' ? 'Canal (Endodôntico)' :
-                  val.status === 'cavitation_nico' ? 'Cavitação Óssea (NICO)' :
-                  val.status === 'caries' ? 'Cárie Ativa' :
-                  val.status === 'ceramic_crown' ? 'Coroa Cerâmica' : String(val.status);
-                dentesAfetados.push(`Dente ${dente}: ${labelStatus}${val.notes ? ` (${val.notes})` : ''}`);
-              }
-            });
-            if (dentesAfetados.length > 0) {
-              validSpecItems.push(`ODONTOGRAMA BIOLÓGICO: ${dentesAfetados.join('; ')}`);
-            }
-          }
-
-          if (spec.amalgama_ativo) validSpecItems.push(`PROTOCOLO SMART: Ativo${spec.amalgama_elementos ? ` (Elementos: ${spec.amalgama_elementos})` : ''}`);
-          if (spec.implante_zirconia_ativo) validSpecItems.push(`IMPLANTES METAL-FREE: Zircônia${spec.implante_elementos ? ` (${spec.implante_elementos})` : ''}`);
-          if (spec.focos_cavitacao_ativo) validSpecItems.push(`CAVITAÇÕES ÓSSEAS (NICO): ${spec.focos_descricao || 'Identificado'}`);
-          if (spec.terapia_neural_ativo) validSpecItems.push(`TERAPIA NEURAL: ${spec.terapia_neural_locais || 'Aplicada'}`);
-          if (spec.ozonioterapia_ativo) validSpecItems.push(`OZONIOTERAPIA: ${spec.ozonio_modalidades || 'Indicada'}`);
-          if (spec.atm_bruxismo_ativo || spec.atm_bruxismo) validSpecItems.push(`ATM / BRUXISMO: ${spec.atm_bruxismo || 'Presente'}`);
-          if (spec.observacoes_odonto_biologica) validSpecItems.push(`OBSERVAÇÕES ODONTO: ${spec.observacoes_odonto_biologica}`);
-        } else {
-          // Para Neurologia / Medicina Geral: blindagem estrita contra campos de odontologia e lixo base64
-          Object.entries(spec).forEach(([k, v]) => {
-            if (
-              k === 'mapeamento_corporal' || 
-              k === 'vitals' || 
-              DENTAL_SPEC_KEYS.has(k) || 
-              NEURO_SPEC_KEYS.has(k) ||
-              k === 'pentagonos' ||
-              k === 'desenho_pentagonos' ||
-              k === 'anotacao_diagrama_imagem'
-            ) {
-              return;
-            }
-
-            // Ignora qualquer string base64 ou imagem
-            if (typeof v === 'string' && (v.startsWith('data:image/') || v.length > 250)) {
-              return;
-            }
-
-            // Ignora objetos não tratados para nunca gerar [object Object]
-            if (typeof v === 'object' || Array.isArray(v)) {
-              return;
-            }
-
-            // Ignora vazios ou falsos
-            if (!v || v === '' || v === 'false' || v === false) {
-              return;
-            }
-
-            validSpecItems.push(`${k.replace(/_/g, ' ').toUpperCase()}: ${safeText(v)}`);
-          });
-        }
-
-        if (validSpecItems.length > 0) {
-          checkPageBreak(25);
-          doc.setFontSize(12);
-          doc.setTextColor(0, 50, 100);
-          doc.setFont('helvetica', 'bold');
-          doc.text(`Dados de ${safeText(record.especialidade || 'Especialidade')}`, margin, currentY);
-          currentY += 7;
-          doc.setFontSize(9.5);
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          
-          const specDataStr = validSpecItems.join(' | ');
-          const specLines = doc.splitTextToSize(specDataStr, contentWidth);
-          specLines.forEach((line: string) => {
-            checkPageBreak(5.5);
-            doc.text(line, margin, currentY);
-            currentY += 5;
-          });
-          currentY += 6;
-        }
-      }
-
-      // Sinais Vitais (Vitals)
-      const vitalsObj = record.vitals || record.dados_especialidade?.vitals;
-      if (vitalsObj && typeof vitalsObj === 'object') {
-        const vitalsStr = Object.entries(vitalsObj)
-          .filter(([_, v]) => v)
-          .map(([k, v]) => `${k.toUpperCase()}: ${safeText(v)}`)
-          .join(' | ');
-        
-        if (vitalsStr) {
-          checkPageBreak(20);
-          doc.setFontSize(12);
-          doc.setTextColor(0, 50, 100);
-          doc.setFont('helvetica', 'bold');
-          doc.text("Sinais Vitais", margin, currentY);
-          currentY += 7;
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          const vitalsLines = doc.splitTextToSize(vitalsStr, contentWidth);
-          vitalsLines.forEach((line: string) => {
-            checkPageBreak(5.5);
-            doc.text(line, margin, currentY);
-            currentY += 5;
-          });
-          currentY += 6;
-        }
-      }
-
-      // Resumo, Hipótese e Conduta (paginação segura linha por linha)
-      const contentSections = [
-        { title: "Resumo do Atendimento", content: record.resumo_formatado },
-        { title: "Hipótese Diagnóstica", content: record.hipotese_diagnostica },
-        { title: "Conduta / Plano Terapêutico", content: record.conduta_plano_terapeutico || record.sugestao_conduta }
-      ];
-
-      contentSections.forEach(s => {
-        if (s.content) {
-          const textLines = doc.splitTextToSize(safeText(s.content), contentWidth);
-          checkPageBreak(15);
-          doc.setFontSize(12);
-          doc.setTextColor(0, 50, 100);
-          doc.setFont('helvetica', 'bold');
-          doc.text(s.title, margin, currentY);
-          currentY += 7;
-          doc.setFontSize(9.5);
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          textLines.forEach((line: string) => {
-            checkPageBreak(5.5);
-            doc.text(line, margin, currentY);
-            currentY += 5;
-          });
-          currentY += 6;
-        }
-      });
-
-      // Prescrição Médica & Receituário Integrado no Prontuário
-      if (record.prescricao) {
-        const cleanPresc = formatPrescricaoForPDF(record.prescricao);
-        if (cleanPresc) {
-          const prescLines = doc.splitTextToSize(cleanPresc, contentWidth);
-          checkPageBreak(18);
-          doc.setFontSize(12);
-          doc.setTextColor(0, 50, 100);
-          doc.setFont('helvetica', 'bold');
-          doc.text("Prescrição Médica & Recomendações:", margin, currentY);
-          currentY += 7;
-          doc.setFontSize(9.5);
-          doc.setTextColor(0, 0, 0);
-          doc.setFont('helvetica', 'normal');
-          prescLines.forEach((line: string) => {
-            checkPageBreak(5.5);
-            doc.text(line, margin, currentY);
-            currentY += 5;
-          });
-          currentY += 6;
-        }
-      }
-      
-      const fileName = `prontuario_${(record.paciente_nome_completo || 'paciente').replace(/\s+/g, '_')}.pdf`;
-      
-      if (sendToWhatsApp) {
-        if (!record.paciente_telefone) {
-          toast.error("Telefone do paciente não informado.");
-          return;
-        }
-        const base64 = doc.output('datauristring').split(',')[1];
-        toast.loading("Enviando via WhatsApp...", { id: 'sending-pdf' });
-        await sendWhatsAppMessage(record.paciente_telefone, "Segue seu prontuário clínico.", base64, 'document', fileName);
-        toast.success("Prontuário enviado!", { id: 'sending-pdf' });
-      } else {
-        doc.save(fileName);
-        toast.success("Prontuário gerado!");
-      }
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      toast.error(`Erro ao gerar o PDF: ${error instanceof Error ? error.message : 'Dados mal formatados'}`);
-    }
-  };
-
-  const generatePrescriptionPDF = async (record: ClinicalRecord, sendToWhatsApp = false) => {
-    if (!record.prescricao && !record.checklist_integrativo) {
-      toast.error("Não há prescrição ou checklist para gerar o receituário.");
+  // Processamento com IA Copiloto (/api/process-clinical)
+  const handleAnalyzeWithAi = async () => {
+    if (!clinicalInput.trim()) {
+      toast.error('Digite ou dite o relato da consulta antes de estruturar com a IA.');
       return;
     }
-    console.log("Gerando Receituário Profissional...");
+
+    setIsProcessingAi(true);
     try {
-      const doc = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 20;
-      const contentWidth = pageWidth - (margin * 2);
+      const dobContext = patientDob
+        ? ` Data de nascimento informada: ${patientDob}${calculatedAge !== null ? ` (${calculatedAge} anos)` : ''}.`
+        : '';
+      const fullInput = `${patientName ? `Paciente: ${patientName}.` : ''}${dobContext}\n${clinicalInput}`;
 
-      const safeText = (val: any) => stripEmojis(String(val || ''));
-      let currentY = 20;
+      const resp = await axios.post(
+        '/api/process-clinical',
+        {
+          input: fullInput,
+          examMode: activeSpecialty,
+          reason: 'Avaliação Clínica Especializada'
+        },
+        { timeout: 60000 }
+      );
 
-      const checkPageBreak = (needed: number) => {
-        if (currentY + needed > pageHeight - 35) {
-          doc.addPage();
-          doc.setDrawColor(0, 50, 100);
-          doc.setLineWidth(0.5);
-          doc.rect(10, 10, pageWidth - 20, pageHeight - 20);
-          currentY = 20;
-          return true;
-        }
-        return false;
-      };
-
-      // Borda Decorativa
-      doc.setDrawColor(0, 50, 100);
-      doc.setLineWidth(0.5);
-      doc.rect(10, 10, pageWidth - 20, pageHeight - 20);
-      
-      // Cabeçalho
-      doc.setFillColor(245, 248, 255);
-      doc.rect(11, 11, pageWidth - 22, 40, 'F');
-      
-      doc.setFontSize(24);
-      doc.setTextColor(0, 50, 100);
-      doc.setFont('helvetica', 'bold');
-      doc.text("RECEITUÁRIO", pageWidth / 2, 30, { align: 'center' });
-      
-      doc.setFontSize(10);
-      doc.setTextColor(70, 70, 70);
-      doc.setFont('helvetica', 'normal');
-      doc.text(clinicInfo?.name || "Ambulatório IA - Gestão de Saúde Inteligente", pageWidth / 2, 38, { align: 'center' });
-      doc.text(clinicInfo?.slogan || "Suporte à Decisão Clínica", pageWidth / 2, 43, { align: 'center' });
-
-      doc.setLineWidth(0.8);
-      doc.setDrawColor(0, 50, 100);
-      doc.line(20, 51, 190, 51);
-      
-      // Dados do Paciente
-      currentY = 60;
-      doc.setFontSize(11);
-      doc.setTextColor(40, 40, 40);
-      doc.setFont('helvetica', 'bold');
-      doc.text("PACIENTE:", margin + 5, currentY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(safeText(record.paciente_nome_completo || 'Não informado'), margin + 30, currentY);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.text("DATA:", pageWidth - margin - 45, currentY);
-      doc.setFont('helvetica', 'normal');
-      doc.text(formatDateBR(record.data_consulta || record.created_at), pageWidth - margin - 5, currentY, { align: 'right' });
-      
-      currentY += 15;
-
-      doc.setFontSize(14);
-      doc.setTextColor(0, 50, 100);
-      doc.setFont('helvetica', 'bold');
-      doc.text("PRESCRIÇÃO E ORIENTAÇÕES", pageWidth / 2, currentY, { align: 'center' });
-      currentY += 15;
-
-      // Conteúdo da Prescrição
-      if (record.prescricao) {
-        doc.setFontSize(11);
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'normal');
-        const cleanPrescricao = formatPrescricaoForPDF(record.prescricao);
-        const prescricaoLines = doc.splitTextToSize(cleanPrescricao, contentWidth - 10);
-        
-        prescricaoLines.forEach((line: string) => {
-          checkPageBreak(7);
-          doc.text(line, margin + 5, currentY);
-          currentY += 6;
-        });
-        currentY += 10;
+      const parsed = resp.data || {};
+      if (!patientName && parsed.paciente_nome_completo) {
+        setPatientName(parsed.paciente_nome_completo);
       }
-      
-      // Itens do Checklist Integrativo
-      if (record.checklist_integrativo && typeof record.checklist_integrativo === 'object') {
-        const markedItems: string[] = [];
-        Object.entries(record.checklist_integrativo).forEach(([section, fields]: [string, any]) => {
-          if (fields && typeof fields === 'object') {
-            Object.entries(fields).forEach(([key, val]) => {
-              if (val === true || val === 'true' || val === 'Sinalizado') {
-                markedItems.push(formatIntegrativeLabel(key));
-              } else if (val && val !== 'false' && (typeof val === 'string' || typeof val === 'number')) {
-                markedItems.push(`${formatIntegrativeLabel(key)}: ${val}`);
+      if (!patientDob && parsed.paciente_data_nascimento) {
+        setPatientDob(parsed.paciente_data_nascimento);
+      }
+      if (parsed.resumo_formatado) {
+        setClinicalSummary(parsed.resumo_formatado);
+      }
+      if (parsed.prescricao) {
+        setPrescriptionText(parsed.prescricao);
+      }
+
+      const specData = parsed.dados_especialidade || {};
+      if (activeSpecialty === 'biological_dentistry') {
+        setDentalData((prev) => ({
+          ...prev,
+          ...specData,
+          odontograma: specData.odontograma
+            ? {
+                ...(prev.odontograma || {}),
+                ...specData.odontograma,
+                teeth: {
+                  ...(prev.odontograma?.teeth || {}),
+                  ...(specData.odontograma?.teeth || {})
+                }
               }
-            });
-          }
-        });
-
-        if (markedItems.length > 0) {
-          checkPageBreak(25);
-          doc.setFontSize(13);
-          doc.setTextColor(0, 50, 100);
-          doc.setFont('helvetica', 'bold');
-          doc.text("SUPLEMENTAÇÃO E SAÚDE INTEGRATIVA", margin + 5, currentY);
-          currentY += 10;
-          
-          markedItems.forEach((item, index) => {
-            checkPageBreak(15);
-            doc.setFontSize(11);
-            doc.setTextColor(40, 40, 40);
-            doc.setFont('helvetica', 'bold');
-            doc.text(`${index + 1}. ${safeText(item).toUpperCase()}`, margin + 5, currentY);
-            currentY += 6;
-            
-            doc.setFontSize(9);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(120, 120, 120);
-            doc.text("Uso conforme orientação personalizada.", margin + 10, currentY);
-            currentY += 9;
-          });
-        }
-      }
-      
-      // Rodapé com Carimbo e Assinatura Digital ICP-Brasil
-      const footerY = pageHeight - 38;
-      const detected = detectRecordSpecialtyAndDoctor(record);
-      const isDental = detected.isDental || examMode === 'biological_dentistry';
-      const docName = record.profiles?.full_name || record.profissional_responsavel || (isDental ? 'Dra. Lucy Murata' : 'Dr. Carlos Morato');
-      const prefix = (docName.toLowerCase().startsWith('dr.') || docName.toLowerCase().startsWith('dra.') || docName.toLowerCase().startsWith('dr ') || docName.toLowerCase().startsWith('dra ')) ? '' : 'Dr(a). ';
-      const councilText = isDental ? 'CRO-SP: 69246 • Odontologia Biológica & Saúde Integrativa' : 'CRM/SP 145.892 • Neurologia & Medicina Integrativa';
-      
-      const doctorClinicConfig = getActiveClinicConfig(undefined, detected.doctorId);
-      const carimboImg = doctorClinicConfig.carimbo_url || doctorClinicConfig.signature_url;
-
-      // Se houver imagem do carimbo/assinatura anexada
-      if (carimboImg && carimboImg.startsWith('data:image')) {
-        try {
-          doc.addImage(carimboImg, 'PNG', pageWidth / 2 - 27, footerY - 20, 54, 20);
-        } catch (e) {
-          console.warn("Aviso ao desenhar carimbo no PDF:", e);
-        }
-      } else {
-        // Carimbo Digital Institucional em moldura nítida
-        doc.setDrawColor(0, 50, 100);
-        doc.setLineWidth(0.4);
-        doc.roundedRect(pageWidth / 2 - 45, footerY - 17, 90, 16, 1.5, 1.5);
-        doc.setFontSize(8);
-        doc.setTextColor(0, 50, 100);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${prefix}${docName}`.toUpperCase(), pageWidth / 2, footerY - 11, { align: 'center' });
-        doc.setFontSize(7);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${councilText.split('•')[0].trim()} • CARIMBO ELETRÔNICO ICP-BRASIL`, pageWidth / 2, footerY - 5, { align: 'center' });
+            : prev.odontograma
+        }));
+      } else if (activeSpecialty === 'nutrology') {
+        setNutrologyData((prev) => ({
+          ...prev,
+          ...specData,
+          suplementacao_prescrita:
+            specData.suplementacao_prescrita || parsed.prescricao || prev.suplementacao_prescrita,
+          plano_alimentar_orientacoes:
+            specData.plano_alimentar_orientacoes ||
+            parsed.conduta_plano_terapeutico ||
+            prev.plano_alimentar_orientacoes,
+          observacoes_clinicas:
+            parsed.resumo_formatado || prev.observacoes_clinicas,
+          radar_metabolico: parsed.radar_metabolico
+            ? {
+                energia: parsed.radar_metabolico.disposicao_energia ?? prev.radar_metabolico?.energia ?? 6,
+                sono: parsed.radar_metabolico.sono ?? prev.radar_metabolico?.sono ?? 6,
+                intestino: parsed.radar_metabolico.nutricao_digestao ?? prev.radar_metabolico?.intestino ?? 6,
+                glicemia: prev.radar_metabolico?.glicemia ?? 6,
+                imunidade: parsed.radar_metabolico.imunidade ?? prev.radar_metabolico?.imunidade ?? 6
+              }
+            : prev.radar_metabolico
+        }));
+      } else if (activeSpecialty === 'dermatology') {
+        setDermatologyData((prev) => ({
+          ...prev,
+          ...specData,
+          observacoes_dermato:
+            parsed.resumo_formatado || prev.observacoes_dermato
+        }));
       }
 
-      doc.setDrawColor(0, 50, 100);
-      doc.setLineWidth(0.5);
-      doc.line(pageWidth / 2 - 45, footerY + 1, pageWidth / 2 + 45, footerY + 1);
-      
-      doc.setFontSize(10.5);
-      doc.setTextColor(0, 50, 100);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${prefix}${docName}`, pageWidth / 2, footerY + 6, { align: 'center' });
-      
-      doc.setFontSize(8);
-      doc.setTextColor(80, 80, 80);
-      doc.setFont('helvetica', 'normal');
-      doc.text(councilText, pageWidth / 2, footerY + 10.5, { align: 'center' });
-
-      // Selo de Conformidade ICP-Brasil / Retenção Farmacêutica
-      doc.setFillColor(245, 248, 255);
-      doc.roundedRect(margin, footerY + 14, contentWidth, 9, 1.5, 1.5, 'F');
-      doc.setFontSize(6.5);
-      doc.setTextColor(0, 50, 100);
-      doc.setFont('helvetica', 'bold');
-      doc.text("PADRÃO ICP-BRASIL • MEDIDA PROVISÓRIA Nº 2.200-2/2001 • LEI FEDERAL 14.063/2020", pageWidth / 2, footerY + 18, { align: 'center' });
-      doc.setFontSize(6);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(110, 120, 135);
-      doc.text("Assinatura eletrônica qualificada com aceite obrigatório para dispensação e retenção em farmácias (Portaria SVS/MS 344/98).", pageWidth / 2, footerY + 21.5, { align: 'center' });
-      
-      const fileName = `receita_${(record.paciente_nome_completo || 'paciente').replace(/\s+/g, '_')}.pdf`;
-
-      if (sendToWhatsApp) {
-        if (!record.paciente_telefone) {
-          toast.error("Telefone do paciente não informado.");
-          return;
-        }
-        const base64 = doc.output('datauristring').split(',')[1];
-        toast.loading("Enviando receituário oficial em PDF para o WhatsApp...", { id: 'sending-pdf' });
-        try {
-          const patientGreeting = record.paciente_nome_completo ? `Olá ${record.paciente_nome_completo}, ` : 'Olá, ';
-          const whatsappMsg = `💊 *RECEITUÁRIO MÉDICO DIGITAL*\n\n${patientGreeting}segue em anexo o seu receituário oficial emitido em sua consulta com *${prefix}${docName}* (${councilText.split('•')[0].trim()}).\n\n📄 O arquivo PDF timbrado e com certificação digital segue em anexo para você apresentar na farmácia ou imprimir quando desejar.\n\n_Ambulatório IA • Saúde e Tecnologia_`;
-
-          await sendWhatsAppMessage(record.paciente_telefone, whatsappMsg, base64, 'document', fileName);
-          toast.success("Receituário em PDF enviado com sucesso no WhatsApp!", { id: 'sending-pdf' });
-        } catch (err) {
-          toast.error("Erro ao enviar receituário via WhatsApp.", { id: 'sending-pdf' });
-        }
-      } else {
-        doc.save(fileName);
-        toast.success("Receituário gerado em PDF com sucesso!");
-      }
-    } catch (error) {
-      console.error("Erro ao gerar receituário:", error);
-      toast.error("Erro ao gerar o receituário. Tente novamente.");
+      toast.success('Consulta estruturada pela IA com sucesso!');
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.message ||
+        'Não foi possível processar com a IA no momento.';
+      toast.error(msg);
+    } finally {
+      setIsProcessingAi(false);
     }
   };
 
-  // 1. Rota Pública de Anamnese / Pré-Cadastro do Paciente (não exige login nem bloqueio)
-  if (typeof window !== 'undefined' && (
-    currentHash.includes('anamnese') ||
-    window.location.hash.includes('anamnese') ||
-    window.location.search.includes('anamnese') ||
-    window.location.pathname.includes('anamnese') ||
-    window.location.search.includes('publicAnamnese') ||
-    window.location.href.includes('anamnese')
-  )) {
-    return <PublicAnamneseView />;
-  }
+  // Geração de Laudo / Protocolo PDF White-Label
+  const handleExportPdf = () => {
+    const doc = new jsPDF();
+    const specMeta = STUDIO_SPECIALTIES.find((s) => s.id === activeSpecialty)!;
+    const todayStr = new Date().toLocaleDateString('pt-BR');
 
-  if (!isConfigured) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md bg-white rounded-[40px] shadow-2xl border border-red-100 p-10 text-center"
-        >
-          <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center text-red-500 mx-auto mb-6">
-            <AlertCircle size={32} />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-800 mb-4">Configuração Pendente</h1>
-          <p className="text-slate-600 mb-6 text-sm">
-            O aplicativo não conseguiu se conectar ao banco de dados. Para que ele funcione no Netlify, você precisa configurar as variáveis de ambiente.
-          </p>
-          <div className="bg-slate-50 p-4 rounded-xl text-left text-xs font-mono text-slate-700 space-y-2 mb-6 border border-slate-200 overflow-x-auto">
-            <p><strong>VITE_SUPABASE_URL</strong> = seu_link_supabase</p>
-            <p><strong>VITE_SUPABASE_ANON_KEY</strong> = sua_chave_anon</p>
-            <p><strong>GEMINI_API_KEY</strong> = sua_chave_gemini</p>
-          </div>
-          <p className="text-xs text-slate-500">
-            Adicione essas variáveis no painel do Netlify (Site Settings &gt; Environment Variables) e faça um novo deploy.
-          </p>
-        </motion.div>
-      </div>
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, 210, 32, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(15);
+    doc.setFont('helvetica', 'bold');
+    doc.text(brand.clinicName || 'Clínica Studio Visual IA', 14, 14);
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(
+      `${brand.professionalName || 'Profissional'} · ${brand.councilBadge || ''} · ${specMeta.title}`,
+      14,
+      21
     );
-  }
+    if (brand.phone || brand.address) {
+      doc.text([brand.phone, brand.address].filter(Boolean).join(' · ').slice(0, 95), 14, 27);
+    }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        {/* Aviso de WebView no Login */}
-        <AnimatePresence>
-          {isWebView && (
-            <motion.div 
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="bg-amber-500 text-white overflow-hidden shadow-lg"
-            >
-              <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <AlertCircle size={18} className="shrink-0" />
-                  <div className="text-[10px] leading-tight font-medium">
-                    <p className="font-bold">Microfone Bloqueado!</p>
-                    <p className="opacity-90">Copie o link e cole no Chrome ou Safari. Não use o navegador do WhatsApp.</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.href);
-                    toast.success('Link copiado!');
-                  }}
-                  className="px-3 py-1.5 bg-white text-amber-600 rounded-lg font-bold text-[10px] whitespace-nowrap"
-                >
-                  Copiar Link
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(10.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Paciente: ${patientName || 'Não informado'}`, 14, 42);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    const ageLabel = calculatedAge !== null ? ` · Idade: ${calculatedAge} anos` : '';
+    doc.text(`Data: ${todayStr}${ageLabel}`, 14, 48);
 
-        <div className="flex-1 flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-md bg-white rounded-[40px] shadow-2xl border border-slate-100 p-10"
-          >
-          <div className="flex flex-col items-center mb-8">
-            <div 
-              onClick={() => {
-                const nextCount = logoClicks + 1;
-                setLogoClicks(nextCount);
-                if (nextCount >= 3) {
-                  setLogoClicks(0);
-                  setShowSecretControls(!showSecretControls);
-                  toast("🔑 Atalho Secreto: Entrando como Administrador...", { icon: "⚡" });
-                  handleMarcoLogin();
-                } else if (nextCount === 2) {
-                  toast("Pressione mais 1 vez para entrada rápida master.", { duration: 2000 });
-                }
-              }}
-              className="cursor-pointer hover:opacity-95 active:scale-95 transition-all select-none flex items-center justify-center w-full group py-2"
-              title="Ambulatório IA (Clique 3x para entrada master)"
-            >
-              <img 
-                src={DEFAULT_CLINIC_LOGO_URL} 
-                alt="Logo Ambulatório IA" 
-                referrerPolicy="no-referrer"
-                className="h-20 sm:h-24 w-auto object-contain max-w-[320px]"
-              />
-            </div>
-          </div>
+    let cursorY = 56;
 
-          <form onSubmit={handleAuth} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail Profissional</label>
-              <input 
-                type="email" 
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all text-slate-700 font-medium"
-                placeholder="medico@clinica.com"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Senha</label>
-              <input 
-                type="password" 
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-6 py-4 rounded-2xl bg-slate-50 border border-slate-100 focus:border-clinical-blue focus:ring-4 focus:ring-clinical-blue/5 outline-none transition-all text-slate-700 font-medium"
-                placeholder="••••••••"
-              />
-            </div>
+    const addSection = (title: string, body?: string) => {
+      if (!body || !body.trim()) return;
+      if (cursorY > 255) {
+        doc.addPage();
+        cursorY = 20;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(2, 132, 199);
+      doc.text(title, 14, cursorY);
+      cursorY += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(30, 41, 59);
+      const lines = doc.splitTextToSize(body.trim(), 182);
+      doc.text(lines, 14, cursorY);
+      cursorY += lines.length * 4.8 + 5;
+    };
 
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center justify-between gap-3 text-red-600 text-xs font-medium animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="flex items-center gap-3">
-                  <AlertCircle size={16} />
-                  {error}
-                </div>
-                <button 
-                  onClick={() => setError(null)}
-                  className="p-1 hover:bg-red-100 rounded-full transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
+    if (clinicalSummary) addSection('Síntese Clínica', clinicalSummary);
 
-            <button 
-              type="submit"
-              disabled={authLoading}
-              className="w-full py-4 bg-clinical-blue text-white rounded-2xl font-bold shadow-xl shadow-clinical-blue/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
-            >
-              {authLoading ? <Loader2 className="animate-spin" size={20} /> : 'Entrar no Sistema'}
-            </button>
+    if (activeSpecialty === 'biological_dentistry') {
+      const teethObj = dentalData.odontograma?.teeth || {};
+      const teethRows = Object.values(teethObj)
+        .filter((t: any) => t && t.status && t.status !== 'healthy')
+        .map((t: any) => [
+          `Dente ${t.id}`,
+          String(t.status),
+          t.cbctFindings || t.notes || '-',
+          t.biologicalPlan || '-'
+        ]);
 
-            {/* Painel Secreto de Desenvolvimento / Administrador (Exibido apenas sob comando) */}
-            {showSecretControls && (
-              <div className="grid grid-cols-1 gap-2.5 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <button 
-                  type="button"
-                  onClick={handleMarcoLogin}
-                  disabled={authLoading}
-                  className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2.5 text-sm shadow-md shadow-blue-600/20"
-                >
-                  <ShieldCheck size={18} />
-                  Entrar como Dr. Marco Duarte (Admin)
-                </button>
+      if (teethRows.length > 0) {
+        autoTable(doc, {
+          startY: cursorY,
+          head: [['Elemento', 'Condição', 'Achado Clínico / RX', 'Plano Biológico']],
+          body: teethRows,
+          styles: { fontSize: 8.5, cellPadding: 2.5 },
+          headStyles: { fillColor: [2, 132, 199] }
+        });
+        cursorY = (doc as any).lastAutoTable.finalY + 8;
+      }
 
-                <button 
-                  type="button"
-                  onClick={handleLucyLogin}
-                  disabled={authLoading}
-                  className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs"
-                >
-                  <Sparkles size={16} className="text-emerald-600" />
-                  Entrar como Dra. Lucy Morata (Odonto Biológica)
-                </button>
+      if (dentalData.amalgama_ativo) {
+        addSection('Protocolo SMART (Remoção Segura de Amálgama)', `Elementos: ${dentalData.amalgama_elementos || 'Conforme odontograma'}`);
+      }
+      if (dentalData.implante_zirconia_ativo) {
+        addSection('Implantes Cerâmicos Metal-Free (Zircônia)', `Elementos: ${dentalData.implante_elementos || '-'} · Sistema: ${dentalData.implante_tipo_sistema || 'Zircônia'}`);
+      }
+      if (dentalData.focos_cavitacao_ativo) {
+        addSection('Cavitações Ósseas (NICO/FDOK)', dentalData.focos_tomografia_cbct || dentalData.focos_descricao || 'Foco cavitacional sinalizado');
+      }
+      addSection('Observações Odontológicas', dentalData.observacoes_odonto_biologica);
+    }
 
-                <button 
-                  type="button"
-                  onClick={handleDemoLogin}
-                  disabled={authLoading}
-                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs"
-                >
-                  <Stethoscope size={16} className="text-slate-500" />
-                  Acesso Rápido Médico de Demonstração
-                </button>
+    if (activeSpecialty === 'nutrology') {
+      const metricsLine = [
+        nutrologyData.peso_kg ? `Peso: ${nutrologyData.peso_kg} kg` : '',
+        nutrologyData.altura_cm ? `Altura: ${nutrologyData.altura_cm} cm` : '',
+        nutrologyData.gordura_corporal_pct ? `% Gordura: ${nutrologyData.gordura_corporal_pct}%` : '',
+        nutrologyData.massa_muscular_kg ? `Massa Muscular: ${nutrologyData.massa_muscular_kg} kg` : '',
+        nutrologyData.gordura_visceral ? `Gordura Visceral: ${nutrologyData.gordura_visceral}` : ''
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      addSection('Bioimpedância & Composição Corporal', metricsLine);
 
-                <button 
-                  type="button"
-                  onClick={handleTestDentistLogin}
-                  disabled={authLoading}
-                  className="w-full py-3 bg-teal-50 hover:bg-teal-100 text-teal-700 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs shadow-xs"
-                >
-                  <Sparkles size={16} className="text-teal-600" />
-                  Testar Acesso - Nova Dentista Convidada
-                </button>
-              </div>
-            )}
-          </form>
+      const markers = nutrologyData.labAnalysis?.biomarkers || [];
+      if (markers.length > 0) {
+        autoTable(doc, {
+          startY: cursorY,
+          head: [['Biomarcador', 'Resultado', 'Ref. Comum', 'Faixa Ótima', 'Conduta']],
+          body: markers.map((m) => [
+            m.name,
+            `${m.value} ${m.unit}`,
+            m.labRange,
+            m.optimalRange,
+            m.clinicalAction
+          ]),
+          styles: { fontSize: 8, cellPadding: 2.2 },
+          headStyles: { fillColor: [5, 150, 105] }
+        });
+        cursorY = (doc as any).lastAutoTable.finalY + 8;
+      }
+      addSection('Prescrição Nutrológica & Suplementação', nutrologyData.suplementacao_prescrita);
+      addSection('Conduta Alimentar & Estilo de Vida', nutrologyData.plano_alimentar_orientacoes);
+      addSection('Observações Clínicas', nutrologyData.observacoes_clinicas);
+    }
 
-          <div className="mt-6 pt-4 border-t border-slate-50 text-center space-y-2">
-            <p className="text-[11px] text-slate-400">
-              Acesso seguro e restrito à equipe médica e diretoria clínica.
-            </p>
-          </div>
-        </motion.div>
-        </div>
-      </div>
-    );
-  }
+    if (activeSpecialty === 'dermatology') {
+      const skinHeader = [
+        dermatologyData.fototipo_fitzpatrick ? `Fitzpatrick: Tipo ${dermatologyData.fototipo_fitzpatrick}` : '',
+        dermatologyData.escala_glogau ? `Glogau: Grau ${dermatologyData.escala_glogau}` : '',
+        dermatologyData.skinHealthScore ? `Qualidade Cutânea: ${dermatologyData.skinHealthScore}/100` : ''
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      addSection('Avaliação Cutânea & Escalas', skinHeader);
+      addSection('Resumo Visual', dermatologyData.patientSummary || dermatologyData.clinicalSummary);
+      addSection('Skincare Diurno (Manhã)', dermatologyData.rotina_manha);
+      addSection('Tratamento Noturno', dermatologyData.rotina_noite);
+      addSection('Procedimentos em Consultório', dermatologyData.procedimentos_consultorio);
+      addSection('Suplementação Oral (In)', dermatologyData.suplementacao_oral_in);
+      addSection('Observações Dermatológicas', dermatologyData.observacoes_dermato);
+    }
+
+    if (prescriptionText) addSection('Prescrição Adicional', prescriptionText);
+
+    const pageHeight = doc.internal.pageSize.getHeight();
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(brand.cityFooter || '', 14, pageHeight - 12);
+
+    const fileName = `protocolo_${activeSpecialty}_${(patientName || 'paciente').replace(/[^a-z0-9]/gi, '_')}.pdf`;
+    doc.save(fileName);
+    toast.success('Laudo e protocolo em PDF gerados!');
+  };
+
+  // Envio leve pelo WhatsApp Web/App (zero necessidade de API paga ou QR Code)
+  const handleSendWhatsApp = () => {
+    const specMeta = STUDIO_SPECIALTIES.find((s) => s.id === activeSpecialty)!;
+    const parts: string[] = [
+      `*${brand.clinicName}* — ${specMeta.title}`,
+      patientName ? `Paciente: *${patientName}*` : '',
+      ''
+    ];
+
+    if (activeSpecialty === 'biological_dentistry') {
+      if (clinicalSummary) parts.push(`*Resumo:*\n${clinicalSummary}`);
+      if (dentalData.observacoes_odonto_biologica) {
+        parts.push(`*Plano Odontológico:*\n${dentalData.observacoes_odonto_biologica}`);
+      }
+    } else if (activeSpecialty === 'nutrology') {
+      if (nutrologyData.labAnalysis?.patientSummary) {
+        parts.push(`*Análise Metabólica:*\n${nutrologyData.labAnalysis.patientSummary}`);
+      }
+      if (nutrologyData.suplementacao_prescrita) {
+        parts.push(`*Suplementação:*\n${nutrologyData.suplementacao_prescrita}`);
+      }
+      if (nutrologyData.plano_alimentar_orientacoes) {
+        parts.push(`*Orientações:*\n${nutrologyData.plano_alimentar_orientacoes}`);
+      }
+    } else if (activeSpecialty === 'dermatology') {
+      if (dermatologyData.patientSummary) {
+        parts.push(`*Avaliação Visual:*\n${dermatologyData.patientSummary}`);
+      }
+      if (dermatologyData.rotina_manha) parts.push(`*Manhã:*\n${dermatologyData.rotina_manha}`);
+      if (dermatologyData.rotina_noite) parts.push(`*Noite:*\n${dermatologyData.rotina_noite}`);
+      if (dermatologyData.suplementacao_oral_in) {
+        parts.push(`*Oral (In):*\n${dermatologyData.suplementacao_oral_in}`);
+      }
+    }
+
+    if (parts.filter(Boolean).length <= 2) {
+      parts.push('Segue o resumo do seu atendimento clínico visual.');
+    }
+
+    const cleanPhone = patientPhone.replace(/\D/g, '');
+    const formattedPhone = cleanPhone
+      ? cleanPhone.startsWith('55')
+        ? cleanPhone
+        : `55${cleanPhone}`
+      : '';
+    const text = encodeURIComponent(parts.filter((p) => p !== undefined).join('\n\n'));
+    const url = formattedPhone
+      ? `https://wa.me/${formattedPhone}?text=${text}`
+      : `https://wa.me/?text=${text}`;
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleClearConsultation = () => {
+    setPatientName('');
+    setPatientDob('');
+    setPatientPhone('');
+    setClinicalInput('');
+    setClinicalSummary('');
+    setPrescriptionText('');
+    setDentalData({});
+    setNutrologyData({});
+    setDermatologyData({});
+    toast.success('Nova consulta pronta.');
+  };
+
+  const handleOdontogramUpdateFromGallery = (odonto: OdontogramData) => {
+    setDentalData((prev) => ({ ...prev, odontograma: odonto }));
+  };
+
+  const activeSpec = STUDIO_SPECIALTIES.find((s) => s.id === activeSpecialty)!;
 
   return (
-    <div className="min-h-screen bg-[#f4f6fb] flex flex-col md:flex-row min-w-0 p-2 sm:p-3 md:p-4 gap-3 sm:gap-4">
-      {/* Banner de Nova Atualização Disponível (PWA Auto-Update) */}
-      <AnimatePresence>
-        {hasUpdate && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="bg-blue-600 text-white overflow-hidden fixed top-0 left-0 right-0 z-[110] shadow-2xl border-b border-blue-400"
-          >
-            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-xl shrink-0">
-                  <Sparkles size={20} className="animate-pulse text-blue-200" />
-                </div>
-                <div className="text-xs sm:text-sm font-medium">
-                  <p className="font-bold text-white flex items-center gap-2">
-                    <span>✨ Nova Versão do Ambulatório IA Pronta!</span>
-                    <span className="text-[10px] bg-blue-500/80 px-2 py-0.5 rounded-full font-mono">v4.6</span>
-                  </p>
-                  <p className="text-blue-100 text-[11px] sm:text-xs">Clique no botão para carregar as últimas melhorias sem perder nenhum dado.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button 
-                  onClick={() => handleReloadApp(true)}
-                  disabled={isReloading}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2 bg-white text-blue-700 hover:bg-blue-50 rounded-xl font-extrabold text-xs transition-transform active:scale-95 shadow-md"
-                >
-                  <RefreshCw size={14} className={isReloading ? "animate-spin" : ""} />
-                  {isReloading ? "Atualizando..." : "Atualizar Agora (1 Clique)"}
-                </button>
-                <button 
-                  onClick={() => setHasUpdate(false)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors text-white/80"
-                  title="Fechar aviso temporariamente"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col">
+      <Toaster position="top-right" />
 
-      {/* Aviso de WebView / Microfone Bloqueado */}
-      <AnimatePresence>
-        {isWebView && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="bg-amber-500 text-white overflow-hidden fixed top-0 left-0 right-0 z-[100] shadow-lg"
-          >
-            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-lg">
-                  <AlertCircle size={20} />
-                </div>
-                <div className="text-xs sm:text-sm font-medium">
-                  <p className="font-bold">Atenção: Microfone Bloqueado!</p>
-                  <p className="opacity-90">Você está no navegador interno (WhatsApp/Instagram). Copie o link e cole diretamente no Chrome ou Safari para gravar áudios.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button 
-                  onClick={() => {
-                    navigator.clipboard.writeText(window.location.href);
-                    toast.success('Link copiado! Cole no Chrome ou Safari.');
-                  }}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white text-amber-600 rounded-xl font-bold text-xs transition-transform active:scale-95 shadow-sm"
-                >
-                  <Copy size={14} />
-                  Copiar Link
-                </button>
-                <button 
-                  onClick={() => setIsWebView(false)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                  title="Fechar aviso"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Top Bar — Contrato estrito de 3 zonas */}
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
+          {/* Zona 1: Wordmark único (1 linha) */}
+          <span className="text-base md:text-lg font-extrabold tracking-tight text-slate-900 whitespace-nowrap shrink-0">
+            {brand.clinicName}
+          </span>
 
-      {/* Lateral Navigation Sidebar (Modern Floating Card CRM Style) */}
-      <aside className={cn(
-        "bg-white text-slate-700 shrink-0 rounded-3xl border border-slate-200/70 flex flex-col justify-between p-3.5 shadow-xs z-40 transition-all duration-300",
-        isSidebarCollapsed ? "w-full md:w-20" : "w-full md:w-64"
-      )}>
-        <div className="space-y-4">
-          {/* Logo Brand + Collapse Arrow Toggle Button */}
-          <div className="flex items-center justify-between gap-1 p-1">
-            <div 
-              className="flex items-center cursor-pointer rounded-2xl hover:bg-slate-50 transition-all group overflow-hidden py-1 px-1.5"
-              onClick={() => navigateToTab('dashboard')}
-              title="Ambulatório IA"
-            >
-              {!isSidebarCollapsed ? (
-                <img 
-                  src={DEFAULT_CLINIC_LOGO_URL} 
-                  alt="Logo Ambulatório IA" 
-                  referrerPolicy="no-referrer"
-                  className="h-11 w-auto max-w-[180px] object-contain"
-                />
-              ) : (
-                <div className="w-10 h-10 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src={DEFAULT_CLINIC_LOGO_URL} 
-                    alt="Logo" 
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Minimize / Expand Sidebar Toggle Button */}
-            <button
-              type="button"
-              onClick={() => {
-                const newState = !isSidebarCollapsed;
-                setIsSidebarCollapsed(newState);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('ambulatorio_sidebar_collapsed', String(newState));
-                }
-              }}
-              className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors hidden md:flex items-center justify-center shrink-0"
-              title={isSidebarCollapsed ? "Expandir menu lateral" : "Minimizar menu lateral"}
-            >
-              {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-            </button>
-          </div>
-
-          {isDoctorLucy && !isSidebarCollapsed && (
-            <div className="mx-1 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/70 flex items-center gap-2 text-[11px] text-emerald-800 font-bold shadow-2xs">
-              <Sparkles size={13} className="text-emerald-600 shrink-0" />
-              <span className="truncate">Modo Odontologia Biológica</span>
-            </div>
-          )}
-
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                Menu Principal
-              </div>
-            )}
-
-            {/* Dashboard Geral (Oculto para Dra. Lucy para modo 100% focado no atendimento odontológico) */}
-            {!isDoctorLucy && (
-              <button
-                onClick={() => navigateToTab('dashboard')}
-                title={isSidebarCollapsed ? "Dashboard Geral" : undefined}
-                className={cn(
-                  "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                  showDashboard 
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                    : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-                )}
-              >
-                <Activity size={17} className={showDashboard ? "text-white" : "text-slate-500"} />
-                {!isSidebarCollapsed && <span>Dashboard Geral</span>}
-              </button>
-            )}
-
-            {/* Atendimento Clínico / Odontologia Biológica */}
-            <button
-              onClick={() => {
-                if (isDoctorLucy) setExamMode('biological_dentistry');
-                navigateToTab('atendimento');
-              }}
-              title={isSidebarCollapsed ? (isDoctorLucy ? "Odontologia Biológica" : "Atendimento Clínico") : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                (!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial)
-                  ? (isDoctorLucy 
-                      ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/20" 
-                      : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20")
-                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-              )}
-            >
-              {isDoctorLucy ? (
-                <Sparkles size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-white" : "text-emerald-600"} />
-              ) : (
-                <Mic size={17} className={(!showDashboard && !showAgenda && !showHistory && !showMessageHistory && !showManageTeam && !showFinancial) ? "text-white" : "text-slate-500"} />
-              )}
-              {!isSidebarCollapsed && <span>{isDoctorLucy ? "Odontologia Biológica" : "Atendimento Clínico"}</span>}
-            </button>
-
-            {/* Agenda Médica / Odonto */}
-            <button
-              onClick={() => navigateToTab('agenda')}
-              title={isSidebarCollapsed ? (isDoctorLucy ? "Agenda Odonto" : "Agenda Médica") : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                showAgenda 
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-              )}
-            >
-              <Calendar size={17} className={showAgenda ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>{isDoctorLucy ? "Agenda Odonto" : "Agenda Médica"}</span>}
-            </button>
-
-            {/* CRM & Funil de Pacientes (Oculto para Dra. Lucy) */}
-            {!isDoctorLucy && (
-              <button
-                onClick={() => navigateToTab('crm')}
-                title={isSidebarCollapsed ? "CRM & Funil de Pacientes" : undefined}
-                className={cn(
-                  "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                  showCrm 
-                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                    : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-                )}
-              >
-                <TrendingUp size={17} className={showCrm ? "text-white" : "text-slate-500"} />
-                {!isSidebarCollapsed && (
-                  <div className="flex items-center justify-between w-full">
-                    <span>CRM & Funil</span>
-                    <span className="px-1.5 py-0.2 text-[9px] font-black bg-indigo-100 text-indigo-700 rounded-md">PRO</span>
-                  </div>
-                )}
-              </button>
-            )}
-
-            {/* Mensagens & WhatsApp */}
-            <button
-              onClick={() => navigateToTab('mensagens')}
-              title={isSidebarCollapsed ? "Mensagens & WhatsApp" : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                showMessageHistory 
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-              )}
-            >
-              <MessageSquare size={17} className={showMessageHistory ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>Mensagens & WhatsApp</span>}
-            </button>
-
-            {/* Histórico de Prontuários */}
-            <button
-              onClick={() => {
-                if (isDoctorLucy) setHistoryDoctorFilter('dra_lucy');
-                navigateToTab('historico');
-              }}
-              title={isSidebarCollapsed ? (isDoctorLucy ? "Prontuários Odonto" : "Histórico de Prontuários") : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                showHistory 
-                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                  : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-              )}
-            >
-              <History size={17} className={showHistory ? "text-white" : "text-slate-500"} />
-              {!isSidebarCollapsed && <span>{isDoctorLucy ? "Prontuários Odonto" : "Histórico de Prontuários"}</span>}
-            </button>
-
-            {/* Módulos Exclusivos do Administrador */}
-            {user?.role === 'admin' && (
-              <>
-                {!isSidebarCollapsed && (
-                  <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    Gestão da Clínica
-                  </div>
-                )}
-
+          {/* Zona 2: 3 Especialidades */}
+          <nav className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+            {STUDIO_SPECIALTIES.map((spec) => {
+              const isActive = activeSpecialty === spec.id;
+              return (
                 <button
-                  onClick={() => navigateToTab('financeiro')}
-                  title={isSidebarCollapsed ? "Financeiro & Caixa" : undefined}
+                  key={spec.id}
+                  type="button"
+                  onClick={() => setActiveSpecialty(spec.id)}
                   className={cn(
-                    "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                    isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                    showFinancial 
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                      : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
+                    'px-3.5 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer',
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   )}
                 >
-                  <DollarSign size={17} className={showFinancial ? "text-white" : "text-slate-500"} />
-                  {!isSidebarCollapsed && <span>Financeiro & Caixa</span>}
+                  {spec.shortLabel}
                 </button>
-
-                <button
-                  onClick={() => navigateToTab('equipe')}
-                  title={isSidebarCollapsed ? "Equipe & Acessos" : undefined}
-                  className={cn(
-                    "w-full flex items-center rounded-2xl text-xs font-bold transition-all",
-                    isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5",
-                    showManageTeam 
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20" 
-                      : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
-                  )}
-                >
-                  <Users size={17} className={showManageTeam ? "text-white" : "text-slate-500"} />
-                  {!isSidebarCollapsed && (
-                    <span>
-                      {user?.email === 'marco.agduarte22@gmail.com' ? "Gerenciar Equipes" : "Equipe & Acessos"}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  onClick={() => setShowClinicSettings(true)}
-                  title={isSidebarCollapsed ? "Configurações & WhatsApp" : undefined}
-                  className={cn(
-                    "w-full flex items-center rounded-2xl text-xs font-bold text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 transition-all",
-                    isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-                  )}
-                >
-                  <Settings size={17} className="text-slate-500" />
-                  {!isSidebarCollapsed && <span>Configurações & WhatsApp</span>}
-                </button>
-              </>
-            )}
-
-            {!isSidebarCollapsed && (
-              <div className="px-3 pt-3 pb-1 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                Manuais & Ajuda
-              </div>
-            )}
-
-            {/* Manual da Dra. Lucy (Exibido para Dra. Lucy ou Master Admin Marco) */}
-            {(resolveDoctorKey(user) === 'dra_lucy' || user?.email === 'marco.agduarte22@gmail.com' || user?.id === 'master-admin-marco') && (
-              <button
-                onClick={() => {
-                  setManualDefaultProfile('dra_lucy');
-                  setShowManualClinico(true);
-                }}
-                title={isSidebarCollapsed ? "Manual Dra. Lucy (Odontologia Biológica & Cirurgia)" : undefined}
-                className={cn(
-                  "w-full flex items-center rounded-2xl text-xs font-bold text-emerald-800 bg-emerald-100/90 hover:bg-emerald-200/90 border border-emerald-300/80 ring-1 ring-emerald-500/20 transition-all shadow-2xs cursor-pointer",
-                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-                )}
-              >
-                <Sparkles size={17} className="text-emerald-600 shrink-0" />
-                {!isSidebarCollapsed && <span className="truncate">Manual Dra. Lucy (Odonto)</span>}
-              </button>
-            )}
-
-            {/* Manual do Dr. Carlos (Exibido para Dr. Carlos ou Master Admin Marco) */}
-            {(resolveDoctorKey(user) === 'dr_carlos' || user?.email === 'marco.agduarte22@gmail.com' || user?.id === 'master-admin-marco') && (
-              <button
-                onClick={() => {
-                  setManualDefaultProfile('dr_carlos');
-                  setShowManualClinico(true);
-                }}
-                title={isSidebarCollapsed ? "Manual Dr. Carlos (Medicina, Neurologia & Integrativa)" : undefined}
-                className={cn(
-                  "w-full flex items-center rounded-2xl text-xs font-bold text-blue-800 bg-blue-100/90 hover:bg-blue-200/90 border border-blue-300/80 ring-1 ring-blue-500/20 transition-all shadow-2xs cursor-pointer",
-                  isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-                )}
-              >
-                <Brain size={17} className="text-blue-600 shrink-0" />
-                {!isSidebarCollapsed && <span className="truncate">Manual Dr. Carlos (Neuro)</span>}
-              </button>
-            )}
-
-            {/* Manual Geral de Instruções do Sistema (Acessível para Todos: Médicos, Gestores e Equipe) */}
-            <button
-              onClick={() => setShowSystemOverview(true)}
-              title={isSidebarCollapsed ? "Manual Geral de Instruções do Sistema (Guia Completo da Clínica)" : undefined}
-              className={cn(
-                "w-full flex items-center rounded-2xl text-xs font-bold text-slate-700 bg-slate-100/80 hover:bg-slate-200/90 hover:text-slate-900 border border-slate-200/90 transition-all shadow-2xs cursor-pointer",
-                isSidebarCollapsed ? "justify-center p-3" : "gap-3 px-3.5 py-2.5"
-              )}
-            >
-              <BookOpen size={17} className="text-blue-700 shrink-0" />
-              {!isSidebarCollapsed && <span className="truncate">Manual de Instruções</span>}
-            </button>
+              );
+            })}
           </nav>
 
-          {/* Painel de Status Offline & PWA */}
-          {!isSidebarCollapsed ? (
-            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200/70 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-bold">
-                <span className="text-slate-700 flex items-center gap-1.5">
-                  <span className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-amber-500")} />
-                  {isOnline ? "Conectado (Nuvem)" : "Modo Offline (Local)"}
-                </span>
-                {offlinePendingCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                    {offlinePendingCount} no PC
-                  </span>
-                )}
-              </div>
-
-              {offlinePendingCount > 0 && (
-                <button
-                  onClick={async () => {
-                    if (!isOnline) {
-                      toast.error("Conecte-se ao Wi-Fi para sincronizar os prontuários com a nuvem.");
-                      return;
-                    }
-                    setIsSyncingOffline(true);
-                    const toastId = toast.loading("Sincronizando com a nuvem...");
-                    const { syncedCount, errorsCount } = await syncOfflineRecordsWithCloud(supabase);
-                    setIsSyncingOffline(false);
-                    toast.dismiss(toastId);
-                    if (syncedCount > 0) {
-                      toast.success(`${syncedCount} prontuários sincronizados com a nuvem!`);
-                      setOfflinePendingCount(getOfflineRecords().filter(r => r.is_offline_pending).length);
-                      fetchHistory();
-                    } else if (errorsCount > 0) {
-                      toast.error(`Falha ao enviar ${errorsCount} prontuários.`);
-                    }
-                  }}
-                  disabled={isSyncingOffline || !isOnline}
-                  className="w-full py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-[11px] font-extrabold flex items-center justify-center gap-1.5 transition-all border border-amber-200"
-                >
-                  <RefreshCw size={12} className={isSyncingOffline ? "animate-spin" : ""} />
-                  Sincronizar {offlinePendingCount} Pendentes
-                </button>
-              )}
-
-              {/* Botão Oficial de Instalação PWA (Computador / Celular) */}
-              <PWAInstallButton variant="sidebar" />
-
-              {/* Botão de Atualizar / Recarregar Sistema */}
-              <button
-                onClick={() => handleReloadApp(false)}
-                disabled={isReloading}
-                className="w-full py-2 px-2.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 transition-all border border-slate-200 shadow-xs"
-                title="Recarregar tela e buscar novas atualizações sem perder dados"
-              >
-                <RefreshCw size={12} className={isReloading ? "animate-spin text-blue-600" : "text-blue-600"} />
-                <span>{isReloading ? "Atualizando..." : "Recarregar / Atualizar App"}</span>
-              </button>
-
-              {user?.role === 'admin' && (
-                <div className="flex gap-1.5 pt-1">
-                  <button
-                    onClick={() => {
-                      const recs = getOfflineRecords();
-                      const fullHistory = history.length > 0 ? history : recs;
-                      if (fullHistory.length === 0) {
-                        toast.error("Nenhum prontuário encontrado para backup.");
-                        return;
-                      }
-                      exportLocalDataJSON(fullHistory);
-                      toast.success("Backup do banco de dados salvo em Downloads!");
-                    }}
-                    className="flex-1 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 transition-all border border-slate-200"
-                    title="Salvar cópia de segurança em arquivo JSON (Exclusivo Administrador)"
-                  >
-                    <Save size={11} className="text-blue-600" />
-                    Backup JSON (Admin)
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => handleReloadApp(false)}
-                disabled={isReloading}
-                className="p-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-2xl transition-all border border-slate-200"
-                title="Recarregar tela e atualizar"
-              >
-                <RefreshCw size={16} className={isReloading ? "animate-spin text-blue-600" : "text-blue-600"} />
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* User Profile & Logout */}
-        <div className="pt-3 border-t border-slate-100 space-y-2 mt-3">
-          {(() => {
-            const userDisplayName = resolveDoctorDisplayName(user, user?.full_name);
-            const userInitial = userDisplayName ? userDisplayName.replace(/^Dr\.\s*|^Dra\.\s*/i, '').charAt(0).toUpperCase() : 'M';
-            return !isSidebarCollapsed ? (
-              <div 
-                onClick={() => setShowProfileModal(true)}
-                className="px-3 py-2 bg-slate-50 hover:bg-slate-100/90 rounded-2xl border border-slate-200/70 flex items-center gap-3 cursor-pointer transition-all group active:scale-98"
-                title="Clique para ver ou alterar foto e dados do perfil"
-              >
-                <div className="relative shrink-0">
-                  {user?.avatar_url ? (
-                    <img
-                      src={user.avatar_url}
-                      alt={userDisplayName}
-                      className="w-9 h-9 rounded-xl object-cover border border-blue-400/80 shadow-2xs group-hover:border-blue-500 transition-colors"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs group-hover:from-blue-700 group-hover:to-indigo-700 transition-all">
-                      {userInitial}
-                    </div>
-                  )}
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-xs text-slate-600 group-hover:text-blue-600">
-                    <Camera size={9} />
-                  </div>
-                </div>
-                <div className="overflow-hidden min-w-0 flex-1">
-                  <p className="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700 transition-colors">
-                    {userDisplayName}
-                  </p>
-                  <p className="text-[10px] text-blue-600 font-semibold uppercase">{user?.role || 'Médico'}</p>
-                </div>
-              </div>
-            ) : (
-              <div 
-                onClick={() => setShowProfileModal(true)}
-                className="flex justify-center cursor-pointer group" 
-                title={`${userDisplayName} (${user?.role || 'Médico'}) - Clique para alterar foto`}
-              >
-                <div className="relative">
-                  {user?.avatar_url ? (
-                    <img
-                      src={user.avatar_url}
-                      alt={userDisplayName}
-                      className="w-9 h-9 rounded-2xl object-cover border border-blue-400/80 shadow-2xs group-hover:ring-2 group-hover:ring-blue-500/40 transition-all"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-xs shadow-2xs group-hover:scale-105 transition-all">
-                      {userInitial}
-                    </div>
-                  )}
-                  <div className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white rounded-full border border-slate-200 flex items-center justify-center shadow-xs text-slate-600">
-                    <Camera size={8} />
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            title={isSidebarCollapsed ? "Sair do Sistema" : undefined}
-            className={cn(
-              "w-full flex items-center bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 rounded-xl font-bold text-xs transition-all border border-red-200/60 cursor-pointer shadow-2xs active:scale-95",
-              isSidebarCollapsed ? "justify-center p-2.5" : "justify-center gap-2 px-4 py-2.5"
-            )}
-          >
-            <LogOut size={16} />
-            {!isSidebarCollapsed && <span>Sair do Sistema</span>}
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-
-      {showProfileModal && (
-        <UserProfileModal
-          user={user}
-          onClose={() => setShowProfileModal(false)}
-          onUpdateUser={(updated) => updateUserState(updated)}
-        />
-      )}
-
-      <SystemOverviewModal 
-        isOpen={showSystemOverview} 
-        onClose={() => setShowSystemOverview(false)} 
-        userId={user?.id || ''}
-      />
-
-      <ManualClinicoModal
-        isOpen={showManualClinico}
-        onClose={() => setShowManualClinico(false)}
-        defaultProfile={manualDefaultProfile}
-      />
-
-      <AnimatePresence>
-        {showClinicSettings && (
-          <div 
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto"
-            onClick={() => setShowClinicSettings(false)}
-          >
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden my-auto"
+          {/* Zona 3: 1 Ação Primária */}
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowBrandModal(true)}
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              {/* Header fixo do Modal */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-clinical-blue rounded-xl flex items-center justify-center text-white shadow-sm">
-                    <Settings size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 text-base">Configurações da Clínica & WhatsApp</h3>
-                    <p className="text-xs text-slate-500">Personalize dados do consultório e conexão da API</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setShowClinicSettings(false)} 
-                  className="p-2 hover:bg-slate-200 text-slate-400 hover:text-slate-700 rounded-full transition-colors"
-                  title="Fechar (Esc)"
-                >
-                  <X size={22} />
-                </button>
-              </div>
-
-              {/* Corpo com Scroll Suave */}
-              <div className="p-6 sm:p-8 overflow-y-auto flex-1">
-                <ClinicSettings currentUser={user} onClose={() => setShowClinicSettings(false)} />
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      <main className="flex-1 w-full max-w-[1680px] mx-auto p-3 sm:p-5 lg:p-6 transition-all">
-        {user && user.status === 'pending' ? (
-          <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-white rounded-2xl border border-slate-200 shadow-sm">
-            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4">
-              <Clock size={32} />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Aguardando Aprovação</h2>
-            <p className="text-slate-600 max-w-md mb-6">
-              Seu cadastro foi realizado com sucesso! Agora, aguarde um administrador liberar seu acesso ao sistema.
-            </p>
-            <button 
-              onClick={() => checkUser()}
-              className="flex items-center gap-2 px-6 py-3 bg-clinical-blue text-white rounded-xl font-bold hover:bg-clinical-blue-hover transition-all shadow-lg shadow-blue-100"
-            >
-              <RefreshCw size={18} />
-              Verificar Status
+              <Building2 size={14} />
+              <span>Minha Clínica</span>
             </button>
           </div>
-        ) : (
-          <AnimatePresence mode="wait">
-            {showManageTeam ? (
-              <motion.div
-                key="manage-team"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+        </div>
+      </header>
+
+      {/* Main Content Workspace */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 py-6 space-y-6">
+        {/* Cabeçalho da Especialidade + Dados Rápidos do Paciente */}
+        <section className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div>
+              <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">
+                {activeSpec.title}
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {activeSpec.tagline}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                <ManageTeam currentUser={user} onClose={() => setShowManageTeam(false)} />
-              </motion.div>
-            ) : showFinancial ? (
-              <motion.div
-                key="financial"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                <FileDown size={14} />
+                <span>Gerar Laudo / Receita PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
-                <FinancialModule currentUser={user} />
-              </motion.div>
-            ) : showCrm ? (
-              <motion.div
-                key="crm"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                <MessageCircle size={14} />
+                <span>Enviar WhatsApp</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearConsultation}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Iniciar nova consulta limpa"
               >
-                <CrmKanbanModule 
-                  currentUser={user} 
-                  onOpenAgendaWithPatient={(name, phone) => {
-                    setPrefillPatient({ name, phone: phone || '' });
-                    navigateToTab('agenda');
-                  }}
-                  onStartConsultation={(name, phone) => {
-                    setCurrentRecord({
-                      paciente_nome_completo: name,
-                      paciente_telefone: phone || '',
-                      especialidade: resolveDoctorKey(user) === 'dra_lucy' ? 'Odontologia Biológica' : 'Neurologia',
-                      paciente_status: 'Estável',
-                      resumo_formatado: '',
-                      sugestao_conduta: ''
-                    });
-                    navigateToTab('atendimento');
-                  }}
-                />
-              </motion.div>
-            ) : showDashboard ? (
-              <motion.div
-                key="dashboard"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <Dashboard 
-                  onStartConsultation={() => {
-                    setCurrentRecord({
-                      paciente_nome_completo: '',
-                      especialidade: 'Geral',
-                      paciente_status: 'Estável',
-                      resumo_formatado: '',
-                      sugestao_conduta: ''
-                    });
-                    navigateToTab('atendimento');
-                  }}
-                  onOpenAgenda={() => navigateToTab('agenda')}
-                  onOpenMessages={() => navigateToTab('mensagens')}
-                  onOpenHistory={() => navigateToTab('historico')}
-                  onOpenCrm={() => navigateToTab('crm')}
-                />
-              </motion.div>
-            ) : showAgenda ? (
-          <Agenda 
-            user={user} 
-            prefillPatient={prefillPatient} 
-            onOpenChat={(phone) => {
-              setPreselectedChatPhone(phone);
-              navigateToTab('mensagens');
-            }}
-            onStartConsultation={async (paciente, telefone, motivo, medicoId, appointmentId, convenio, especialidade, statusPagamento, valorConsulta, dataNascimento, cpf) => {
-              console.log("onStartConsultation - paciente:", paciente, "telefone:", telefone, "dataNascimento:", dataNascimento, "cpf:", cpf, "convenio:", convenio, "statusPagamento:", statusPagamento, "valor:", valorConsulta);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('ambulatorio_active_tab', 'atendimento');
-              }
-              setShowAgenda(false);
-              setShowDashboard(false);
-              setShowFinancial(false);
-              setShowHistory(false);
-              setShowMessageHistory(false);
-              setShowManageTeam(false);
-              setSelectedPatient(paciente);
-              setSelectedPatientPhone(telefone || '');
-              setSelectedAppointmentReason(motivo || '');
-              setSelectedMedicoId(medicoId || null);
-              setSelectedAppointmentId(appointmentId || null);
-              setSelectedPatientConvenio(convenio || 'Particular');
-              setSelectedPatientStatusPagamento(statusPagamento || '');
-              setSelectedPatientValorConsulta(valorConsulta || '');
-              setPrefillPatient(null);
+                <RotateCcw size={13} />
+                <span>Nova Consulta</span>
+              </button>
+            </div>
+          </div>
 
-              const specLower = (especialidade || '').toLowerCase();
-              let targetExamMode: 'standard' | 'neurological' | 'integrative' | 'biological_dentistry' = 'standard';
-              if (specLower.includes('integrativa')) {
-                targetExamMode = 'integrative';
-              } else if (specLower.includes('odontologia') || specLower.includes('biológica') || specLower.includes('biologica')) {
-                targetExamMode = 'biological_dentistry';
-              } else if (specLower.includes('neuro')) {
-                targetExamMode = 'neurological';
-              }
+          {/* Barra do Paciente + Copiloto de Voz IA */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div className="md:col-span-5">
+              <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1 mb-1">
+                <User size={12} />
+                <span>Nome do Paciente</span>
+              </label>
+              <input
+                type="text"
+                value={patientName}
+                onChange={(e) => setPatientName(e.target.value)}
+                placeholder="Ex: Maria Aparecida Silva"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+              />
+            </div>
 
-              setExamMode(targetExamMode);
-
-              // 1. Carrega dados prévios locais de anamnese
-              const cleanPhone = (telefone || '').replace(/\D/g, '');
-              const cleanWithout55 = cleanPhone.startsWith('55') && cleanPhone.length > 10 ? cleanPhone.slice(2) : cleanPhone;
-              let localAnamnese: any = null;
-              try {
-                const savedApp = appointmentId ? localStorage.getItem(`anamnese_app_${appointmentId}`) : null;
-                const savedPhone = cleanPhone ? localStorage.getItem(`anamnese_${cleanPhone}`) : null;
-                const savedPhoneWithout55 = cleanWithout55 ? localStorage.getItem(`anamnese_${cleanWithout55}`) : null;
-                const savedPhoneWith55 = cleanPhone ? localStorage.getItem(`anamnese_55${cleanPhone}`) : null;
-                
-                if (savedApp) localAnamnese = JSON.parse(savedApp);
-                else if (savedPhone) localAnamnese = JSON.parse(savedPhone);
-                else if (savedPhoneWithout55) localAnamnese = JSON.parse(savedPhoneWithout55);
-                else if (savedPhoneWith55) localAnamnese = JSON.parse(savedPhoneWith55);
-
-                // Fallback: varre chaves do localStorage caso o número esteja formatado diferente
-                if (!localAnamnese) {
-                  for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith('anamnese_')) {
-                      try {
-                        const parsed = JSON.parse(localStorage.getItem(key) || '');
-                        if (parsed && (
-                          (parsed.paciente_nome && parsed.paciente_nome.toLowerCase().trim() === paciente.toLowerCase().trim()) ||
-                          (cleanWithout55 && String(parsed.paciente_telefone || '').replace(/\D/g, '').includes(cleanWithout55))
-                        )) {
-                          localAnamnese = parsed;
-                          break;
-                        }
-                      } catch (_) {}
-                    }
-                  }
-                }
-              } catch (e) {}
-
-              // Fallback 2: busca no histórico clínico já carregado do paciente
-              const prevHistoryRecord: any = history.find(h => 
-                (h.paciente_nome_completo && h.paciente_nome_completo.toLowerCase().trim() === paciente.toLowerCase().trim()) ||
-                (cleanWithout55 && h.paciente_telefone && h.paciente_telefone.replace(/\D/g, '').includes(cleanWithout55))
-              );
-
-              const initialAlerts = localAnamnese?.alertas_clinicos || prevHistoryRecord?.alertas_copiloto || prevHistoryRecord?.alertas_clinicos || [];
-              const initialDob = dataNascimento || localAnamnese?.data_nascimento || prevHistoryRecord?.paciente_data_nascimento || '';
-              const initialCpf = cpf || localAnamnese?.paciente_cpf || prevHistoryRecord?.paciente_cpf || '';
-              const initialPhoto = localAnamnese?.foto_url || prevHistoryRecord?.foto_url || '';
-              const initialAddress = localAnamnese?.endereco ? (typeof localAnamnese.endereco === 'object' ? [localAnamnese.endereco.logradouro, localAnamnese.endereco.numero, localAnamnese.endereco.bairro, localAnamnese.endereco.cidade].filter(Boolean).join(', ') : localAnamnese.endereco) : (prevHistoryRecord?.endereco || '');
-              const initialMeds = localAnamnese?.medicamentosAtuais || localAnamnese?.medicamentos_atuais || prevHistoryRecord?.medicamentos_em_uso || '';
-
-              if (initialCpf) setSelectedPatientCpf(initialCpf);
-              if (initialDob) setSelectedPatientDob(initialDob);
-
-              const initialRecord = {
-                paciente_nome_completo: paciente,
-                paciente_telefone: telefone || '',
-                paciente_cpf: initialCpf,
-                paciente_data_nascimento: initialDob,
-                convenio: convenio || prevHistoryRecord?.convenio || 'Particular',
-                status_pagamento: statusPagamento || '',
-                valor_consulta: valorConsulta || '',
-                especialidade: especialidade || 'Geral',
-                paciente_status: 'Estável',
-                resumo_formatado: motivo ? `Queixa principal agendada: ${motivo}` : '',
-                sugestao_conduta: '',
-                alertas_clinicos: initialAlerts,
-                alertas_copiloto: initialAlerts,
-                foto_url: initialPhoto,
-                endereco: initialAddress,
-                medicamentos_em_uso: initialMeds,
-                medicamentosAtuais: initialMeds
-              };
-
-              setCurrentRecord(initialRecord as any);
-
-              // 2. Busca assíncrona no backend / Supabase para garantir sincronia de foto, nascimento e alertas
-              try {
-                const res = await fetch(`/api/public/anamnese-data?phone=${encodeURIComponent(cleanPhone)}&id=${encodeURIComponent(appointmentId || '')}&name=${encodeURIComponent(paciente || '')}`);
-                if (res.ok) {
-                  const json = await res.json();
-                  if (json.data) {
-                    const d = json.data;
-                    const fetchedDob = d.data_nascimento || d.paciente_data_nascimento || '';
-                    if (d.paciente_cpf) setSelectedPatientCpf(d.paciente_cpf);
-                    if (fetchedDob) setSelectedPatientDob(fetchedDob);
-                    if (d.convenio) setSelectedPatientConvenio(d.convenio);
-                    if (d.status_pagamento) setSelectedPatientStatusPagamento(d.status_pagamento);
-                    if (d.valor_consulta) setSelectedPatientValorConsulta(d.valor_consulta);
-
-                    const dbAddress = d.endereco ? (typeof d.endereco === 'object' ? [d.endereco.logradouro, d.endereco.numero, d.endereco.bairro, d.endereco.cidade].filter(Boolean).join(', ') : d.endereco) : initialAddress;
-
-                    setCurrentRecord((prev: any) => ({
-                      ...prev,
-                      paciente_cpf: d.paciente_cpf || prev?.paciente_cpf,
-                      paciente_data_nascimento: fetchedDob || prev?.paciente_data_nascimento,
-                      data_nascimento: fetchedDob || prev?.data_nascimento,
-                      alertas_clinicos: (d.alertas_clinicos && d.alertas_clinicos.length > 0) ? d.alertas_clinicos : prev?.alertas_clinicos || [],
-                      alertas_copiloto: (d.alertas_clinicos && d.alertas_clinicos.length > 0) ? d.alertas_clinicos : prev?.alertas_copiloto || [],
-                      foto_url: d.foto_url || prev?.foto_url,
-                      convenio: d.convenio || prev?.convenio,
-                      status_pagamento: d.status_pagamento || prev?.status_pagamento,
-                      valor_consulta: d.valor_consulta || prev?.valor_consulta,
-                      endereco: dbAddress || prev?.endereco,
-                      medicamentos_em_uso: d.medicamentos_atuais || d.medicamentosAtuais || prev?.medicamentos_em_uso,
-                      medicamentosAtuais: d.medicamentos_atuais || d.medicamentosAtuais || prev?.medicamentosAtuais
-                    }));
-                  }
-                }
-
-                // Fallback direto no Supabase agendamentos caso a API local não tenha os dados mais recentes
-                if (appointmentId && appointmentId !== '1') {
-                  const { data: agData } = await supabase.from('agendamentos').select('*').eq('id', appointmentId).limit(1);
-                  if (agData && agData.length > 0) {
-                    const ag = agData[0];
-                    const agDob = ag.data_nascimento || ag.paciente_data_nascimento;
-                    if (agDob) {
-                      setSelectedPatientDob(agDob);
-                      setCurrentRecord((prev: any) => ({
-                        ...prev,
-                        paciente_data_nascimento: agDob,
-                        data_nascimento: agDob
-                      }));
-                    }
-                    if (ag.paciente_cpf) {
-                      setSelectedPatientCpf(ag.paciente_cpf);
-                      setCurrentRecord((prev: any) => ({
-                        ...prev,
-                        paciente_cpf: ag.paciente_cpf
-                      }));
-                    }
-                  }
-                }
-              } catch (asyncErr) {
-                console.warn("Erro ao buscar dados remotos de anamnese:", asyncErr);
-              }
-            }} />
-        ) : showMessageHistory ? (
-          <motion.div 
-            key="message-history"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-          >
-            <MessageHistory 
-              initialPhone={preselectedChatPhone}
-              onSchedule={(name, phone) => {
-                setPrefillPatient({name, phone});
-                setShowAgenda(true);
-                setShowDashboard(false);
-                setShowMessageHistory(false);
-                setPreselectedChatPhone(null);
-              }} 
-            />
-          </motion.div>
-        ) : showHistory ? (
-              <motion.div 
-                key="history"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="space-y-6"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-clinical-border shadow-sm">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Histórico de Atendimentos</h2>
-                    <p className="text-slate-500 text-sm">Gerencie, filtre e visualize os prontuários por profissional e especialidade.</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input 
-                        type="text"
-                        placeholder="Buscar por nome, CPF, nascimento..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-clinical-blue/20 focus:border-clinical-blue w-full sm:w-64 transition-all"
-                      />
-                    </div>
-                    <button 
-                      onClick={exportToCSV}
-                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-semibold transition-all shadow-xs active:scale-98"
-                      title="Exportar prontuários filtrados em planilha CSV"
-                    >
-                      <Download size={15} className="text-slate-500" />
-                      <span>Exportar CSV</span>
-                    </button>
-                    <label 
-                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-98"
-                      title="Importar lista de pacientes a partir de planilha Excel (.csv)"
-                    >
-                      <UploadCloud size={15} className="text-slate-500" />
-                      <span>Importar Planilha (CSV)</span>
-                      <input 
-                        type="file" 
-                        accept=".csv,.txt" 
-                        className="hidden" 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            try {
-                              const content = event.target?.result as string;
-                              const updated = importLocalDataCSV(content);
-                              setHistory(updated);
-                              toast.success(`Planilha importada com sucesso! ${updated.length} prontuários no sistema.`);
-                            } catch (err) {
-                              toast.error("Erro ao importar a planilha CSV. Verifique o formato.");
-                            }
-                          };
-                          reader.readAsText(file, 'ISO-8859-1');
-                        }}
-                      />
-                    </label>
-                    <label 
-                      className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-semibold transition-all cursor-pointer shadow-xs active:scale-98"
-                      title="Restaurar backup completo em formato JSON"
-                    >
-                      <Save size={15} className="text-slate-500" />
-                      <span>Importar Backup (JSON)</span>
-                      <input 
-                        type="file" 
-                        accept=".json" 
-                        className="hidden" 
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            try {
-                              const content = event.target?.result as string;
-                              const updated = importLocalDataJSON(content);
-                              setHistory(updated);
-                              toast.success("Backup JSON importado com sucesso!");
-                            } catch (err) {
-                              toast.error("Erro ao importar o arquivo JSON de backup.");
-                            }
-                          };
-                          reader.readAsText(file);
-                        }}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {/* Filtros por Especialidade e Profissional */}
-                {isMasterAdmin ? (
-                  <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/70">
-                    <button
-                      onClick={() => setHistoryDoctorFilter('all')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                        historyDoctorFilter === 'all'
-                          ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                      }`}
-                    >
-                      <span>📋 Todos os Prontuários</span>
-                      <span className="bg-slate-200/80 text-slate-700 text-[10px] px-2 py-0.5 rounded-full font-extrabold">
-                        {history.length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setHistoryDoctorFilter('dra_lucy')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                        historyDoctorFilter === 'dra_lucy'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                      }`}
-                    >
-                      <span>🦷 Dra. Lucy Murata (Odontologia Biológica)</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
-                        historyDoctorFilter === 'dra_lucy' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        {history.filter(r => {
-                          const d = detectRecordSpecialtyAndDoctor(r);
-                          return d.isDental;
-                        }).length}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => setHistoryDoctorFilter('dr_carlos')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                        historyDoctorFilter === 'dr_carlos'
-                          ? 'bg-purple-600 text-white shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
-                      }`}
-                    >
-                      <span>🧠 Dr. Carlos Morato (Neurologia & Integrativa)</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
-                        historyDoctorFilter === 'dr_carlos' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                      }`}>
-                        {history.filter(r => {
-                          const d = detectRecordSpecialtyAndDoctor(r);
-                          return d.isNeuro || d.isIntegrative;
-                        }).length}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    {currentDoctorKey === 'dra_lucy' ? (
-                      <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-blue-50 border border-blue-200/80 rounded-2xl text-xs font-bold text-blue-900 shadow-2xs">
-                        <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                        <span>🦷 Prontuários: <strong>Dra. Lucy Morata (Odontologia Biológica)</strong></span>
-                        <span className="bg-blue-200/80 text-blue-900 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold ml-1">
-                          {history.filter(r => detectRecordSpecialtyAndDoctor(r).isDental).length} atendimentos
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="inline-flex items-center gap-2.5 px-4 py-2 bg-purple-50 border border-purple-200/80 rounded-2xl text-xs font-bold text-purple-900 shadow-2xs">
-                        <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
-                        <span>🧠 Prontuários: <strong>Dr. Carlos Morato (Neurologia & Integrativa)</strong></span>
-                        <span className="bg-purple-200/80 text-purple-900 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold ml-1">
-                          {history.filter(r => {
-                            const d = detectRecordSpecialtyAndDoctor(r);
-                            return d.isNeuro || d.isIntegrative;
-                          }).length} atendimentos
-                        </span>
-                      </div>
-                    )}
-                  </div>
+            <div className="md:col-span-4">
+              <label className="text-[11px] font-semibold text-slate-600 flex items-center justify-between mb-1">
+                <span className="flex items-center gap-1">
+                  <Calendar size={12} />
+                  <span>Nascimento</span>
+                </span>
+                {calculatedAge !== null && (
+                  <span className="font-mono tabular-nums text-sky-700 font-bold">
+                    {calculatedAge} anos
+                  </span>
                 )}
+              </label>
+              <input
+                type="date"
+                value={patientDob}
+                onChange={(e) => setPatientDob(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums focus:ring-2 focus:ring-sky-500 focus:outline-none"
+              />
+            </div>
 
-                <div className="grid gap-4">
-                  {(() => {
-                    const cleanTerm = searchTerm.toLowerCase().trim();
-                    const cleanDigits = cleanTerm.replace(/\D/g, '');
-                    const activeFilter = isMasterAdmin ? historyDoctorFilter : (currentDoctorKey || 'all');
-                    const filtered = history.filter((record) => {
-                      // Filtro por profissional / especialidade
-                      const detected = detectRecordSpecialtyAndDoctor(record);
-                      if (activeFilter === 'dra_lucy' && !detected.isDental) return false;
-                      if (activeFilter === 'dr_carlos' && !(detected.isNeuro || detected.isIntegrative)) return false;
-                      if (activeFilter === 'offline' && !(record.is_offline_pending || record.offline_id)) return false;
+            <div className="md:col-span-3">
+              <label className="text-[11px] font-semibold text-slate-600 flex items-center gap-1 mb-1">
+                <Phone size={12} />
+                <span>WhatsApp (Opcional)</span>
+              </label>
+              <input
+                type="text"
+                value={patientPhone}
+                onChange={(e) => setPatientPhone(e.target.value)}
+                placeholder="(11) 99999-9999"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums focus:ring-2 focus:ring-sky-500 focus:outline-none"
+              />
+            </div>
+          </div>
 
-                      if (!cleanTerm) return true;
-                      const nameMatch = record.paciente_nome_completo?.toLowerCase().includes(cleanTerm);
-                      const cpfMatch = (cleanDigits.length > 0 && record.paciente_cpf?.replace(/\D/g, '').includes(cleanDigits)) || record.paciente_cpf?.toLowerCase().includes(cleanTerm);
-                      const dobMatch = record.paciente_data_nascimento?.includes(cleanTerm);
-                      const phoneMatch = record.paciente_telefone?.includes(cleanTerm);
-                      const specMatch = record.especialidade?.toLowerCase().includes(cleanTerm);
-                      const dateMatch = record.data_consulta?.includes(cleanTerm) || record.created_at?.includes(cleanTerm);
-                      return nameMatch || cpfMatch || dobMatch || phoneMatch || specMatch || dateMatch;
-                    });
+          {/* Copiloto Clínico por Voz ou Texto */}
+          <div className="bg-slate-50 rounded-xl border border-slate-200 p-3.5 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Sparkles size={14} className="text-sky-600" />
+                <span>Copiloto Clínico IA (Dite ou digite o resumo da consulta para preencher automaticamente)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors whitespace-nowrap',
+                    isRecording
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                  )}
+                >
+                  {isRecording ? <Square size={12} /> : <Mic size={13} />}
+                  <span>{isRecording ? 'Parar Ditado' : 'Ditar por Voz'}</span>
+                </button>
 
-                    if (filtered.length === 0) {
-                      return (
-                        <div className="text-center py-12 bg-white rounded-3xl border border-clinical-border">
-                          <FileText size={48} className="mx-auto text-slate-300 mb-3" />
-                          <p className="text-slate-500 font-medium">Nenhum prontuário encontrado.</p>
-                        </div>
-                      );
-                    }
+                <button
+                  type="button"
+                  onClick={handleAnalyzeWithAi}
+                  disabled={isProcessingAi || !clinicalInput.trim()}
+                  className="px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  {isProcessingAi ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  <span>{isProcessingAi ? 'Estruturando...' : 'Estruturar com IA'}</span>
+                </button>
+              </div>
+            </div>
 
-                    return filtered.map((record) => {
-                      const detected = detectRecordSpecialtyAndDoctor(record);
+            <textarea
+              rows={2}
+              value={clinicalInput}
+              onChange={(e) => setClinicalInput(e.target.value)}
+              placeholder={
+                activeSpecialty === 'biological_dentistry'
+                  ? 'Ex: Paciente com amálgamas extensos nos dentes 16 e 46 para protocolo SMART, indicação de implante zircônia no 36 e foco cavitacional NICO no 38...'
+                  : activeSpecialty === 'nutrology'
+                  ? 'Ex: Queixa de fadiga vespertina, peso 78kg, altura 1,72m, gordura 26%, insulina basal 14, vitamina D 23. Prescrever D3 10.000 UI, Berberina 500mg...'
+                  : 'Ex: Fototipo III, melasma misto em região malar bilateral há 3 anos, iniciar rotina com protetor com cor FPS 60, ácido tranexâmico noturno e Polypodium oral...'
+              }
+              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"
+            />
 
-                      return (
-                      <motion.div 
-                        key={record.id}
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="bg-white p-6 rounded-3xl border border-clinical-border shadow-sm hover:shadow-md transition-all group"
-                      >
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                          <div className="flex items-start gap-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-colors ${
-                              detected.isDental 
-                                ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white' 
-                                : 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'
-                            }`}>
-                              {detected.isDental ? '🦷' : '🧠'}
-                            </div>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2 mb-1">
-                                <h3 className="font-bold text-slate-800">{record.paciente_nome_completo}</h3>
-                                <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold border", getStatusColor(record.paciente_status))}>
-                                  {record.paciente_status}
-                                </span>
-                                {detected.isDental ? (
-                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-blue-200 bg-blue-50 text-blue-700">
-                                    🦷 DRA. LUCY • ODONTOLOGIA BIOLÓGICA
-                                  </span>
-                                ) : detected.isIntegrative ? (
-                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-sky-200 bg-sky-50 text-sky-700">
-                                    🌿 DR. CARLOS • INTEGRATIVA
-                                  </span>
-                                ) : (
-                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border border-purple-200 bg-purple-50 text-purple-700">
-                                    🧠 DR. CARLOS • NEUROLOGIA
-                                  </span>
-                                )}
-                                {(record.is_offline_pending || record.offline_id) && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-amber-300 bg-amber-100 text-amber-800 flex items-center gap-1">
-                                    💻 SALVO NO PC (OFFLINE)
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
-                                <span className="flex items-center gap-1.5">
-                                  <Calendar size={14} className="text-slate-300" />
-                                  {formatDateBR(record.data_consulta || record.created_at)}
-                                </span>
-                                {record.paciente_cpf && (
-                                  <span className="flex items-center gap-1.5">
-                                    <User size={14} className="text-slate-300" />
-                                    CPF: {record.paciente_cpf}
-                                  </span>
-                                )}
-                                <span className="flex items-center gap-1.5">
-                                  <Activity size={14} className="text-slate-300" />
-                                  {record.especialidade || detected.specialtyLabel}
-                                </span>
-                                <span className="flex items-center gap-1.5 font-semibold text-slate-700">
-                                  <Stethoscope size={14} className="text-slate-400" />
-                                  {record.profissional_responsavel || detected.doctorName}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 self-end md:self-center">
-                            <button 
-                              onClick={() => {
-                                if (record.paciente_telefone) {
-                                  setPreselectedChatPhone(record.paciente_telefone);
-                                  setShowMessageHistory(true);
-                                  setShowHistory(false);
-                                  setShowDashboard(false);
-                                } else {
-                                  toast.error("Paciente sem telefone cadastrado.");
-                                }
-                              }}
-                              className="p-2.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
-                              title="Enviar Mensagem"
-                            >
-                              <MessageSquare size={20} />
-                            </button>
-                            <button 
-                              onClick={() => {
-                                const detected = detectRecordSpecialtyAndDoctor(record);
-                                const sanitizedRecord = {
-                                  ...record,
-                                  checklist_integrativo: record.checklist_integrativo ? {
-                                    ...initialIntegrativeData,
-                                    ...record.checklist_integrativo
-                                  } : undefined,
-                                  mapeamento_corporal: (record.mapeamento_corporal && record.mapeamento_corporal.length > 0)
-                                    ? record.mapeamento_corporal 
-                                    : (record.dados_especialidade?.mapeamento_corporal || []),
-                                  vitals: record.vitals || record.dados_especialidade?.vitals || undefined,
-                                };
-
-                                setCurrentRecord(sanitizedRecord);
-                                setShowHistory(false);
-                                setShowDashboard(false);
-
-                                if (detected.isDental) {
-                                  setExamMode('biological_dentistry');
-                                  toast.success('Prontuário Odontológico carregado • Dra. Lucy Murata');
-                                } else if (detected.isNeuro) {
-                                  setExamMode('neurological');
-                                  toast.success('Prontuário Neurológico carregado • Dr. Carlos Morato');
-                                } else if (detected.isIntegrative) {
-                                  setExamMode('integrative');
-                                  toast.success('Prontuário Integrativo carregado • Dr. Carlos Morato');
-                                } else {
-                                  setExamMode(detected.mode);
-                                  toast.success(`Prontuário carregado • ${detected.doctorName}`);
-                                }
-                              }}
-                              className="p-2.5 text-slate-400 hover:text-clinical-blue hover:bg-clinical-blue/5 rounded-xl transition-all"
-                              title="Visualizar e Editar no Prontuário"
-                            >
-                              <Eye size={20} />
-                            </button>
-                            <button 
-                              onClick={() => generatePDF(record)}
-                              className="p-2.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl transition-all"
-                              title="Baixar PDF"
-                            >
-                              <Download size={20} />
-                            </button>
-                            <button 
-                              onClick={() => generateCSV(record)}
-                              className="p-2.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
-                              title="Baixar CSV"
-                            >
-                              <FileText size={20} />
-                            </button>
-                            <button 
-                              onClick={(e) => handleDelete(record.id!, e)}
-                              className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                              title="Excluir"
-                            >
-                              <Trash2 size={20} />
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                    });
-                  })()}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="default"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="space-y-8"
-              >
-                <PatientDossierView
-                  patientName={selectedPatient || currentRecord?.paciente_nome_completo || (currentRecord as any)?.paciente_nome || ''}
-                  patientPhone={selectedPatientPhone || currentRecord?.paciente_telefone || ''}
-                  patientCpf={currentRecord?.paciente_cpf || selectedPatientCpf || ''}
-                  patientDob={currentRecord?.paciente_data_nascimento || (currentRecord as any)?.data_nascimento || selectedPatientDob || ''}
-                  patientStatus={currentRecord?.paciente_status || 'Estável'}
-                  convenio={selectedPatientConvenio || (currentRecord as any)?.convenio || 'Particular'}
-                  statusPagamento={selectedPatientStatusPagamento || (currentRecord as any)?.status_pagamento || ''}
-                  valorConsulta={selectedPatientValorConsulta || (currentRecord as any)?.valor_consulta || ''}
-                  currentRecord={currentRecord}
-                  history={history}
-                  examMode={examMode}
-                  setExamMode={setExamMode}
-                  isRecording={isRecording}
-                  recordingMode={recordingMode}
-                  setRecordingMode={setRecordingMode}
-                  recordingDuration={recordingDuration}
-                  pendingDraft={pendingDraft}
-                  onRestoreDraft={(draft) => handleAudioProcess(draft.transcript)}
-                  onDiscardDraft={() => {
-                    try {
-                      localStorage.removeItem('ambulatorio_draft_consultation');
-                      setPendingDraft(null);
-                      toast('Rascunho de consulta descartado.');
-                    } catch (e) {}
-                  }}
-                  startRecording={startRecording}
-                  stopRecording={stopRecording}
-                  isProcessing={isProcessing}
-                  liveTranscript={liveTranscript}
-                  onSaveRecord={saveRecord}
-                  isSaving={isSaving}
-                  saveSuccess={saveSuccess}
-                  onOpenChat={(phone) => {
-                    setPreselectedChatPhone(phone);
-                    navigateToTab('mensagens');
-                  }}
-                  onGeneratePDF={(rec) => generatePDF(rec)}
-                  onGenerateAtestadoPDF={() => {
-                    if (currentRecord) generatePDF(currentRecord);
-                    else toast.success('Atestado Médico emitido em PDF com sucesso!');
-                  }}
-                  onGenerateReceitaPDF={(recOverride, sendToWhatsApp = false) => {
-                    const recToUse = recOverride || currentRecord;
-                    if (recToUse) {
-                      generatePrescriptionPDF(recToUse, sendToWhatsApp);
-                    } else {
-                      toast.error('Nenhum registro selecionado para emissão do receituário.');
-                    }
-                  }}
-                  onClose={() => {
-                    setSelectedPatient(null);
-                    setCurrentRecord(null);
-                    navigateToTab('dashboard');
-                  }}
-                  setCurrentRecord={setCurrentRecord}
-                  specialtyData={specialtyData}
-                  setSpecialtyData={setSpecialtyData}
-                  integrativeData={integrativeData}
-                  setIntegrativeData={setIntegrativeData}
-                  currentUser={user}
-                  onDeleteRecord={(recId, e) => handleDelete(recId, e)}
-                />
-
-
-              </motion.div>
+            {clinicalSummary && (
+              <div className="p-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 leading-relaxed">
+                <span className="font-bold text-slate-900">Síntese Estruturada: </span>
+                {clinicalSummary}
+              </div>
             )}
-          </AnimatePresence>
+          </div>
+        </section>
+
+        {/* MÓDULO ATIVO POR ESPECIALIDADE */}
+        {activeSpecialty === 'biological_dentistry' && (
+          <div className="space-y-6">
+            <PatientMediaGallery
+              patientName={patientName || 'Paciente Demonstração'}
+              initialOdontogram={dentalData.odontograma}
+              onOdontogramChange={handleOdontogramUpdateFromGallery}
+              hideEmbeddedOdontogram={true}
+            />
+            <BiologicalDentistryForm
+              data={dentalData}
+              onChange={setDentalData}
+              patientName={patientName}
+              patientPhone={patientPhone}
+              patientDob={patientDob}
+              clinicInfo={{
+                name: brand.clinicName,
+                address: brand.address,
+                phone: brand.phone
+              }}
+            />
+          </div>
+        )}
+
+        {activeSpecialty === 'nutrology' && (
+          <NutrologyModule
+            data={nutrologyData}
+            onChange={setNutrologyData}
+            patientName={patientName}
+          />
+        )}
+
+        {activeSpecialty === 'dermatology' && (
+          <DermatologyModule
+            data={dermatologyData}
+            onChange={setDermatologyData}
+            patientName={patientName}
+          />
         )}
       </main>
 
-      <footer className="p-8 text-center text-slate-400 text-[10px] uppercase tracking-widest font-bold">
-        © 2026 Ambulatório IA • Tecnologia para Saúde Voluntária
-      </footer>
+      {/* Modal Minha Clínica (Personalização White-Label para demonstrações e uso real) */}
+      {showBrandModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Personalizar Marca da Clínica</h3>
+                <p className="text-xs text-slate-500">
+                  Os dados abaixo aparecem automaticamente no topo do sistema e nos laudos em PDF.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBrandModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-      <Toaster position="top-right" />
-      </div>
+            <form onSubmit={handleSaveBrand} className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">Nome da Clínica / Studio</label>
+                <input
+                  type="text"
+                  value={draftBrand.clinicName}
+                  onChange={(e) => setDraftBrand({ ...draftBrand, clinicName: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Nome do Profissional</label>
+                  <input
+                    type="text"
+                    value={draftBrand.professionalName}
+                    onChange={(e) => setDraftBrand({ ...draftBrand, professionalName: e.target.value })}
+                    placeholder="Ex: Dr. João Mendes"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Conselho (CRM / CRO)</label>
+                  <input
+                    type="text"
+                    value={draftBrand.councilBadge}
+                    onChange={(e) => setDraftBrand({ ...draftBrand, councilBadge: e.target.value })}
+                    placeholder="Ex: CRO-SP 12345"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Telefone / WhatsApp</label>
+                  <input
+                    type="text"
+                    value={draftBrand.phone}
+                    onChange={(e) => setDraftBrand({ ...draftBrand, phone: e.target.value })}
+                    placeholder="(11) 99999-9999"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">Endereço</label>
+                  <input
+                    type="text"
+                    value={draftBrand.address}
+                    onChange={(e) => setDraftBrand({ ...draftBrand, address: e.target.value })}
+                    placeholder="Rua / Consultório / Cidade"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowBrandModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check size={14} />
+                  <span>Salvar Marca</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

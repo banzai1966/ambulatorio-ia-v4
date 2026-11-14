@@ -613,6 +613,7 @@ export default function InteractiveOdontogram({
   const [selectedToothNum, setSelectedToothNum] = useState<number | null>(16);
   const [filterStatus, setFilterStatus] = useState<ToothStatus | 'all'>('all');
   const [showPanoramicBanner, setShowPanoramicBanner] = useState<boolean>(true);
+  const [confirmReset, setConfirmReset] = useState<boolean>(false);
 
   const teethRecords = data.teeth || {};
 
@@ -744,7 +745,7 @@ export default function InteractiveOdontogram({
                 Odontograma Anatômico Digital & Relação Sistêmica (FDI 11 a 48)
               </h3>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 uppercase tracking-wide">
-                Dra. Lucy &bull; Odontologia Biológica
+                Odontologia Biológica &bull; Notação FDI
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -773,19 +774,38 @@ export default function InteractiveOdontogram({
           </div>
 
           {!readOnly && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('Deseja redefinir todos os dentes para Saudável/Hígido?')) {
-                  onChange({ ...data, teeth: {} });
-                }
-              }}
-              className="px-2.5 py-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
-              title="Redefinir odontograma"
-            >
-              <RotateCcw size={12} />
-              <span>Limpar</span>
-            </button>
+            confirmReset ? (
+              <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 px-2 py-1 rounded-xl">
+                <span className="text-[11px] font-bold text-rose-700 mr-1">Redefinir tudo?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange({ ...data, teeth: {} });
+                    setConfirmReset(false);
+                  }}
+                  className="px-2 py-0.5 bg-rose-600 text-white rounded-lg text-[11px] font-bold hover:bg-rose-700 cursor-pointer"
+                >
+                  Sim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="px-2 py-0.5 bg-white text-slate-600 border border-slate-200 rounded-lg text-[11px] font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Não
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmReset(true)}
+                className="px-2.5 py-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
+                title="Redefinir odontograma"
+              >
+                <RotateCcw size={12} />
+                <span>Limpar</span>
+              </button>
+            )
           )}
         </div>
       </div>
