@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
   Upload,
@@ -18,7 +18,10 @@ import {
   Pill,
   Zap,
   Crosshair,
-  RotateCcw
+  RotateCcw,
+  SplitSquareHorizontal,
+  Layers,
+  Check
 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -185,14 +188,97 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
   const [newMarkerCategory, setNewMarkerCategory] = useState<DermaCategory>('melasma');
   const [zoom, setZoom] = useState(1);
   const [highContrastMode, setHighContrastMode] = useState(false);
+  const [opticalMode, setOpticalMode] = useState<'natural' | 'melanin' | 'vascular' | 'texture'>('natural');
+  const [opticalUrl, setOpticalUrl] = useState<string | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareAfterUrl, setCompareAfterUrl] = useState<string | null>(null);
+  const [splitPos, setSplitPos] = useState(50);
+  const [selectedPackages, setSelectedPackages] = useState<string[]>([
+    '3x Laser Lavieen (Uniformização)',
+    'Protocolo In & Out Clareador (60 dias)'
+  ]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [demoCleared, setDemoCleared] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const compareInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
   const area = data.area_avaliada || 'face';
   const effectiveImageUrl = data.imageUrl || (!demoCleared ? dermaSampleImg : undefined);
+
+  // Processador óptico em tempo real no navegador (Custo R$ 0 de IA):
+  // Mapa de Melanina (pigmento marrom), Mapa Vascular (hemoglobina/eritema) e Relevo/Textura
+  useEffect(() => {
+    if (!effectiveImageUrl || opticalMode === 'natural') {
+      setOpticalUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = effectiveImageUrl;
+    img.onload = () => {
+      if (cancelled) return;
+      const w = Math.min(720, img.naturalWidth || 720);
+      const scale = w / (img.naturalWidth || w);
+      const h = Math.max(1, Math.round((img.naturalHeight || 540) * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        const frame = ctx.getImageData(0, 0, w, h);
+        const px = frame.data;
+
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i];
+          const g = px[i + 1];
+          const b = px[i + 2];
+
+          if (opticalMode === 'melanin') {
+            // Índice de melanina / contraste marrom-UV simulado
+            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+            const pigmentSignal = Math.max(0, 255 - luma + (r - b) * 0.45);
+            const intensity = Math.min(255, Math.pow(pigmentSignal / 255, 1.35) * 255);
+            px[i] = Math.min(255, 255 - intensity * 0.35);
+            px[i + 1] = Math.max(0, 240 - intensity * 0.78);
+            px[i + 2] = Math.max(0, 220 - intensity * 0.95);
+          } else if (opticalMode === 'vascular') {
+            // Índice de eritema / hemoglobina (R excessivo sobre G e B)
+            const erythema = Math.max(0, r - 0.55 * g - 0.35 * b);
+            const boost = Math.min(255, erythema * 3.1);
+            const gray = 0.3 * r + 0.59 * g + 0.11 * b;
+            px[i] = Math.min(255, gray * 0.45 + boost * 0.95);
+            px[i + 1] = Math.max(0, gray * 0.42 - boost * 0.25);
+            px[i + 2] = Math.max(0, gray * 0.48 - boost * 0.2);
+          } else if (opticalMode === 'texture') {
+            // Relevo e microtextura epidérmica monocromática de alto contraste
+            const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+            const stretched = Math.min(255, Math.max(0, (luma - 110) * 1.65 + 120));
+            px[i] = stretched * 0.9;
+            px[i + 1] = Math.min(255, stretched * 1.02);
+            px[i + 2] = Math.min(255, stretched * 1.08);
+          }
+        }
+
+        ctx.putImageData(frame, 0, 0);
+        if (!cancelled) {
+          setOpticalUrl(canvas.toDataURL('image/jpeg', 0.9));
+        }
+      } catch {
+        if (!cancelled) setOpticalUrl(null);
+      }
+    };
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveImageUrl, opticalMode]);
   const zones =
     data.detectedZones && data.detectedZones.length > 0
       ? data.detectedZones
@@ -536,7 +622,48 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
           </div>
 
           {effectiveImageUrl && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Mapas Ópticos de Pele em Tempo Real (Custo R$ 0) */}
+              <div className="flex items-center p-0.5 bg-slate-900 rounded-xl border border-slate-700">
+                {[
+                  { id: 'natural', label: 'Natural' },
+                  { id: 'melanin', label: 'Mapa Melanina' },
+                  { id: 'vascular', label: 'Mapa Vascular' },
+                  { id: 'texture', label: 'Relevo/Poros' }
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setCompareMode(false);
+                      setOpticalMode(m.id as any);
+                    }}
+                    className={cn(
+                      'px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap',
+                      !compareMode && opticalMode === m.id
+                        ? 'bg-rose-600 text-white'
+                        : 'text-slate-300 hover:text-white'
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCompareMode(!compareMode)}
+                className={cn(
+                  'px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border cursor-pointer whitespace-nowrap',
+                  compareMode
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+                    : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                )}
+              >
+                <SplitSquareHorizontal size={13} />
+                <span>Cortina Antes/Depois</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))))}
@@ -568,13 +695,15 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
                 title="Realce de Contraste Pigmento / Vascular"
               >
                 <Contrast size={13} />
-                <span>Realce Pigmento</span>
+                <span>Realce</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
                   setZoom(1);
                   setHighContrastMode(false);
+                  setOpticalMode('natural');
+                  setCompareMode(false);
                 }}
                 className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 cursor-pointer"
                 title="Resetar visualização"
@@ -595,29 +724,115 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
 
         {effectiveImageUrl ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            {/* Viewport da Foto com Overlays */}
-            <div className="lg:col-span-7 bg-black rounded-xl border border-slate-800 p-3 flex items-center justify-center overflow-auto max-h-[500px]">
-              <div
-                onClick={handleImageClick}
-                style={{
-                  transform: `scale(${zoom})`,
-                  transformOrigin: 'center center'
-                }}
-                className={cn(
-                  'relative inline-block transition-transform duration-150',
-                  isAddingMarker ? 'cursor-crosshair' : 'cursor-default'
-                )}
-              >
-                <img
-                  ref={imageRef}
-                  src={effectiveImageUrl}
-                  alt="Avaliação Dermatológica"
-                  className="max-h-[450px] w-auto object-contain rounded-lg block"
+            {/* Viewport da Foto com Overlays / Cortina Antes & Depois */}
+            <div className="lg:col-span-7 bg-black rounded-xl border border-slate-800 p-3 flex flex-col items-center justify-center overflow-auto max-h-[540px] space-y-3">
+              {compareMode ? (
+                <div className="w-full space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <span className="text-amber-300 font-semibold">
+                      Arraste o controle abaixo para comparar Antes vs. Evolução na TV
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={compareInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          const rd = new FileReader();
+                          rd.onload = (ev) => setCompareAfterUrl(ev.target?.result as string);
+                          rd.readAsDataURL(f);
+                          e.target.value = '';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => compareInputRef.current?.click()}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-lg font-semibold cursor-pointer"
+                      >
+                        Subir Foto "Depois" Real
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative mx-auto max-w-full w-fit overflow-hidden rounded-lg border border-slate-800 select-none">
+                    <img
+                      src={effectiveImageUrl}
+                      alt="Antes"
+                      className="max-h-[410px] w-auto object-contain block"
+                    />
+                    <div
+                      className="absolute inset-0 overflow-hidden"
+                      style={{ clipPath: `inset(0 ${100 - splitPos}% 0 0)` }}
+                    >
+                      <img
+                        src={compareAfterUrl || effectiveImageUrl}
+                        alt="Depois"
+                        className="max-h-[410px] w-auto object-contain block"
+                        style={
+                          compareAfterUrl
+                            ? undefined
+                            : { filter: 'brightness(1.08) contrast(0.95) saturate(0.88)' }
+                        }
+                      />
+                    </div>
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-white shadow-[0_0_8px_rgba(0,0,0,0.8)] pointer-events-none"
+                      style={{ left: `${splitPos}%` }}
+                    >
+                      <span className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white text-slate-950 flex items-center justify-center text-[10px] font-bold shadow-lg">
+                        ↔
+                      </span>
+                    </div>
+                    <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/70 text-white text-[10px] font-bold rounded">
+                      {compareAfterUrl ? 'DEPOIS (RETORNO)' : 'SIMULAÇÃO DE CLAREAMENTO'}
+                    </span>
+                    <span className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 text-slate-200 text-[10px] font-bold rounded">
+                      ANTES (DIA 1)
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={95}
+                    value={splitPos}
+                    onChange={(e) => setSplitPos(Number(e.target.value))}
+                    className="w-full accent-rose-500 cursor-pointer"
+                  />
+                </div>
+              ) : (
+                <div
+                  onClick={handleImageClick}
                   style={{
-                    filter: highContrastMode ? 'contrast(1.45) saturate(1.35)' : 'none'
+                    transform: `scale(${zoom})`,
+                    transformOrigin: 'center center'
                   }}
-                />
-                {showOverlays &&
+                  className={cn(
+                    'relative inline-block transition-transform duration-150',
+                    isAddingMarker ? 'cursor-crosshair' : 'cursor-default'
+                  )}
+                >
+                  <img
+                    ref={imageRef}
+                    src={opticalUrl || effectiveImageUrl}
+                    alt="Avaliação Dermatológica"
+                    className="max-h-[450px] w-auto object-contain rounded-lg block"
+                    style={{
+                      filter: highContrastMode ? 'contrast(1.45) saturate(1.35)' : 'none'
+                    }}
+                  />
+                  {opticalMode !== 'natural' && (
+                    <span className="absolute top-2 left-2 px-2 py-0.5 bg-slate-950/85 border border-rose-500/40 text-rose-300 rounded text-[10px] font-bold">
+                      {opticalMode === 'melanin'
+                        ? 'Filtro Óptico: Mapa de Melanina'
+                        : opticalMode === 'vascular'
+                        ? 'Filtro Óptico: Mapa Vascular / Eritema'
+                        : 'Filtro Óptico: Relevo & Poros'}
+                    </span>
+                  )}
+                {!compareMode &&
+                  showOverlays &&
                   zones.map((z) => {
                     const [ymin, xmin, ymax, xmax] = z.box_2d;
                     const st = CATEGORY_STYLE[z.category] || CATEGORY_STYLE.melasma;
@@ -652,6 +867,7 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
                     );
                   })}
               </div>
+              )}
             </div>
 
             {/* Painel Lateral de Diagnóstico Visual */}
@@ -831,6 +1047,59 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* MONTADOR VISUAL DE SESSÕES / PLANO DE TRATAMENTO NA TV */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Layers size={16} className="text-rose-600" />
+              <span>Montador Rápido de Plano & Sessões (Apresentação ao Paciente)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Marque os protocolos indicados para preencher o plano clínico e exportar direto para PDF e WhatsApp.
+            </p>
+          </div>
+          <span className="text-xs font-mono font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg">
+            {selectedPackages.length} protocolo(s) selecionado(s)
+          </span>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            '3x Laser Lavieen (Uniformização)',
+            '3x Microagulhamento + Drug Delivery',
+            'Peeling Químico Clareador',
+            'Bioestimulador de Colágeno',
+            '4x MMP Capilar + LED Terapia',
+            'Protocolo In & Out Clareador (60 dias)'
+          ].map((pkg) => {
+            const active = selectedPackages.includes(pkg);
+            return (
+              <button
+                key={pkg}
+                type="button"
+                onClick={() => {
+                  const next = active
+                    ? selectedPackages.filter((x) => x !== pkg)
+                    : [...selectedPackages, pkg];
+                  setSelectedPackages(next);
+                  update({ procedimentos_consultorio: next.join('\n') });
+                }}
+                className={cn(
+                  'px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 cursor-pointer transition-colors',
+                  active
+                    ? 'bg-rose-600 text-white border-rose-700'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                )}
+              >
+                {active && <Check size={12} />}
+                <span>{pkg}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -15,7 +15,12 @@ import {
   Scale,
   Flame,
   Pill,
-  Utensils
+  Utensils,
+  Target,
+  TrendingUp,
+  Sun,
+  Moon,
+  Clock
 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -184,13 +189,6 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
     });
   };
 
-  // Cálculo automático do IMC
-  const pesoNum = parseFloat(String(data.peso_kg || '').replace(',', '.'));
-  const alturaCmNum = parseFloat(String(data.altura_cm || '').replace(',', '.'));
-  const imcValue =
-    pesoNum > 0 && alturaCmNum > 50
-      ? pesoNum / Math.pow(alturaCmNum / 100, 2)
-      : null;
 
   const getImcClassification = (imc: number) => {
     if (imc < 18.5) return { label: 'Abaixo do peso', tone: 'text-amber-700' };
@@ -385,6 +383,28 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
 
   const lab = data.labAnalysis || (!demoCleared ? DEMO_LAB_RESULT : undefined);
   const isDemoLab = !data.labAnalysis && !demoCleared;
+
+  // Valores efetivos de Bioimpedância (usa demo apenas para apresentação inicial sem sujar dados reais)
+  const effectivePeso = data.peso_kg ?? (isDemoLab ? '78.4' : '');
+  const effectiveAltura = data.altura_cm ?? (isDemoLab ? '172' : '');
+  const effectiveGordura = data.gordura_corporal_pct ?? (isDemoLab ? '26.8' : '');
+  const effectiveMusculo = data.massa_muscular_kg ?? (isDemoLab ? '31.2' : '');
+  const effectiveVisceral = data.gordura_visceral ?? (isDemoLab ? '11' : '');
+  const effectiveTmb = data.tmb_kcal ?? (isDemoLab ? '1640' : '');
+  const effectiveCintura = data.circunferencia_abdominal_cm ?? (isDemoLab ? '92' : '');
+  const effectiveObjetivo =
+    data.objetivo_principal ?? (isDemoLab ? 'Emagrecimento & Sensibilidade à Insulina' : '');
+  const effectiveSupplements =
+    data.suplementacao_prescrita ?? (isDemoLab ? DEMO_LAB_RESULT.suggestedSupplements.join('\n') : '');
+  const effectiveDiet =
+    data.plano_alimentar_orientacoes ?? (isDemoLab ? DEMO_LAB_RESULT.lifestyleFocus.join('\n') : '');
+
+  const pesoNum = parseFloat(String(effectivePeso).replace(',', '.'));
+  const altM = parseFloat(String(effectiveAltura).replace(',', '.')) / 100;
+  const effectiveImc = !isNaN(pesoNum) && !isNaN(altM) && altM > 0.5 ? pesoNum / (altM * altM) : null;
+  const gorduraNum = parseFloat(String(effectiveGordura).replace(',', '.'));
+  const musculoNum = parseFloat(String(effectiveMusculo).replace(',', '.'));
+  const visceralNum = parseFloat(String(effectiveVisceral).replace(',', '.'));
 
   return (
     <div className="space-y-6">
@@ -628,16 +648,36 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-[11px]">
-                      <div>
-                        <span className="text-slate-400 block">Ref. Laboratório</span>
-                        <span className="font-mono tabular-nums text-slate-300">{item.labRange}</span>
+                    <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                      <div className="flex items-center justify-between text-[10px] font-semibold">
+                        <span className="text-rose-400">Crítico</span>
+                        <span className="text-amber-400">Normal Lab</span>
+                        <span className="text-emerald-400 font-bold">Faixa Ótima</span>
+                        <span className="text-amber-400">Excesso</span>
                       </div>
-                      <div>
-                        <span className="text-emerald-400 block">Faixa Ótima</span>
-                        <span className="font-mono tabular-nums font-semibold text-emerald-300">
-                          {item.optimalRange}
-                        </span>
+                      <div className="relative h-2.5 rounded-full overflow-hidden bg-slate-800 flex">
+                        <div className="w-[22%] bg-rose-500/80" />
+                        <div className="w-[25%] bg-amber-400/80" />
+                        <div className="w-[33%] bg-emerald-500" />
+                        <div className="w-[20%] bg-amber-500/70" />
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white border-2 border-slate-950 shadow-md transition-all"
+                          style={{
+                            left: isCritical ? '13%' : isOptimal ? '63%' : '35%'
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block">Ref. Laboratório</span>
+                          <span className="font-mono tabular-nums text-slate-300">{item.labRange}</span>
+                        </div>
+                        <div>
+                          <span className="text-emerald-400 block">Faixa Ótima</span>
+                          <span className="font-mono tabular-nums font-semibold text-emerald-300">
+                            {item.optimalRange}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -727,11 +767,11 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <Scale size={16} className="text-emerald-600" />
               <span>Bioimpedância & Composição Corporal</span>
             </h3>
-            {imcValue !== null && (
+            {effectiveImc !== null && (
               <div className="text-xs font-mono tabular-nums text-slate-700">
-                IMC: <strong>{imcValue.toFixed(1)}</strong>{' '}
-                <span className={cn('font-sans font-semibold ml-1', getImcClassification(imcValue).tone)}>
-                  ({getImcClassification(imcValue).label})
+                IMC: <strong>{effectiveImc.toFixed(1)}</strong>{' '}
+                <span className={cn('font-sans font-semibold ml-1', getImcClassification(effectiveImc).tone)}>
+                  ({getImcClassification(effectiveImc).label})
                 </span>
               </div>
             )}
@@ -742,7 +782,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">Peso (kg)</label>
               <input
                 type="text"
-                value={data.peso_kg || ''}
+                value={effectivePeso}
                 onChange={(e) => update({ peso_kg: e.target.value })}
                 placeholder="Ex: 78.4"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -752,7 +792,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">Altura (cm)</label>
               <input
                 type="text"
-                value={data.altura_cm || ''}
+                value={effectiveAltura}
                 onChange={(e) => update({ altura_cm: e.target.value })}
                 placeholder="Ex: 172"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -762,7 +802,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">% Gordura Corporal</label>
               <input
                 type="text"
-                value={data.gordura_corporal_pct || ''}
+                value={effectiveGordura}
                 onChange={(e) => update({ gordura_corporal_pct: e.target.value })}
                 placeholder="Ex: 24.5"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -772,7 +812,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">Massa Muscular (kg)</label>
               <input
                 type="text"
-                value={data.massa_muscular_kg || ''}
+                value={effectiveMusculo}
                 onChange={(e) => update({ massa_muscular_kg: e.target.value })}
                 placeholder="Ex: 32.0"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -782,7 +822,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">Gordura Visceral (Nível)</label>
               <input
                 type="text"
-                value={data.gordura_visceral || ''}
+                value={effectiveVisceral}
                 onChange={(e) => update({ gordura_visceral: e.target.value })}
                 placeholder="Ex: 9"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -792,7 +832,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">TMB (kcal/dia)</label>
               <input
                 type="text"
-                value={data.tmb_kcal || ''}
+                value={effectiveTmb}
                 onChange={(e) => update({ tmb_kcal: e.target.value })}
                 placeholder="Ex: 1640"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -805,7 +845,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">Objetivo Nutrológico Principal</label>
               <input
                 type="text"
-                value={data.objetivo_principal || ''}
+                value={effectiveObjetivo}
                 onChange={(e) => update({ objetivo_principal: e.target.value })}
                 placeholder="Ex: Emagrecimento, Hipertrofia, Longevidade..."
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
@@ -815,7 +855,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               <label className="text-[11px] font-semibold text-slate-600 block mb-1">Circunferência Abdominal (cm)</label>
               <input
                 type="text"
-                value={data.circunferencia_abdominal_cm || ''}
+                value={effectiveCintura}
                 onChange={(e) => update({ circunferencia_abdominal_cm: e.target.value })}
                 placeholder="Ex: 90"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono tabular-nums"
@@ -904,6 +944,114 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
         </div>
       </div>
 
+      {/* BLOCO 2.5: PROJEÇÃO DE TRANSFORMAÇÃO 90 DIAS (APRESENTAÇÃO TV) */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Target size={16} className="text-emerald-600" />
+              <span>Projeção de Metas em 90 Dias (Hoje vs. Protocolo 12 Semanas)</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Visão comparativa para apresentar ao paciente o ganho metabólico esperado no acompanhamento trimestral.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold">
+            <TrendingUp size={13} />
+            <span>Meta Score: {lab ? `${Math.min(96, lab.metabolicScore + 22)}/100` : '90/100'}</span>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            {
+              label: 'Peso Corporal',
+              now: !isNaN(pesoNum) ? `${pesoNum.toFixed(1)} kg` : '--',
+              goal: !isNaN(pesoNum) ? `${Math.max(48, pesoNum - 4.5).toFixed(1)} kg` : 'Meta -4 a -6 kg',
+              delta: 'Foco em perda de gordura'
+            },
+            {
+              label: '% Gordura',
+              now: !isNaN(gorduraNum) ? `${gorduraNum.toFixed(1)}%` : '--',
+              goal: !isNaN(gorduraNum) ? `${Math.max(12, gorduraNum - 4.5).toFixed(1)}%` : 'Meta -4% a -5%',
+              delta: 'Preservando massa magra'
+            },
+            {
+              label: 'Massa Muscular',
+              now: !isNaN(musculoNum) ? `${musculoNum.toFixed(1)} kg` : '--',
+              goal: !isNaN(musculoNum) ? `${(musculoNum + 1.6).toFixed(1)} kg` : 'Meta +1,5 kg',
+              delta: 'Estímulo proteico + força'
+            },
+            {
+              label: 'Gordura Visceral',
+              now: !isNaN(visceralNum) ? `Nível ${visceralNum}` : '--',
+              goal: !isNaN(visceralNum) ? `Nível ${Math.max(4, visceralNum - 3)}` : 'Nível <= 7',
+              delta: 'Redução inflamatória'
+            }
+          ].map((card) => (
+            <div key={card.label} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <span className="text-[11px] font-semibold text-slate-500 block">{card.label}</span>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-xs font-mono text-slate-500 line-through">{card.now}</span>
+                <span className="text-base font-mono tabular-nums font-bold text-emerald-700">{card.goal}</span>
+              </div>
+              <span className="text-[11px] text-emerald-700 font-medium block">{card.delta}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* BLOCO 2.8: CRONOGRAMA VISUAL "SEU DIA METABÓLICO" */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Clock size={16} className="text-emerald-600" />
+            <span>Mapa Visual do Dia do Paciente (Adesão Rápida)</span>
+          </h3>
+          <span className="text-[11px] text-slate-500">Organizado por janela de absorção</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            {
+              slot: 'Manhã (Jejum / Café)',
+              icon: <Sun size={14} className="text-amber-500" />,
+              content:
+                effectiveSupplements.split('\n')[2] ||
+                'Metilcobalamina + Metilfolato · 30g de proteína no café + 15 min de luz solar'
+            },
+            {
+              slot: 'Após o Almoço',
+              icon: <Utensils size={14} className="text-emerald-600" />,
+              content:
+                effectiveSupplements.split('\n')[0] ||
+                'Vitamina D3 + K2 (lipossolúvel) · Iniciar refeição por vegetais fibrosos'
+            },
+            {
+              slot: 'Pré-Jantar / Treino',
+              icon: <Flame size={14} className="text-rose-500" />,
+              content:
+                effectiveSupplements.split('\n')[1] ||
+                'Modulação glicêmica (Berberina) + Treino de força 45 min'
+            },
+            {
+              slot: 'Noite (Antes de Dormir)',
+              icon: <Moon size={14} className="text-indigo-500" />,
+              content:
+                effectiveSupplements.split('\n')[3] ||
+                'Magnésio Bisglicinato / Treonato 1h antes de dormir · Reduzir telas'
+            }
+          ].map((block) => (
+            <div key={block.slot} className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                {block.icon}
+                <span>{block.slot}</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">{block.content}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* BLOCO 3: SUPLEMENTAÇÃO & PLANO ALIMENTAR */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-2">
@@ -913,7 +1061,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
           </label>
           <textarea
             rows={5}
-            value={data.suplementacao_prescrita || ''}
+            value={effectiveSupplements}
             onChange={(e) => update({ suplementacao_prescrita: e.target.value })}
             placeholder="Fórmulas manipuladas, vitaminas, aminoácidos e horários..."
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
@@ -927,7 +1075,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
           </label>
           <textarea
             rows={5}
-            value={data.plano_alimentar_orientacoes || ''}
+            value={effectiveDiet}
             onChange={(e) => update({ plano_alimentar_orientacoes: e.target.value })}
             placeholder="Distribuição proteica, ciclo circadiano, intestino, atividade física..."
             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
