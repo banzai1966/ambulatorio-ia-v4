@@ -113,21 +113,108 @@ const FITZPATRICK_SCALE: { grade: 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI'; swatch
   { grade: 'VI', swatch: '#4a2a18', desc: 'Negra' }
 ];
 
+const DEMO_DERMA_ZONES: DermaZone[] = [
+  {
+    id: 'demo_z1',
+    category: 'melasma',
+    box_2d: [430, 270, 560, 440],
+    confidence: 94,
+    patientFriendlyTitle: 'Hiperpigmentação Malar Direita (Melasma)',
+    patientExplanation:
+      'Acúmulo superficial e dérmico de melanina na região da maçã do rosto, sensível à radiação solar e luz visível.',
+    clinicalFinding:
+      'Mácula hipercrômica acastanhada de contornos irregulares em região malar direita compatível com melasma epidérmico/misto.',
+    treatmentOptions: [
+      {
+        name: 'Protocolo Clareador + Antioxidante Oral (In & Out)',
+        benefit: 'Uniformiza o tom da pele reduzindo risco de efeito rebote.',
+        priority: 'Recomendado'
+      },
+      {
+        name: 'Drug Delivery Clareador / Laser Não-Ablativo',
+        benefit: 'Acelera a fragmentação do pigmento e renovação epidérmica.',
+        priority: 'Complementar'
+      }
+    ]
+  },
+  {
+    id: 'demo_z2',
+    category: 'melasma',
+    box_2d: [435, 560, 565, 730],
+    confidence: 92,
+    patientFriendlyTitle: 'Hiperpigmentação Malar Esquerda',
+    patientExplanation:
+      'Distribuição simétrica de pigmento em região zigomática esquerda, comum em fototipos intermediários.',
+    clinicalFinding:
+      'Componente pigmentar simétrico em região malar esquerda com leve contraste sob iluminação direta.',
+    treatmentOptions: [
+      {
+        name: 'Ácido Tranexâmico Tópico + Fotoproteção com Cor',
+        benefit: 'Bloqueia sinalização melanogênica induzida por luz visível.',
+        priority: 'Recomendado'
+      }
+    ]
+  },
+  {
+    id: 'demo_z3',
+    category: 'pores_texture',
+    box_2d: [220, 340, 340, 660],
+    confidence: 88,
+    patientFriendlyTitle: 'Zona Frontal — Textura & Linhas Finas',
+    patientExplanation:
+      'Área com leve perda de viço e microtextura superficial que responde rápido a bioestimulação e hidratação profunda.',
+    clinicalFinding:
+      'Textura epidérmica irregular leve e linhas dinâmicas iniciais em região frontal (Glogau II).',
+    treatmentOptions: [
+      {
+        name: 'Bioestimulador Suave / Skinbooster',
+        benefit: 'Melhora firmeza, hidratação e luminosidade natural.',
+        priority: 'Opcional'
+      }
+    ]
+  }
+];
+
 export default function DermatologyModule({ data, onChange, patientName }: Props) {
   const [viewMode, setViewMode] = useState<'tv' | 'clinical'>('tv');
   const [showOverlays, setShowOverlays] = useState(true);
-  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(
+    () => data.detectedZones?.[0]?.id || DEMO_DERMA_ZONES[0].id
+  );
   const [isAddingMarker, setIsAddingMarker] = useState(false);
   const [newMarkerCategory, setNewMarkerCategory] = useState<DermaCategory>('melasma');
   const [zoom, setZoom] = useState(1);
   const [highContrastMode, setHighContrastMode] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [demoCleared, setDemoCleared] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
   const area = data.area_avaliada || 'face';
-  const zones = data.detectedZones || [];
+  const effectiveImageUrl = data.imageUrl || (!demoCleared ? dermaSampleImg : undefined);
+  const zones =
+    data.detectedZones && data.detectedZones.length > 0
+      ? data.detectedZones
+      : !data.imageUrl && !demoCleared
+      ? DEMO_DERMA_ZONES
+      : [];
+  const effectiveFitzpatrick =
+    data.fototipo_fitzpatrick || (!data.imageUrl && !demoCleared ? 'III' : undefined);
+  const effectiveGlogau =
+    data.escala_glogau || (!data.imageUrl && !demoCleared ? 'II' : undefined);
+  const effectiveScore =
+    data.skinHealthScore || (!data.imageUrl && !demoCleared ? 76 : undefined);
+  const effectivePatientSummary =
+    data.patientSummary ||
+    (!data.imageUrl && !demoCleared
+      ? 'Caso modelo demonstrativo: identificamos focos simétricos de pigmentação malar e textura frontal leve — todos com excelente resposta ao protocolo combinado In & Out.'
+      : undefined);
+  const effectiveClinicalSummary =
+    data.clinicalSummary ||
+    (!data.imageUrl && !demoCleared
+      ? 'Pele fototipo III com fotoenvelhecimento Glogau II, apresentando máculas hipercrômicas malares bilaterais e textura frontal discreta. Indicado manejo despigmentante gradual sem efeito rebote.'
+      : undefined);
 
   const update = (patch: Partial<DermatologyData>) => {
     onChange({ ...data, ...patch });
@@ -250,7 +337,7 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
   };
 
   const exportAnnotatedPng = () => {
-    if (!imageRef.current || !data.imageUrl) return;
+    if (!imageRef.current || !effectiveImageUrl) return;
     const img = imageRef.current;
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth || 1000;
@@ -387,10 +474,10 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
               disabled={isAnalyzing}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap"
             >
-              Caso Demonstração (Melasma / Pele)
+              Analisar Amostra com IA
             </button>
 
-            {data.imageUrl && (
+            {effectiveImageUrl && (
               <>
                 <button
                   type="button"
@@ -433,11 +520,22 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
                     ))}
                   </select>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDemoCleared(true);
+                    update({ imageUrl: undefined, detectedZones: [] });
+                  }}
+                  className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap"
+                >
+                  Limpar Foto
+                </button>
               </>
             )}
           </div>
 
-          {data.imageUrl && (
+          {effectiveImageUrl && (
             <div className="flex items-center gap-1.5">
               <button
                 type="button"
@@ -495,7 +593,7 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
           )}
         </div>
 
-        {data.imageUrl ? (
+        {effectiveImageUrl ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* Viewport da Foto com Overlays */}
             <div className="lg:col-span-7 bg-black rounded-xl border border-slate-800 p-3 flex items-center justify-center overflow-auto max-h-[500px]">
@@ -512,7 +610,7 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
               >
                 <img
                   ref={imageRef}
-                  src={data.imageUrl}
+                  src={effectiveImageUrl}
                   alt="Avaliação Dermatológica"
                   className="max-h-[450px] w-auto object-contain rounded-lg block"
                   style={{
@@ -558,18 +656,18 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
 
             {/* Painel Lateral de Diagnóstico Visual */}
             <div className="lg:col-span-5 space-y-3">
-              {(data.patientSummary || data.clinicalSummary) && (
+              {(effectivePatientSummary || effectiveClinicalSummary) && (
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-1.5">
                   <div className="flex items-center justify-between text-[11px] font-semibold text-rose-400">
                     <span>{viewMode === 'tv' ? 'Resumo para o Paciente (TV)' : 'Parecer Dermatológico IA'}</span>
-                    {data.skinHealthScore !== undefined && (
+                    {effectiveScore !== undefined && (
                       <span className="font-mono tabular-nums text-emerald-400">
-                        Qualidade Cutânea: {data.skinHealthScore}/100
+                        Qualidade Cutânea: {effectiveScore}/100
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-slate-200 leading-relaxed">
-                    {viewMode === 'tv' ? data.patientSummary : data.clinicalSummary}
+                    {viewMode === 'tv' ? effectivePatientSummary : effectiveClinicalSummary}
                   </p>
                 </div>
               )}
@@ -674,12 +772,12 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">Fototipo de Fitzpatrick</h3>
             <span className="text-xs font-mono text-slate-500">
-              Selecionado: {data.fototipo_fitzpatrick || 'Não definido'}
+              Selecionado: {effectiveFitzpatrick || 'Não definido'}
             </span>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {FITZPATRICK_SCALE.map((f) => {
-              const active = data.fototipo_fitzpatrick === f.grade;
+              const active = effectiveFitzpatrick === f.grade;
               return (
                 <button
                   key={f.grade}
@@ -706,7 +804,7 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">Escala de Fotoenvelhecimento (Glogau)</h3>
             <span className="text-xs font-mono text-slate-500">
-              Grau: {data.escala_glogau || 'Não definido'}
+              Grau: {effectiveGlogau || 'Não definido'}
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -716,7 +814,7 @@ export default function DermatologyModule({ data, onChange, patientName }: Props
               { g: 'III', title: 'Tipo III', desc: 'Rugas em repouso (50+)' },
               { g: 'IV', title: 'Tipo IV', desc: 'Rugas difusas / severo' }
             ].map((item) => {
-              const active = data.escala_glogau === item.g;
+              const active = effectiveGlogau === item.g;
               return (
                 <button
                   key={item.g}

@@ -33,6 +33,8 @@ import {
 import { toast } from 'react-hot-toast';
 import InteractiveOdontogram, { OdontogramData } from './InteractiveOdontogram';
 import CbctAiScannerModal, { CbctDetectedTooth } from './CbctAiScannerModal';
+import panoramicDentalRx from '../assets/images/panoramic_dental_rx_1789739027711.jpg';
+import cbctDentalScan from '../assets/images/cbct_dental_scan_1789739011366.jpg';
 
 interface MediaItem {
   id: string;
@@ -43,10 +45,29 @@ interface MediaItem {
   description?: string;
 }
 
+const BUILT_IN_DEMO_MEDIA: MediaItem[] = [
+  {
+    id: 'demo_panoramica_1',
+    title: 'Radiografia Panorâmica HD (Demonstração)',
+    type: 'radiograph',
+    url: panoramicDentalRx,
+    date: 'Caso Modelo',
+    description: 'Exame pronto para demonstração — clique em Scanner Visual IA (Modo TV) ou simule implantes 360°.'
+  },
+  {
+    id: 'demo_cbct_1',
+    title: 'Tomografia Cone Beam CBCT (Demonstração)',
+    type: 'tomography',
+    url: cbctDentalScan,
+    date: 'Caso Modelo',
+    description: 'Cortes tomográficos modelo para avaliação de canais, lesões ósseas e implantes.'
+  }
+];
+
 // Helper para obter chave de persistência de anexos do paciente
 function getPatientMediaStorageKey(patientName: string): string {
   const clean = (patientName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
-  return `ambulatorio_media_gallery_${clean || 'geral'}`;
+  return `studio_media_gallery_v2_${clean || 'geral'}`;
 }
 
 const LEGACY_SEEDED_IDS = new Set(['tc_cbct_1', 'rx_panoramica_1', 'foto_extraoral_1']);
@@ -128,7 +149,7 @@ export default function PatientMediaGallery({
 }) {
   const storageKey = getPatientMediaStorageKey(patientName);
 
-  // Inicializa apenas com exames reais persistidos do paciente (sem arquivos fictícios pré-populados)
+  // Inicializa com exames salvos do paciente ou caso modelo pronto para demonstração
   const [items, setItems] = useState<MediaItem[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -136,17 +157,18 @@ export default function PatientMediaGallery({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            return cleanStoredMediaItems(parsed);
+            const cleaned = cleanStoredMediaItems(parsed);
+            if (cleaned.length > 0) return cleaned;
           }
         }
       } catch (err) {
         console.warn('Erro ao carregar galeria salva:', err);
       }
     }
-    return [];
+    return BUILT_IN_DEMO_MEDIA;
   });
 
-  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(() => items[0] || null);
+  const [selectedItem, setSelectedItem] = useState<MediaItem | null>(() => items[0] || BUILT_IN_DEMO_MEDIA[0]);
   const [activeTab, setActiveTab] = useState<'all' | 'tomography' | 'radiograph' | 'photo'>('all');
 
   // Troca de Aba com sincronização estrita do item selecionado correspondente
@@ -216,28 +238,28 @@ export default function PatientMediaGallery({
     setShowOdontogram(true);
   };
 
-  // Recarrega galeria quando o paciente selecionado mudar e limpa eventuais itens de amostra antigos
+  // Recarrega galeria quando o paciente selecionado mudar
   useEffect(() => {
+    setActiveTab('all');
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem(storageKey);
-        if (saved) {
+        if (saved !== null) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
             const cleaned = cleanStoredMediaItems(parsed);
-            if (cleaned.length !== parsed.length) {
-              localStorage.setItem(storageKey, JSON.stringify(cleaned));
+            if (cleaned.length > 0) {
+              setItems(cleaned);
+              setSelectedItem(cleaned[0]);
+              return;
             }
-            setItems(cleaned);
-            setSelectedItem(cleaned[0] || null);
-            return;
           }
         }
       } catch (err) {
         console.warn('Erro ao sincronizar galeria do paciente:', err);
       }
-      setItems([]);
-      setSelectedItem(null);
+      setItems(BUILT_IN_DEMO_MEDIA);
+      setSelectedItem(BUILT_IN_DEMO_MEDIA[0]);
     }
   }, [patientName, storageKey]);
 
@@ -593,7 +615,7 @@ export default function PatientMediaGallery({
         >
           Radiografias / Raio-X ({items.filter(i => i.type === 'radiograph').length})
         </button>
-        <button
+          <button
           onClick={() => handleTabChange('photo')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
             activeTab === 'photo'
@@ -601,7 +623,7 @@ export default function PatientMediaGallery({
               : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
           }`}
         >
-          Fotos Extraorais / Corporais ({items.filter(i => i.type === 'photo').length})
+          Fotos Clínicas ({items.filter(i => i.type === 'photo').length})
         </button>
       </div>
 
@@ -901,6 +923,18 @@ export default function PatientMediaGallery({
             >
               <Sparkles size={14} className="text-pink-100" />
               <span>Abrir Scanner Visual IA (Amostra Teste)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('all');
+                persistItems(BUILT_IN_DEMO_MEDIA);
+                setSelectedItem(BUILT_IN_DEMO_MEDIA[0]);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <RotateCcw size={14} />
+              <span>Carregar Panorâmica & CBCT Modelo</span>
             </button>
           </div>
         </div>

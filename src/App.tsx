@@ -12,7 +12,10 @@ import {
   Calendar,
   Phone,
   Check,
-  RotateCcw
+  RotateCcw,
+  Save,
+  FolderOpen,
+  Trash2
 } from 'lucide-react';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
@@ -57,6 +60,86 @@ export default function App() {
   const [dentalData, setDentalData] = useState<BiologicalDentistryData>({});
   const [nutrologyData, setNutrologyData] = useState<NutrologyData>({});
   const [dermatologyData, setDermatologyData] = useState<DermatologyData>({});
+
+  // Pasta Rápida de Atendimentos Salvos (para guardar ditado por voz, síntese IA e laudos)
+  interface SavedConsultationRecord {
+    id: string;
+    savedAt: string;
+    specialty: StudioSpecialtyId;
+    patientName: string;
+    patientDob: string;
+    patientPhone: string;
+    clinicalInput: string;
+    clinicalSummary: string;
+    prescriptionText: string;
+    dentalData: BiologicalDentistryData;
+    nutrologyData: NutrologyData;
+    dermatologyData: DermatologyData;
+  }
+
+  const SAVED_RECORDS_KEY = 'studio_clinico_saved_records_v1';
+  const [savedRecords, setSavedRecords] = useState<SavedConsultationRecord[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(SAVED_RECORDS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showSavedDrawer, setShowSavedDrawer] = useState(false);
+
+  const persistSavedRecords = (next: SavedConsultationRecord[]) => {
+    setSavedRecords(next);
+    try {
+      localStorage.setItem(SAVED_RECORDS_KEY, JSON.stringify(next));
+    } catch {
+      toast.error('Limite de armazenamento local atingido para salvar novos registros.');
+    }
+  };
+
+  const handleSaveConsultation = (override?: Partial<SavedConsultationRecord>, silent = false) => {
+    const rec: SavedConsultationRecord = {
+      id: `rec_${Date.now()}`,
+      savedAt: new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
+      specialty: override?.specialty || activeSpecialty,
+      patientName: (override?.patientName ?? patientName).trim() || 'Paciente sem nome',
+      patientDob: override?.patientDob ?? patientDob,
+      patientPhone: override?.patientPhone ?? patientPhone,
+      clinicalInput: override?.clinicalInput ?? clinicalInput,
+      clinicalSummary: override?.clinicalSummary ?? clinicalSummary,
+      prescriptionText: override?.prescriptionText ?? prescriptionText,
+      dentalData: override?.dentalData ?? dentalData,
+      nutrologyData: override?.nutrologyData ?? nutrologyData,
+      dermatologyData: override?.dermatologyData ?? dermatologyData
+    };
+
+    const next = [rec, ...savedRecords].slice(0, 40);
+    persistSavedRecords(next);
+    if (!silent) {
+      toast.success('Atendimento e ditado salvos na Pasta Rápida!');
+    }
+  };
+
+  const handleLoadSavedRecord = (rec: SavedConsultationRecord) => {
+    setActiveSpecialty(rec.specialty);
+    setPatientName(rec.patientName === 'Paciente sem nome' ? '' : rec.patientName);
+    setPatientDob(rec.patientDob || '');
+    setPatientPhone(rec.patientPhone || '');
+    setClinicalInput(rec.clinicalInput || '');
+    setClinicalSummary(rec.clinicalSummary || '');
+    setPrescriptionText(rec.prescriptionText || '');
+    setDentalData(rec.dentalData || {});
+    setNutrologyData(rec.nutrologyData || {});
+    setDermatologyData(rec.dermatologyData || {});
+    setShowSavedDrawer(false);
+    toast.success(`Atendimento de ${rec.patientName} carregado na tela.`);
+  };
+
+  const handleDeleteSavedRecord = (id: string) => {
+    persistSavedRecords(savedRecords.filter((r) => r.id !== id));
+    toast.success('Registro removido.');
+  };
 
   const calculatedAge = calculatePreciseAge(patientDob);
 
@@ -165,53 +248,81 @@ export default function App() {
       }
 
       const specData = parsed.dados_especialidade || {};
+      const nextName = !patientName && parsed.paciente_nome_completo ? parsed.paciente_nome_completo : patientName;
+      const nextDob = !patientDob && parsed.paciente_data_nascimento ? parsed.paciente_data_nascimento : patientDob;
+      const nextSummary = parsed.resumo_formatado || clinicalSummary;
+      const nextPrescription = parsed.prescricao || prescriptionText;
+
+      let nextDental = dentalData;
+      let nextNutro = nutrologyData;
+      let nextDerma = dermatologyData;
+
       if (activeSpecialty === 'biological_dentistry') {
-        setDentalData((prev) => ({
-          ...prev,
+        nextDental = {
+          ...dentalData,
           ...specData,
           odontograma: specData.odontograma
             ? {
-                ...(prev.odontograma || {}),
+                ...(dentalData.odontograma || {}),
                 ...specData.odontograma,
                 teeth: {
-                  ...(prev.odontograma?.teeth || {}),
+                  ...(dentalData.odontograma?.teeth || {}),
                   ...(specData.odontograma?.teeth || {})
                 }
               }
-            : prev.odontograma
-        }));
+            : dentalData.odontograma
+        };
+        setDentalData(nextDental);
       } else if (activeSpecialty === 'nutrology') {
-        setNutrologyData((prev) => ({
-          ...prev,
+        nextNutro = {
+          ...nutrologyData,
           ...specData,
           suplementacao_prescrita:
-            specData.suplementacao_prescrita || parsed.prescricao || prev.suplementacao_prescrita,
+            specData.suplementacao_prescrita || parsed.prescricao || nutrologyData.suplementacao_prescrita,
           plano_alimentar_orientacoes:
             specData.plano_alimentar_orientacoes ||
             parsed.conduta_plano_terapeutico ||
-            prev.plano_alimentar_orientacoes,
+            nutrologyData.plano_alimentar_orientacoes,
           observacoes_clinicas:
-            parsed.resumo_formatado || prev.observacoes_clinicas,
+            parsed.resumo_formatado || nutrologyData.observacoes_clinicas,
           radar_metabolico: parsed.radar_metabolico
             ? {
-                energia: parsed.radar_metabolico.disposicao_energia ?? prev.radar_metabolico?.energia ?? 6,
-                sono: parsed.radar_metabolico.sono ?? prev.radar_metabolico?.sono ?? 6,
-                intestino: parsed.radar_metabolico.nutricao_digestao ?? prev.radar_metabolico?.intestino ?? 6,
-                glicemia: prev.radar_metabolico?.glicemia ?? 6,
-                imunidade: parsed.radar_metabolico.imunidade ?? prev.radar_metabolico?.imunidade ?? 6
+                energia: parsed.radar_metabolico.disposicao_energia ?? nutrologyData.radar_metabolico?.energia ?? 6,
+                sono: parsed.radar_metabolico.sono ?? nutrologyData.radar_metabolico?.sono ?? 6,
+                intestino: parsed.radar_metabolico.nutricao_digestao ?? nutrologyData.radar_metabolico?.intestino ?? 6,
+                glicemia: nutrologyData.radar_metabolico?.glicemia ?? 6,
+                imunidade: parsed.radar_metabolico.imunidade ?? nutrologyData.radar_metabolico?.imunidade ?? 6
               }
-            : prev.radar_metabolico
-        }));
+            : nutrologyData.radar_metabolico
+        };
+        setNutrologyData(nextNutro);
       } else if (activeSpecialty === 'dermatology') {
-        setDermatologyData((prev) => ({
-          ...prev,
+        nextDerma = {
+          ...dermatologyData,
           ...specData,
           observacoes_dermato:
-            parsed.resumo_formatado || prev.observacoes_dermato
-        }));
+            parsed.resumo_formatado || dermatologyData.observacoes_dermato
+        };
+        setDermatologyData(nextDerma);
       }
 
-      toast.success('Consulta estruturada pela IA com sucesso!');
+      handleSaveConsultation(
+        {
+          specialty: activeSpecialty,
+          patientName: nextName,
+          patientDob: nextDob,
+          patientPhone,
+          clinicalInput,
+          clinicalSummary: nextSummary,
+          prescriptionText: nextPrescription,
+          dentalData: nextDental,
+          nutrologyData: nextNutro,
+          dermatologyData: nextDerma
+        },
+        true
+      );
+
+      toast.success('Consulta estruturada e salva em Atendimentos Salvos!');
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||
@@ -518,6 +629,26 @@ export default function App() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => handleSaveConsultation()}
+                className="px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Salvar atendimento, ditado e laudo na Pasta Rápida"
+              >
+                <Save size={14} />
+                <span>Salvar Atendimento</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSavedDrawer(true)}
+                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                title="Ver atendimentos, ditados e laudos salvos"
+              >
+                <FolderOpen size={14} />
+                <span>Salvos ({savedRecords.length})</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleExportPdf}
                 className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
               >
@@ -790,6 +921,82 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Pasta Rápida de Atendimentos & Ditados Salvos */}
+      {showSavedDrawer && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Pasta Rápida de Atendimentos Salvos</h3>
+                <p className="text-xs text-slate-500">
+                  Seus ditados por voz, sínteses da IA e protocolos ficam guardados aqui para reabrir, gerar PDF ou enviar no WhatsApp.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSavedDrawer(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-3">
+              {savedRecords.length === 0 ? (
+                <div className="text-center py-10 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200 space-y-2">
+                  <p className="text-sm font-semibold text-slate-700">Nenhum atendimento salvo ainda</p>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Quando você usar o Ditado por Voz + "Estruturar com IA" ou clicar em "Salvar Atendimento", o registro completo aparece aqui.
+                  </p>
+                </div>
+              ) : (
+                savedRecords.map((rec) => {
+                  const specLabel =
+                    STUDIO_SPECIALTIES.find((s) => s.id === rec.specialty)?.shortLabel || rec.specialty;
+                  return (
+                    <div
+                      key={rec.id}
+                      className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900 truncate">{rec.patientName}</span>
+                          <span className="px-2 py-0.5 bg-slate-900 text-white rounded-md text-[10px] font-semibold">
+                            {specLabel}
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-500">{rec.savedAt}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 line-clamp-2">
+                          {rec.clinicalSummary || rec.clinicalInput || 'Registro salvo sem texto adicional.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadSavedRecord(rec)}
+                          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          Abrir na Tela
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSavedRecord(rec.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                          title="Excluir registro"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </div>
       )}

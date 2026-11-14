@@ -160,6 +160,7 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
   const [newMarkerValue, setNewMarkerValue] = useState('');
   const [newMarkerUnit, setNewMarkerUnit] = useState('');
   const [newMarkerOptimal, setNewMarkerOptimal] = useState('');
+  const [demoCleared, setDemoCleared] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const radar = data.radar_metabolico || {
@@ -382,7 +383,8 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
     })
     .join(' ');
 
-  const lab = data.labAnalysis;
+  const lab = data.labAnalysis || (!demoCleared ? DEMO_LAB_RESULT : undefined);
+  const isDemoLab = !data.labAnalysis && !demoCleared;
 
   return (
     <div className="space-y-6">
@@ -495,8 +497,20 @@ export default function NutrologyModule({ data, onChange, patientName }: Props) 
               onClick={loadDemoLab}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap"
             >
-              Exame Demonstração (TV)
+              Restaurar Caso Demo
             </button>
+            {lab && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDemoCleared(true);
+                  update({ labAnalysis: undefined });
+                }}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold cursor-pointer whitespace-nowrap"
+              >
+                Limpar para Paciente Real
+              </button>
+            )}
           </div>
         </div>
 
