@@ -31,7 +31,6 @@ import {
 } from './constants/clinicProfiles';
 import PatientMediaGallery from './components/PatientMediaGallery';
 import BiologicalDentistryForm, { BiologicalDentistryData } from './components/BiologicalDentistryForm';
-import IntegrativePresentationSuite from './components/IntegrativePresentationSuite';
 import type { OdontogramData } from './components/InteractiveOdontogram';
 
 export default function App() {
@@ -658,14 +657,6 @@ export default function App() {
               address: brand.address,
               phone: brand.phone
             }}
-          />
-          <IntegrativePresentationSuite
-            dentalData={dentalData}
-            onUpdateDentalData={setDentalData}
-            patientName={patientName}
-            patientDob={patientDob}
-            patientPhone={patientPhone}
-            brand={brand}
           />
         </div>
       </main>
